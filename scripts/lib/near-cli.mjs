@@ -85,6 +85,17 @@ export async function sendFunctionCall(
   });
 }
 
+export async function sendTransactionAsync(account, receiverId, actions) {
+  const [, signedTransaction] = await account.signTransaction(receiverId, actions);
+  const txHash = await account.connection.provider.sendTransactionAsync(signedTransaction);
+  return {
+    transaction: {
+      hash: txHash,
+      receiver_id: receiverId,
+    },
+  };
+}
+
 // Block-pinned or finality-pinned view call. Exactly one of opts.blockId /
 // opts.finality applies; if neither is passed, default is finality: "final".
 // blockId accepts a numeric height, numeric string, or block hash.

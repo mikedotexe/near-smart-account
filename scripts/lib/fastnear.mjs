@@ -55,8 +55,11 @@ export function getNetworkConfig(network = "testnet") {
   if (network === "testnet") {
     return {
       network,
-      rpc: "https://rpc.testnet.fastnear.com",
-      archivalRpc: "https://archival-rpc.testnet.fastnear.com",
+      rpc: process.env.NEAR_TESTNET_RPC || "https://rpc.testnet.fastnear.com",
+      officialRpc:
+        process.env.NEAR_TESTNET_OFFICIAL_RPC || "https://rpc.testnet.near.org",
+      archivalRpc:
+        process.env.NEAR_TESTNET_ARCHIVAL_RPC || "https://archival-rpc.testnet.fastnear.com",
       txApi: "https://tx.test.fastnear.com",
       nearData: "https://testnet.neardata.xyz",
       fastApi: "https://test.api.fastnear.com",
@@ -65,8 +68,11 @@ export function getNetworkConfig(network = "testnet") {
   if (network === "mainnet") {
     return {
       network,
-      rpc: "https://rpc.mainnet.fastnear.com",
-      archivalRpc: "https://archival-rpc.mainnet.fastnear.com",
+      rpc: process.env.NEAR_MAINNET_RPC || "https://rpc.mainnet.fastnear.com",
+      officialRpc:
+        process.env.NEAR_MAINNET_OFFICIAL_RPC || "https://rpc.mainnet.near.org",
+      archivalRpc:
+        process.env.NEAR_MAINNET_ARCHIVAL_RPC || "https://archival-rpc.mainnet.fastnear.com",
       txApi: "https://tx.main.fastnear.com",
       nearData: "https://mainnet.neardata.xyz",
       fastApi: "https://api.fastnear.com",
@@ -141,21 +147,41 @@ export async function request(url, options = {}) {
     headers,
     redirect: options.redirect,
   };
+  let timeout = null;
+  let controller = null;
   if (options.body !== undefined) {
     init.body =
       options.json === false || typeof options.body === "string"
         ? options.body
         : JSON.stringify(options.body);
   }
-
-  const res = await fetch(finalUrl, init);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `${init.method} ${new URL(finalUrl).origin}${new URL(finalUrl).pathname} failed: ${res.status} ${res.statusText}\n${truncate(text, 400)}`
-    );
+  if (options.timeoutMs != null) {
+    controller = new AbortController();
+    init.signal = controller.signal;
+    timeout = setTimeout(() => controller.abort(), options.timeoutMs);
   }
-  return res;
+
+  try {
+    const res = await fetch(finalUrl, init);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(
+        `${init.method} ${new URL(finalUrl).origin}${new URL(finalUrl).pathname} failed: ${res.status} ${res.statusText}\n${truncate(text, 400)}`
+      );
+    }
+    return res;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(
+        `${init.method} ${new URL(finalUrl).origin}${new URL(finalUrl).pathname} timed out after ${options.timeoutMs} ms`
+      );
+    }
+    throw error;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 export async function requestJson(url, options = {}) {
@@ -165,9 +191,10 @@ export async function requestJson(url, options = {}) {
 
 export async function rpcCall(network, method, params, options = {}) {
   const cfg = getNetworkConfig(network);
-  const url = options.archival ? cfg.archivalRpc : cfg.rpc;
+  const url = options.url || (options.archival ? cfg.archivalRpc : cfg.rpc);
   const { data } = await requestJson(url, {
     method: "POST",
+    timeoutMs: options.timeoutMs,
     body: {
       jsonrpc: "2.0",
       id: options.id || "fastnear",

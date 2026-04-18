@@ -12,7 +12,12 @@
 import process from "node:process";
 import { parseArgs } from "node:util";
 import { shortHash } from "./lib/fastnear.mjs";
-import { connectNearWithSigners } from "./lib/near-cli.mjs";
+import { connectNearWithSigners, sendTransactionAsync } from "./lib/near-cli.mjs";
+import {
+  diagnoseStageTransaction,
+  getMainnetStageGasGuidance,
+  renderStageOutcomeSummary,
+} from "./lib/staged-sequence.mjs";
 
 const MAX_CONTRACT_GAS_TGAS = 1_000;
 
@@ -28,6 +33,8 @@ const { values, positionals } = parseArgs({
     "call-deposit-yocto": { type: "string", default: "0" },
     "sequence-order": { type: "string" },
     "conduct-order": { type: "string" },
+    "poll-ms": { type: "string", default: "1000" },
+    "stage-timeout-ms": { type: "string", default: "15000" },
     dry: { type: "boolean", default: false },
     json: { type: "boolean", default: false },
   },
@@ -40,6 +47,8 @@ const specs = (positionals.length ? positionals : ["alpha:1", "beta:2", "gamma:3
 assertUniqueStepIds(specs.map((spec) => spec.step_id), "submitted actions");
 const actionGasTgas = Number(values["action-gas"]);
 const callGasTgas = Number(values["call-gas"]);
+const pollMs = Number(values["poll-ms"]);
+const stageTimeoutMs = Number(values["stage-timeout-ms"]);
 const sequenceOrder = resolveSequenceOrder(values, specs);
 
 if (!Number.isFinite(actionGasTgas) || actionGasTgas <= 0) {
@@ -48,6 +57,12 @@ if (!Number.isFinite(actionGasTgas) || actionGasTgas <= 0) {
 if (!Number.isFinite(callGasTgas) || callGasTgas <= 0) {
   throw new Error("--call-gas must be a positive number");
 }
+if (!Number.isFinite(pollMs) || pollMs <= 0) {
+  throw new Error("--poll-ms must be a positive number");
+}
+if (!Number.isFinite(stageTimeoutMs) || stageTimeoutMs < 0) {
+  throw new Error("--stage-timeout-ms must be zero or positive");
+}
 
 const totalActionGasTgas = actionGasTgas * specs.length;
 if (totalActionGasTgas > MAX_CONTRACT_GAS_TGAS) {
@@ -55,6 +70,11 @@ if (totalActionGasTgas > MAX_CONTRACT_GAS_TGAS) {
     `requested ${totalActionGasTgas} TGas across ${specs.length} actions; keep one transaction at or under ${MAX_CONTRACT_GAS_TGAS} TGas`
   );
 }
+const mainnetGasGuidance = getMainnetStageGasGuidance({
+  network: values.network,
+  actionCount: specs.length,
+  actionGasTgas,
+});
 validateSequenceOrder(specs, sequenceOrder);
 
 if (values.dry) {
@@ -68,6 +88,9 @@ if (values.dry) {
     total_action_gas_tgas: totalActionGasTgas,
     downstream_call_gas_tgas: callGasTgas,
     downstream_call_deposit_yocto: values["call-deposit-yocto"],
+    poll_ms: pollMs,
+    stage_timeout_ms: stageTimeoutMs,
+    guidance: mainnetGasGuidance,
     sequence_order: sequenceOrder,
     actions: specs,
   };
@@ -94,30 +117,58 @@ const actions = specs.map(({ step_id, n }) =>
   )
 );
 
-const result = await account.signAndSendTransaction({
-  receiverId: values.contract,
-  actions,
+const result = await sendTransactionAsync(account, values.contract, actions);
+const txHash = result.transaction?.hash || "?";
+const diagnosis = await diagnoseStageTransaction({
+  network: values.network,
+  txHash,
+  signer: values.signer,
+  contractId: values.contract,
+  expectedCount: specs.length,
+  pollMs,
+  timeoutMs: stageTimeoutMs,
 });
 
 if (values.json) {
-  console.log(JSON.stringify(result, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        network: values.network,
+        signer: values.signer,
+        receiver: values.contract,
+        tx_hash: txHash,
+        sequence_order: sequenceOrder,
+        actions: specs,
+        diagnosis,
+      },
+      null,
+      2
+    )
+  );
   process.exit(0);
 }
 
-const txHash = result.transaction?.hash || result.transaction_outcome?.id || "?";
 console.log(
   `network=${values.network} signer=${values.signer} receiver=${values.contract} actions=${specs.length}`
 );
+for (const line of mainnetGasGuidance) {
+  console.log(line);
+}
 console.log(`tx_hash=${txHash}`);
+console.log(renderStageOutcomeSummary(diagnosis.stage_outcome));
 for (const { step_id, n } of specs) {
   console.log(`  ${step_id} -> ${values.target}.${values.method}({\"n\":${n}})`);
 }
 console.log(`trace: ./scripts/trace-tx.mjs ${txHash} ${values.signer} --wait FINAL`);
-console.log(
-  `run_sequence: near call ${values.contract} run_sequence '{\"caller_id\":\"${values.signer}\",\"order\":[${sequenceOrder
-    .map((step_id) => JSON.stringify(step_id))
-    .join(",")}]}' --accountId ${values.signer}`
-);
+if (diagnosis.stage_outcome.classification === "pending_until_resume") {
+  console.log(
+    `run_sequence: near call ${values.contract} run_sequence '{\"caller_id\":\"${values.signer}\",\"order\":[${sequenceOrder
+      .map((step_id) => JSON.stringify(step_id))
+      .join(",")}]}' --accountId ${values.signer}`
+  );
+} else {
+  console.log("run_sequence: skipped until stage_outcome becomes pending_until_resume");
+}
 console.log(`short=${shortHash(txHash)}`);
 
 function parseSpec(raw) {

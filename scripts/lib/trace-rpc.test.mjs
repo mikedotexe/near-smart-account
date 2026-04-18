@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   classify,
+  fetchTxStatus,
   flattenReceiptTree,
   indexTraceBlockMetadata,
   materializeFlattenedReceipts,
@@ -196,4 +197,77 @@ test("flatten helper omits dedupe placeholders", () => {
     flattenReceiptTree(tree).map((receipt) => receipt.id),
     ["root.testnet", "child.testnet"]
   );
+});
+
+test("fetchTxStatus retries hot rpc transport errors and falls back to official rpc", async () => {
+  const calls = [];
+  const rpcCallFn = async (_network, method, params, options) => {
+    calls.push({ method, params, options });
+    if (options.url === "https://fast.example" && calls.length <= 2) {
+      throw new Error("408 Request Timeout");
+    }
+    return { result: { status: { SuccessValue: "" } } };
+  };
+
+  const raw = await fetchTxStatus(
+    "mainnet",
+    "tx.testnet",
+    "mike.testnet",
+    "FINAL",
+    {
+      rpcCallFn,
+      retryCount: 1,
+      retryDelayMs: 0,
+      networkConfig: {
+        rpc: "https://fast.example",
+        officialRpc: "https://official.example",
+        archivalRpc: "https://archival.example",
+      },
+    }
+  );
+
+  assert.deepEqual(raw, { result: { status: { SuccessValue: "" } } });
+  assert.deepEqual(
+    calls.map((call) => call.options.url),
+    ["https://fast.example", "https://fast.example", "https://official.example"]
+  );
+});
+
+test("fetchTxStatus uses archival rpc after UNKNOWN_TRANSACTION", async () => {
+  const calls = [];
+  const rpcCallFn = async (_network, _method, _params, options) => {
+    calls.push(options);
+    if (!options.archival) {
+      return {
+        error: {
+          cause: {
+            name: "UNKNOWN_TRANSACTION",
+          },
+        },
+      };
+    }
+    return { result: { status: { SuccessValue: "" } } };
+  };
+
+  const raw = await fetchTxStatus(
+    "mainnet",
+    "tx.testnet",
+    "mike.testnet",
+    "FINAL",
+    {
+      rpcCallFn,
+      retryCount: 0,
+      retryDelayMs: 0,
+      networkConfig: {
+        rpc: "https://fast.example",
+        officialRpc: "https://official.example",
+        archivalRpc: "https://archival.example",
+      },
+    }
+  );
+
+  assert.deepEqual(raw, { result: { status: { SuccessValue: "" } } });
+  assert.equal(calls[0].archival, false);
+  assert.equal(calls[1].archival, true);
+  assert.equal(calls[1].url, "https://archival.example");
 });

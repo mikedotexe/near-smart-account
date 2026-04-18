@@ -14,9 +14,10 @@ The workflow is:
 5. keep the resulting evidence with the conclusion
 
 That is what [`PROTOCOL-ONBOARDING.md`](../PROTOCOL-ONBOARDING.md) is for.
-This chapter explains why the guide is shaped that way and how the new
+This chapter explains why the guide is shaped that way, how the new
 `scripts/investigate-tx.mjs` wrapper fits into the repo's existing
-observability method.
+observability method, and why `pathological-router` now sits beside
+`wild-router` and `wrap.testnet` as a public onboarding probe surface.
 
 ## 1. Why the guide exists
 
@@ -118,6 +119,40 @@ For that run:
   `near_deposit -> ft_transfer back to the smart account`, and we want one
   top-level surface that only resolves after the forward is complete
 
+### The next probe after `wild-router`
+
+`wild-router` is still the smallest dishonest-async demo in the repo, but it
+is no longer the only public probe surface.
+
+`pathological-router` now complements it with shapes that matter when we are
+onboarding unfamiliar protocols:
+
+- `do_honest_work` gives a clean honest control
+- `burn_gas` shows plain receipt failure from gas exhaustion
+- `noop_claim_success` proves that a target can emit success without doing
+  any real work
+- `return_decoy_promise` shows how a caller can be fooled by a decoy returned
+  promise while the real work detaches
+- `return_oversized_payload` probes the current callback-size ceiling as part
+  of the completion predicate
+
+That makes `pathological-router` part of the repo's public research apparatus,
+not just a hidden lab stub.
+
+The fast path for this surface is now `scripts/probe-pathological.mjs`. It is
+intentionally a **Direct-pathology** probe, not a general demo runner. Its
+documented preset names are runtime-facing:
+
+- `control`
+- `gas_exhaustion`
+- `false_success`
+- `decoy_returned_chain`
+- `oversized_result`
+
+Those names describe the observed execution/completion shape we are classifying,
+which makes the output read more naturally to NEAR engineers than short internal
+nicknames would.
+
 ### What the evidence should show
 
 The conclusion we want is not merely “the tx succeeded.”
@@ -155,11 +190,23 @@ the results.
 - choose interesting blocks from the included block, receipt blocks, and
   optional trailing tail
 - sample requested views at those interesting blocks
-- pull activity rows for the requested accounts inside the cascade window
+- pull activity rows for the requested accounts and separate rows for the
+  investigated tx from unrelated rows that merely share the same block window
+- parse structured `sa-automation` `EVENT_JSON:` logs into receipt-ordered
+  events and summarize runs by namespace when that telemetry is present
+- summarize stage-lifecycle and compact telemetry metrics like duration,
+  resume latency, settle latency, and max observed used gas
 - emit one markdown report and one JSON artifact
 
 The wrapper does **not** change the method. It packages the method so the
 evidence becomes easier to collect and easier to compare later.
+
+The account-wide companion is now `scripts/aggregate-runs.mjs`. It walks
+FastNEAR account history, parses the same structured events, and gives one
+cross-tx run summary for operators who care about automation telemetry across
+time rather than one transaction at a time. The current shape is intentionally
+markdown-first: summary table first, then transaction coverage, then detailed
+per-run event rows.
 
 ## 5. Why JSON-first output matters
 
@@ -183,6 +230,11 @@ The important payload fields today are:
 
 That is enough to support both human reading and future machine comparison
 without making the wrapper overambitious.
+
+Most JSON artifacts produced by this workflow stay local and ignored under
+`collab/artifacts/`. The repo keeps only two curated checked-in examples:
+one direct-style router automation report and one adapter-backed `wrap.testnet`
+report.
 
 ## 6. What the guide deliberately does not promise
 

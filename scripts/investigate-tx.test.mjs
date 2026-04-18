@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   buildInterestingBlocks,
   parseViewSpec,
+  partitionAccountActivityRows,
   renderMarkdownReport,
   writeReportOutputs,
 } from "./investigate-tx.mjs";
@@ -116,7 +117,7 @@ function fixtureReport() {
     account_activity: [
       {
         account_id: "mike.testnet",
-        rows: [
+        tx_rows: [
           {
             tx_block_height: 100,
             transaction_hash: "tx.testnet",
@@ -124,6 +125,51 @@ function fixtureReport() {
             is_success: true,
           },
         ],
+        other_rows_in_window_count: 1,
+        window_row_count: 2,
+      },
+    ],
+    stage_lifecycle: {
+      classification: "released_after_stage",
+      reason: "yielded callbacks were later resumed and executed downstream work",
+      yielded_receipt_count: 1,
+      pending_yield_count: 0,
+      resumed_yield_count: 1,
+      resume_failed_count: 0,
+    },
+    structured_events: [
+      {
+        event: "sequence_started",
+        version: "1.0.0",
+        data: {
+          namespace: "manual:mike.testnet",
+          first_step_id: "alpha",
+          total_steps: 2,
+        },
+        receipt: {
+          id: "receipt-a",
+          blockHeight: 101,
+        },
+      },
+    ],
+    run_summaries: [
+      {
+        namespace: "manual:mike.testnet",
+        status: "succeeded",
+        triggerId: null,
+        runNonce: null,
+        stepCount: 2,
+        stepsSettledOk: 2,
+        durationMs: 30,
+        resumeLatencyMsAvg: 10,
+        resumeLatencyMsMax: 10,
+        settleLatencyMsAvg: 15,
+        settleLatencyMsMax: 20,
+        maxUsedGasTgas: 22,
+        latestStorageUsage: 321,
+        firstSeenBlockHeight: 101,
+        lastSeenBlockHeight: 102,
+        failedStepId: null,
       },
     ],
     logs: [
@@ -159,6 +205,21 @@ test("buildInterestingBlocks includes tail block when requested", () => {
   assert.deepEqual(blocks, [100, 101, 102, 104]);
 });
 
+test("partitionAccountActivityRows separates investigated tx from other window rows", () => {
+  const partitioned = partitionAccountActivityRows(
+    [
+      { transaction_hash: "tx.testnet", tx_block_height: 100 },
+      { transaction_hash: "other-1", tx_block_height: 101 },
+      { transaction_hash: "tx.testnet", tx_block_height: 102 },
+    ],
+    "tx.testnet"
+  );
+
+  assert.equal(partitioned.tx_rows.length, 2);
+  assert.equal(partitioned.other_rows_in_window_count, 1);
+  assert.equal(partitioned.window_row_count, 3);
+});
+
 test("renderMarkdownReport includes core investigation sections", () => {
   const markdown = renderMarkdownReport(fixtureReport());
   assert.match(markdown, /# Investigate tx:/);
@@ -166,7 +227,12 @@ test("renderMarkdownReport includes core investigation sections", () => {
   assert.match(markdown, /## Surface 2: State time-series/);
   assert.match(markdown, /## Surface 3: Per-block receipts/);
   assert.match(markdown, /## Account activity/);
+  assert.match(markdown, /## Sequence telemetry/);
+  assert.match(markdown, /released_after_stage/);
+  assert.match(markdown, /## Structured events/);
+  assert.match(markdown, /sequence_started/);
   assert.match(markdown, /## Logs/);
+  assert.match(markdown, /Showing only rows for this tx/);
 });
 
 test("writeReportOutputs preserves schema_version in json output", () => {

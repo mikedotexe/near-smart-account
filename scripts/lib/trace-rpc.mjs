@@ -3,6 +3,7 @@ import {
   decodeSuccessValue,
   fetchBlock,
   fetchTransactions,
+  getNetworkConfig,
   rpcCall,
   shortHash,
   truncate,
@@ -25,21 +26,74 @@ export async function fetchTxStatus(
   network,
   txHash,
   senderId,
-  waitUntil = "EXECUTED_OPTIMISTIC"
+  waitUntil = "EXECUTED_OPTIMISTIC",
+  opts = {}
 ) {
   const params = {
     tx_hash: txHash,
     sender_account_id: senderId,
     wait_until: waitUntil,
   };
+  const cfg = opts.networkConfig || getNetworkConfig(network);
+  const rpcCallFn = opts.rpcCallFn || rpcCall;
+  const retryCount = opts.retryCount ?? 2;
+  const retryDelayMs = opts.retryDelayMs ?? 250;
+  const timeoutMs = opts.timeoutMs ?? 5_000;
 
-  let raw = await rpcCall(network, "EXPERIMENTAL_tx_status", params);
+  let raw = await callRpcWithRetry({
+    network,
+    params,
+    rpcCallFn,
+    urls: [cfg.rpc, cfg.officialRpc].filter(Boolean),
+    retryCount,
+    retryDelayMs,
+    timeoutMs,
+  });
   if (isUnknownTransaction(raw.error)) {
-    raw = await rpcCall(network, "EXPERIMENTAL_tx_status", params, {
+    raw = await callRpcWithRetry({
+      network,
+      params,
+      rpcCallFn,
+      urls: [cfg.archivalRpc].filter(Boolean),
+      retryCount,
+      retryDelayMs,
+      timeoutMs,
       archival: true,
     });
   }
   return raw;
+}
+
+async function callRpcWithRetry({
+  network,
+  params,
+  rpcCallFn,
+  urls,
+  retryCount,
+  retryDelayMs,
+  timeoutMs,
+  archival = false,
+}) {
+  let lastError = null;
+
+  for (const url of urls) {
+    for (let attempt = 0; attempt <= retryCount; attempt += 1) {
+      try {
+        return await rpcCallFn(network, "EXPERIMENTAL_tx_status", params, {
+          archival,
+          url,
+          timeoutMs,
+        });
+      } catch (error) {
+        lastError = error;
+        if (attempt < retryCount) {
+          await sleep(retryDelayMs);
+        }
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function statusTag(status) {
@@ -398,4 +452,8 @@ export async function traceTx(network, txHash, senderId, waitUntil) {
     raw,
     error: null,
   };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

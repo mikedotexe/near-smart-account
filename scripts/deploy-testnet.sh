@@ -44,7 +44,7 @@ deploy_one() {
   fi
 
   echo "==> $acct"
-  printf 'y\n' | near delete "$acct" "$MASTER" --networkId "$NETWORK_ID" >/dev/null 2>&1 || true
+  printf 'y\n' | near delete "$acct" "$MASTER" --force --networkId "$NETWORK_ID" >/dev/null 2>&1 || true
   near create-account "$acct" --masterAccount "$MASTER" --initialBalance "$INITIAL_BALANCE" --networkId "$NETWORK_ID"
 
   local init_args
@@ -79,20 +79,22 @@ deploy_one() {
 
 "$DIR/scripts/build-all.sh"
 
-deploy_one smart_account   smart-account
-deploy_one compat_adapter  compat-adapter
-deploy_one demo_adapter    demo-adapter
-deploy_one echo            echo
-deploy_one echo            echo-b           # second echo for promise_and demos
-deploy_one router          router
-deploy_one wild_router     wild-router
+deploy_one smart_account       smart-account
+deploy_one compat_adapter      compat-adapter
+deploy_one demo_adapter        demo-adapter
+deploy_one echo                echo
+deploy_one echo                echo-b           # second echo for promise_and demos
+deploy_one router              router
+deploy_one wild_router         wild-router
+deploy_one pathological_router pathological-router
 
 echo
 echo "Deployed:"
-echo "  smart-account:   $(subaccount smart-account)"
-echo "  compat-adapter:  $(subaccount compat-adapter)"
-echo "  demo-adapter:    $(subaccount demo-adapter)"
-echo "  echo (A):        $(subaccount echo)"
-echo "  echo (B):        $(subaccount echo-b)"
-echo "  router:          $(subaccount router)"
-echo "  wild-router:     $(subaccount wild-router)"
+echo "  smart-account:        $(subaccount smart-account)"
+echo "  compat-adapter:       $(subaccount compat-adapter)"
+echo "  demo-adapter:         $(subaccount demo-adapter)"
+echo "  echo (A):             $(subaccount echo)"
+echo "  echo (B):             $(subaccount echo-b)"
+echo "  router:               $(subaccount router)"
+echo "  wild-router:          $(subaccount wild-router)"
+echo "  pathological-router:  $(subaccount pathological-router)"

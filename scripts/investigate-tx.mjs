@@ -6,7 +6,7 @@ import process from "node:process";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 
-import { fetchAccountHistory, formatTimestampNs, shortHash, truncate } from "./lib/fastnear.mjs";
+import { fetchAccountHistory, shortHash, truncate } from "./lib/fastnear.mjs";
 import {
   fetchTraceBlockMetadata,
   materializeFlattenedReceipts,
@@ -14,6 +14,7 @@ import {
   traceTx,
 } from "./lib/trace-rpc.mjs";
 import { callViewMethod } from "./lib/near-cli.mjs";
+import { parseStructuredEvents, summarizeRuns } from "./lib/events.mjs";
 
 export function parseViewSpec(text) {
   let parsed;
@@ -107,6 +108,72 @@ function formatInlineValue(value) {
   return `\`${text}\``;
 }
 
+function formatMetric(value, digits = 1) {
+  if (value == null) return "`-`";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (Number.isInteger(value)) return `\`${value}\``;
+    return `\`${value.toFixed(digits)}\``;
+  }
+  return `\`${value}\``;
+}
+
+function classifyStageLifecycle(trace, receipts, structuredEvents) {
+  const isStageLike =
+    structuredEvents.some((event) => event.event === "stage_call_registered") ||
+    receipts.some((receipt) =>
+      (receipt.actions || []).some(
+        (action) => typeof action === "string" && action.includes("FunctionCall(stage_call")
+      )
+    ) ||
+    receipts.some((receipt) =>
+      (receipt.logs || []).some((log) => typeof log === "string" && log.includes("stage_call '"))
+    );
+
+  if (!isStageLike) return null;
+
+  const yieldedReceipts = receipts.filter((receipt) => receipt.isPromiseYield);
+  const pendingYieldCount = yieldedReceipts.filter(
+    (receipt) => receipt.statusTag === "pending_yield"
+  ).length;
+  const resumeFailedCount = structuredEvents.filter(
+    (event) => event.event === "sequence_halted" && event.data?.error_kind === "resume_failed"
+  ).length;
+  const yieldedReceiptCount = yieldedReceipts.length;
+  const resumedYieldCount = Math.max(0, yieldedReceiptCount - pendingYieldCount);
+
+  let classification = "stage_like_tx_without_clear_outcome";
+  let reason = "stage-like transaction did not preserve enough live pending signal for a stronger classification";
+
+  if (
+    trace?.raw_final_status &&
+    typeof trace.raw_final_status === "object" &&
+    trace.raw_final_status !== null &&
+    "Failure" in trace.raw_final_status &&
+    yieldedReceiptCount === 0
+  ) {
+    classification = "hard_fail_before_stage";
+    reason = "stage receipt failed before yielded steps became visible";
+  } else if (pendingYieldCount > 0) {
+    classification = "pending_until_resume";
+    reason = "yielded receipt is still pending and waiting for explicit release";
+  } else if (resumeFailedCount > 0) {
+    classification = "immediate_resume_failed";
+    reason = "yielded callback resumed before the intended release path and halted on resume failure";
+  } else if (resumedYieldCount > 0) {
+    classification = "released_after_stage";
+    reason = "yielded callbacks were later resumed and executed downstream work";
+  }
+
+  return {
+    classification,
+    reason,
+    yielded_receipt_count: yieldedReceiptCount,
+    pending_yield_count: pendingYieldCount,
+    resumed_yield_count: resumedYieldCount,
+    resume_failed_count: resumeFailedCount,
+  };
+}
+
 function renderAccountFlags(row) {
   const flags = [];
   if (row.is_signer) flags.push("signer");
@@ -122,6 +189,20 @@ function renderAccountFlags(row) {
   if (row.is_explicit_refund_to) flags.push("explicit_refund_to");
   flags.push(row.is_success ? "success" : "not_success");
   return flags.join(", ");
+}
+
+export function partitionAccountActivityRows(rows, txHash) {
+  const txRows = [];
+  const otherRows = [];
+  for (const row of rows) {
+    if (row.transaction_hash === txHash) txRows.push(row);
+    else otherRows.push(row);
+  }
+  return {
+    tx_rows: txRows,
+    other_rows_in_window_count: otherRows.length,
+    window_row_count: rows.length,
+  };
 }
 
 function formatReceiptNote(receipt) {
@@ -203,16 +284,101 @@ export function renderMarkdownReport(report) {
   for (const account of report.account_activity) {
     lines.push(`### \`${account.account_id}\``);
     lines.push("");
-    if (!account.rows.length) {
-      lines.push("_No rows in window._");
+    if (!account.tx_rows.length) {
+      if (account.other_rows_in_window_count > 0) {
+        lines.push(
+          `_No rows for this tx. Omitted ${account.other_rows_in_window_count} unrelated row(s) from the same block window._`
+        );
+      } else {
+        lines.push("_No rows for this tx in the cascade window._");
+      }
       lines.push("");
       continue;
     }
+    if (account.other_rows_in_window_count > 0) {
+      lines.push(
+        `_Showing only rows for this tx. Omitted ${account.other_rows_in_window_count} unrelated row(s) from the same block window._`
+      );
+      lines.push("");
+    }
     lines.push("| Block | Tx hash | Flags |");
     lines.push("|---|---|---|");
-    for (const row of account.rows) {
+    for (const row of account.tx_rows) {
       lines.push(
         `| ${row.tx_block_height} | \`${shortHash(row.transaction_hash)}\` | ${renderAccountFlags(row).replace(/\|/g, "\\|")} |`
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push("## Sequence telemetry");
+  lines.push("");
+  if (!report.stage_lifecycle && !report.run_summaries.length) {
+    lines.push("_No sequence telemetry summary for this tx._");
+    lines.push("");
+  } else {
+    if (report.stage_lifecycle) {
+      lines.push("### Stage lifecycle");
+      lines.push("");
+      lines.push(`- classification: \`${report.stage_lifecycle.classification}\``);
+      lines.push(`- reason: ${report.stage_lifecycle.reason}`);
+      lines.push(`- yielded receipts: \`${report.stage_lifecycle.yielded_receipt_count}\``);
+      lines.push(`- pending yielded receipts: \`${report.stage_lifecycle.pending_yield_count}\``);
+      lines.push(`- resumed yielded receipts: \`${report.stage_lifecycle.resumed_yield_count}\``);
+      lines.push(`- resume-failed signals: \`${report.stage_lifecycle.resume_failed_count}\``);
+      lines.push("");
+    }
+
+    if (report.run_summaries.length) {
+      lines.push("### Namespace metrics");
+      lines.push("");
+      lines.push(
+        "| Namespace | Status | Steps ok/total | Duration ms | Resume latency ms avg/max | Settle latency ms avg/max | Max used gas (TGas) | Latest storage | Error |"
+      );
+      lines.push("|---|---|---|---|---|---|---|---|---|");
+      for (const run of report.run_summaries) {
+        lines.push(
+          `| \`${run.namespace}\` | \`${run.status}\` | \`${run.stepsSettledOk}/${run.stepCount}\` | ${formatMetric(run.durationMs, 0)} | ${formatMetric(run.resumeLatencyMsAvg)}/${formatMetric(run.resumeLatencyMsMax, 0)} | ${formatMetric(run.settleLatencyMsAvg)}/${formatMetric(run.settleLatencyMsMax, 0)} | ${formatMetric(run.maxUsedGasTgas)} | ${formatMetric(run.latestStorageUsage, 0)} | \`${run.errorKind ?? "-"}\` |`
+        );
+      }
+      lines.push("");
+    }
+  }
+
+  lines.push("## Structured events");
+  lines.push("");
+  if (!report.structured_events.length) {
+    lines.push("_No structured `sa-automation` events._");
+    lines.push("");
+  } else {
+    if (report.run_summaries.length) {
+      lines.push("### Run summaries");
+      lines.push("");
+      lines.push("| Namespace | Status | Trigger | Run nonce | Steps | Blocks | Failed step |");
+      lines.push("|---|---|---|---|---|---|---|");
+      for (const run of report.run_summaries) {
+        const blockSpan =
+          run.firstSeenBlockHeight != null && run.lastSeenBlockHeight != null
+            ? `${run.firstSeenBlockHeight}..${run.lastSeenBlockHeight}`
+            : "?";
+        lines.push(
+          `| \`${run.namespace}\` | \`${run.status}\` | \`${run.triggerId ?? "-"}\` | \`${run.runNonce ?? "-"}\` | \`${run.stepCount}\` | \`${blockSpan}\` | \`${run.failedStepId ?? "-"}\` |`
+        );
+      }
+      lines.push("");
+    }
+
+    lines.push("### Receipt events");
+    lines.push("");
+    lines.push("| Block | Event | Namespace | Receipt | Details |");
+    lines.push("|---|---|---|---|---|");
+    for (const event of report.structured_events) {
+      const namespace =
+        typeof event.data?.namespace === "string" && event.data.namespace
+          ? event.data.namespace
+          : "-";
+      lines.push(
+        `| ${event.receipt.blockHeight ?? "?"} | \`${event.event}\` | \`${namespace}\` | \`${shortHash(event.receipt.id ?? "?")}\` | ${formatInlineValue(event.data)} |`
       );
     }
     lines.push("");
@@ -341,7 +507,10 @@ export async function buildInvestigateReport(
   const accountActivity = [];
   for (const accountId of accounts) {
     const rows = await fetchAccountHistoryWindow(network, accountId, window);
-    accountActivity.push({ account_id: accountId, rows });
+    accountActivity.push({
+      account_id: accountId,
+      ...partitionAccountActivityRows(rows, traced.tree.txHash),
+    });
   }
 
   const blocks = [];
@@ -385,6 +554,19 @@ export async function buildInvestigateReport(
       return (a.receipt_index ?? Number.POSITIVE_INFINITY) - (b.receipt_index ?? Number.POSITIVE_INFINITY);
     });
 
+  const structuredEvents = parseStructuredEvents(receipts, {
+    transactionHash: traced.tree.txHash,
+  });
+  const runSummaries = summarizeRuns(structuredEvents);
+  const stageLifecycle = classifyStageLifecycle(
+    {
+      classification: traced.classification,
+      raw_final_status: traced.tree.finalStatus,
+    },
+    receipts,
+    structuredEvents
+  );
+
   return {
     schema_version: 1,
     tx: {
@@ -408,6 +590,9 @@ export async function buildInvestigateReport(
     blocks,
     state_snapshots: stateSnapshots,
     account_activity: accountActivity,
+    stage_lifecycle: stageLifecycle,
+    structured_events: structuredEvents,
+    run_summaries: runSummaries,
     logs,
   };
 }

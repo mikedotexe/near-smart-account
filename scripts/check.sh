@@ -13,6 +13,14 @@ RF="${RUSTFLAGS:--A warnings}"
 
 RUSTFLAGS="$RF" cargo check -p smart-account-types
 RUSTFLAGS="$RF" cargo check \
-  -p smart-account -p compat-adapter -p demo-adapter -p echo -p router -p wild-router \
+  -p smart-account -p compat-adapter -p demo-adapter -p echo -p router -p wild-router -p pathological-router \
   --target wasm32-unknown-unknown
-node --test scripts/lib/trace-rpc.test.mjs scripts/investigate-tx.test.mjs
+node --test \
+  scripts/lib/near-cli.test.mjs \
+  scripts/lib/staged-sequence.test.mjs \
+  scripts/lib/trace-rpc.test.mjs \
+  scripts/lib/events.test.mjs \
+  scripts/aggregate-runs.test.mjs \
+  scripts/investigate-tx.test.mjs \
+  scripts/probe-pathological.test.mjs \
+  simple-example/scripts/send-demo.test.mjs

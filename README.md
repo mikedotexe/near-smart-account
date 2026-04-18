@@ -21,6 +21,12 @@ FastNEAR RPC so the pattern is easy to reason about as it develops.
 We're early in the dev cycle — probing the solution space for signal, not
 shipping. Nothing in this repo is load-bearing yet.
 
+New here?
+
+- Start with [START-HERE.md](./START-HERE.md) for the shortest reading path.
+- For a candid repo-shape critique, see [HARDENING-REVIEW.md](./HARDENING-REVIEW.md).
+- For the chapter status map, see [md-CLAUDE-chapters/README.md](./md-CLAUDE-chapters/README.md).
+
 ## Layout
 
 | Path | What lives here |
@@ -31,12 +37,14 @@ shipping. Nothing in this repo is load-bearing yet.
 | `contracts/echo/` | Trivial callee — used as the downstream leaf in every trace demo. |
 | `contracts/router/` | Exercises flat promise shapes the trace viewer distinguishes: single-hop, `.then()` callback, `promise_and` fan-out. |
 | `contracts/wild-router/` | Demo “dishonest async” contract: starts real downstream work but does not return the resulting promise chain to its caller. |
+| `contracts/pathological-router/` | Public probe contract for wild-contract taxonomy: pure lie, gas-burn, decoy-promise, and oversized-payload shapes that `Direct` cannot distinguish cleanly by itself. |
 | `types/` | `smart-account-types` — lightweight, publishable crate with shared shapes. Other contracts / off-chain tooling depend on this instead of the contract Wasm. |
 | `web/` | Static-HTML frontend (no bundler). Walks `EXPERIMENTAL_tx_status` into a receipt DAG and renders it. |
 | `simple-example/` | Nested standalone mini-workspace that isolates the bare `stage_call` / `run_sequence` kernel with a tiny stateful recorder leaf. |
+| `collab/` | Team-facing handoff notes plus a tiny curated set of tracked reference investigation artifacts. Most JSONs under `collab/artifacts/` are local outputs and ignored. |
 | `md-CLAUDE-chapters/` | Long-form design + reference chapters. Start with `01-near-cross-contract-tracing.md`. |
 | `scripts/` | Build/deploy shell scripts, the internal FastNear observability toolkit (`trace-tx`, `investigate-tx`, `receipt-to-tx`, `account-history`, `watch-tip`, `block-window`, `state`), `send-staged-echo-demo.mjs` and `send-staged-mixed-demo.mjs` for manual sequencing experiments, `send-balance-trigger-router-demo.mjs` for repo-local direct / adapter / mixed automation demos, and `send-balance-trigger-wrap-demo.mjs` for the real `wrap.testnet` path. |
-| `res/` | Built Wasm artifacts (`*_local.wasm`, `*_release.wasm`). |
+| `res/` | Generated local Wasm outputs from `build-all.sh`. Rebuildable; not tracked in git. |
 
 ## Quickstart
 
@@ -55,6 +63,15 @@ On testnet, `deploy-testnet.sh` now exports FastNEAR RPC automatically so the
 legacy JS `near` CLI keeps working.
 The internal `scripts/*.mjs` helpers also auto-load `.env`, so they will pick
 up `FASTNEAR_API_KEY` without needing a separate `source .env` step.
+
+Testnet churn rule:
+
+- use fresh direct-child accounts for delete/recreate workflows
+- treat long-lived shared rigs as stateful and potentially non-deletable once
+  they cross NEAR's `DeleteAccountWithLargeState` guard
+- funding a child account with more NEAR does **not** make that guard go away;
+  the practical answers are a fresh child account or an explicit state-cleanup
+  flow
 
 The FastNEAR API key is optional; without it the viewer works but falls
 onto the shared rate-limit. Paste it into the **FastNEAR API key** field
@@ -79,7 +96,8 @@ period-accurate terms that were live at the time, including `latch`,
 `conduct`, `gated_call`, and `label`. Current code and current prose prefer
 `step`, `run_sequence`, and "completion policy" / "completion surface".
 
-- [`PROTOCOL-ONBOARDING.md`](./PROTOCOL-ONBOARDING.md) — the primary operator guide for onboarding a new protocol safely: how to choose `Direct` vs `Adapter`, how to probe a step, what to record, and how to use `investigate-tx`.
+- [`PROTOCOL-ONBOARDING.md`](./PROTOCOL-ONBOARDING.md) — the primary operator guide for onboarding a new protocol safely: how to choose `Direct` vs `Adapter`, how to probe a step, what to record, how `pathological-router` complements `wild-router`, and how to use `investigate-tx`.
+- [`TELEMETRY-DESIGN.md`](./TELEMETRY-DESIGN.md) — the structured-event telemetry note: why automation telemetry belongs in `EVENT_JSON:` logs instead of long-lived contract state, what shipped already, and what remains deferred.
 - [`md-CLAUDE-chapters/01-near-cross-contract-tracing.md`](./md-CLAUDE-chapters/01-near-cross-contract-tracing.md) — deep-dive on NEAR receipt mechanics and how to reconstruct cross-contract call traces from `EXPERIMENTAL_tx_status`, with FastNEAR specifics (retention windows, the `/v0/receipt` pivot, neardata streaming vs Lake).
 - [`md-CLAUDE-chapters/02-latch-conduct-testnet-validation.md`](./md-CLAUDE-chapters/02-latch-conduct-testnet-validation.md) — the first end-to-end live validation of the historical `latch / conduct` POC on testnet, including the exact tx hashes, ordering proof, timeout caveat, and smart-account implication.
 - [`md-CLAUDE-chapters/03-smart-account-staged-call.md`](./md-CLAUDE-chapters/03-smart-account-staged-call.md) — the first real smart-account-side staged-call scaffold: what landed locally, why it resumes only after downstream completion, and how the renamed primitive maps onto the validated testnet run.
@@ -109,6 +127,9 @@ yield/resume behavior.
 ```bash
 ./scripts/trace-tx.mjs 4ct5RA1d4x9efJXWGxPBQRLhsPtKxw453wGpP6F8WZ3L
 ./scripts/investigate-tx.mjs 3MKbDCngBqKake71a8SDLtv8HvixnfeDZBt4HSKwaxaf x.mike.testnet --wait FINAL
+./scripts/aggregate-runs.mjs smart-account.x.mike.testnet --limit 20 --with-blocks
+./scripts/aggregate-runs.mjs smart-account.x.mike.testnet --limit 20 --with-blocks --format both --out collab/artifacts/aggregate-runs-smart-account
+./scripts/probe-pathological.mjs false_success
 ./scripts/receipt-to-tx.mjs 6XN7grXUE2KuCGrKyjBCAgSJHvS5DKCjqkxjAh7kskUE
 ./scripts/account-history.mjs yield-sequencer.x.mike.testnet --limit 20 --function-call
 ./scripts/watch-tip.mjs --once
@@ -121,7 +142,9 @@ yield/resume behavior.
 What each script wraps:
 
 - `trace-tx.mjs` — canonical RPC `EXPERIMENTAL_tx_status`, with sender auto-resolution via the Transactions API when omitted
-- `investigate-tx.mjs` — one-command three-surfaces report: traced receipt DAG, block-pinned views, per-block receipt order, activity rows, and JSON/markdown artifacts
+- `investigate-tx.mjs` — one-command three-surfaces report: traced receipt DAG, block-pinned views, per-block receipt order, same-tx activity rows with omitted-window-row counts, stage-lifecycle classification, structured `sa-automation` events, compact sequence telemetry metrics, and JSON/markdown artifacts
+- `aggregate-runs.mjs` — account-wide structured-event sweep: walks FastNEAR account history, parses `EVENT_JSON:` telemetry, renders a markdown-first run summary plus detailed event drill-down, and can emit JSON/both for artifacts
+- `probe-pathological.mjs` — fast Direct-pathology probe against `pathological-router`, using explicit runtime-facing presets (`control`, `gas_exhaustion`, `false_success`, `decoy_returned_chain`, `oversized_result`) to show where `Direct` stays informative and where signal is lost
 - `receipt-to-tx.mjs` — Transactions API `POST /v0/receipt`
 - `account-history.mjs` — Transactions API `POST /v0/account`
 - `watch-tip.mjs` — NEAR Data `GET /v0/last_block/final` or optimistic tip polling
@@ -133,6 +156,8 @@ Current defaults:
 - network defaults to `testnet`
 - scripts auto-load `.env` from the repo root
 - scripts emit human-readable summaries by default and support `--json`
+- generated outputs under `res/` are local build products, not tracked source
+- generated outputs under `collab/artifacts/` are local investigation products by default; the repo keeps exactly two curated JSON reference examples checked in
 
 ## Smart-account staged execution path
 
@@ -183,6 +208,16 @@ run used `4 x 250 TGas = 1000 TGas` exactly. By contrast:
 So the current practical recipe is "use the new `1 PGas` budget across several
 yielded actions" rather than "push a single yielded action up to `940 TGas`".
 
+Current mainnet lab note:
+
+- on `sa-lab.mike.near`, single-step staged calls stayed pending at `180`,
+  `250`, and `500 TGas`
+- two-step staged batches failed at `180` and `250 TGas` per action, then
+  stayed pending at `300` and `400 TGas` per action
+- so the current operator baseline for **mainnet multi-step** probes is:
+  start at `300 TGas` per outer `stage_call` action, and treat `180` / `250`
+  as deliberate boundary probes rather than reasonable defaults
+
 ## Wild-contract compatibility
 
 The primary operator workflow now lives in
@@ -194,24 +229,24 @@ completion policy** (`settle_policy` in code):
 
 - `Direct` means "trust the target receipt's own success/failure surface"
 - `Adapter { adapter_id, adapter_method }` means "dispatch through a protocol-specific adapter that returns one honest top-level result"
-- `Asserted` is reserved for a future post-call assertion mode and is not implemented yet
+- `Asserted { assertion_id, assertion_method, assertion_args, expected_return, assertion_gas_tgas }` means "after the target settles, fire a caller-specified postcheck receipt and advance only if its return bytes exactly match `expected_return`" — this is a real zero-deposit `FunctionCall`, not an enforced read-only view, so callers must choose a trustworthy postcheck surface; see chapter 21
 
 Short rule:
 
 - empty / void success is fine in `Direct`
 - a truthful returned promise chain is also fine in `Direct`
 - hidden nested async requires `Adapter`
-- future state/postcondition cases point toward `Asserted`
+- target-state postconditions that one trustworthy postcheck call can prove (counter must equal N, balance must equal X) use `Asserted`
 
-The repo-native demo pair is:
+Public probe surfaces:
 
-- `wild-router.route_echo_fire_and_forget(...)` — starts a real downstream echo call but returns before that echo has settled
-- `demo-adapter.adapt_fire_and_forget_route_echo(...)` — starts the same messy protocol call, then polls `wild-router.get_last_finished()` until the intended effect is actually visible, and only then returns success to the smart account
-- `compat-adapter.adapt_wrap_near_deposit_then_transfer(...)` — the real protocol-specific external path that wraps `wrap.testnet.near_deposit()` and only returns success after the resulting `ft_transfer` back to the smart account has settled
-
-That keeps the sequencing kernel narrow and stable: it still advances on
-receipt truth, but now the truth can come either directly from the target or
-from a protocol-specific compatibility layer.
+- `wild-router` is the compact dishonest-async demo
+- `pathological-router` is the broader probe contract for pure lie, gas-burn,
+  decoy-promise, and oversized-payload shapes that a raw `Direct` policy
+  cannot distinguish cleanly on its own
+- `probe-pathological.mjs` is the quickest way to run one of those
+  `pathological-router` shapes through the real smart-account kernel and inspect
+  the exact callback-visible completion surface that `Direct` sees
 
 ## Balance-trigger automation path
 
@@ -273,6 +308,7 @@ That helper:
   `--executor-signer` if you want a delegated executor flow
 - writes a JSON artifact file under `collab/artifacts/` with the tx hashes,
   block heights, decoded return values, and ready-made trace commands
+  (local by default; the repo tracks only a tiny curated reference subset)
 
 ## Validated automation testnet flow
 
