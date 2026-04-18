@@ -1,0 +1,15 @@
+[package]
+name = "echo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Trivial NEAR callee used by the router demo to exercise cross-contract trace rendering."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.26.1"
+
+[dev-dependencies]
+near-sdk = { version = "5.26.1", features = ["unit-testing"] }

@@ -1,0 +1,129 @@
+{
+  "generated_at": "2026-04-18T03:46:21.831Z",
+  "network": "testnet",
+  "mode": "adapter",
+  "contract": "smart-account.x.mike.testnet",
+  "router": "router.x.mike.testnet",
+  "wild_router": "wild-router.x.mike.testnet",
+  "adapter": "compat-adapter.x.mike.testnet",
+  "adapter_method": "adapt_fire_and_forget_route_echo",
+  "echo": "echo.x.mike.testnet",
+  "owner_signer": "x.mike.testnet",
+  "executor_signer": "x.mike.testnet",
+  "sequence_id": "router-seq-mo3sonr1",
+  "trigger_id": "balance-trigger-mo3sonr1",
+  "owner_gas_tgas": 200,
+  "execute_gas_tgas": 1000,
+  "call_gas_tgas": 20,
+  "min_balance_yocto": "1000000000000000000000000",
+  "max_runs": 3,
+  "calls": [
+    {
+      "order": 0,
+      "label": "alpha",
+      "policy": "Adapter via compat-adapter.x.mike.testnet.adapt_fire_and_forget_route_echo",
+      "route": "compat-adapter.x.mike.testnet.adapt_fire_and_forget_route_echo({ target: wild-router.x.mike.testnet.route_echo_fire_and_forget({ callee: echo.x.mike.testnet, n: 7 }) })"
+    },
+    {
+      "order": 1,
+      "label": "beta",
+      "policy": "Adapter via compat-adapter.x.mike.testnet.adapt_fire_and_forget_route_echo",
+      "route": "compat-adapter.x.mike.testnet.adapt_fire_and_forget_route_echo({ target: wild-router.x.mike.testnet.route_echo_fire_and_forget({ callee: echo.x.mike.testnet, n: 8 }) })"
+    }
+  ],
+  "artifacts_file": "/Users/mikepurvis/near/smart-account-contract/collab/artifacts/2026-04-18T03-46-04-477Z-router-seq-mo3sonr1-balance-trigger-mo3sonr1.json",
+  "sequence_template_view": {
+    "sequence_id": "router-seq-mo3sonr1",
+    "calls": [
+      {
+        "label": "alpha",
+        "target_id": "wild-router.x.mike.testnet",
+        "method_name": "route_echo_fire_and_forget",
+        "args": "eyJjYWxsZWUiOiJlY2hvLngubWlrZS50ZXN0bmV0IiwibiI6N30=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 20,
+        "settle_policy": {
+          "Adapter": {
+            "adapter_id": "compat-adapter.x.mike.testnet",
+            "adapter_method": "adapt_fire_and_forget_route_echo"
+          }
+        }
+      },
+      {
+        "label": "beta",
+        "target_id": "wild-router.x.mike.testnet",
+        "method_name": "route_echo_fire_and_forget",
+        "args": "eyJjYWxsZWUiOiJlY2hvLngubWlrZS50ZXN0bmV0IiwibiI6OH0=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 20,
+        "settle_policy": {
+          "Adapter": {
+            "adapter_id": "compat-adapter.x.mike.testnet",
+            "adapter_method": "adapt_fire_and_forget_route_echo"
+          }
+        }
+      }
+    ],
+    "contains_adapter_calls": true,
+    "saved_at_ms": 1776483966452,
+    "total_attached_deposit_yocto": "0"
+  },
+  "balance_trigger_view": {
+    "trigger_id": "balance-trigger-mo3sonr1",
+    "sequence_id": "router-seq-mo3sonr1",
+    "min_balance_yocto": "1000000000000000000000000",
+    "max_runs": 3,
+    "runs_started": 0,
+    "in_flight": false,
+    "last_executor_id": null,
+    "last_started_at_ms": null,
+    "last_finished_at_ms": null,
+    "last_run_namespace": null,
+    "last_run_outcome": null,
+    "created_at_ms": 1776483970188
+  },
+  "execution_view": {
+    "trigger_id": "balance-trigger-mo3sonr1",
+    "sequence_id": "router-seq-mo3sonr1",
+    "sequence_namespace": "auto:balance-trigger-mo3sonr1:1",
+    "run_nonce": 1,
+    "executor_id": "x.mike.testnet",
+    "started_at_ms": 1776483972554,
+    "call_count": 2
+  },
+  "txs": [
+    {
+      "step": "save_sequence_template",
+      "signer": "x.mike.testnet",
+      "receiver_id": "smart-account.x.mike.testnet",
+      "tx_hash": "6QmXRW8PdTAqxtHKkg6nwxmtPrBZL76pE7yMXVZV5rPf",
+      "block_hash": "DpoUE3GNVj58JtswaXKFXDG2yhrBuzhBDwB3E32jzRC2",
+      "block_height": 246249887,
+      "status": {
+        "SuccessReceiptId": "BdDYciCL9THXW8WNxK4BvxWCyF6cVoRPLG496HJ9zoo7"
+      }
+    },
+    {
+      "step": "create_balance_trigger",
+      "signer": "x.mike.testnet",
+      "receiver_id": "smart-account.x.mike.testnet",
+      "tx_hash": "GXkE7XFcv6A6TTFdupRcMKca8BjNo6UYJdwPBPcUBvDY",
+      "block_hash": "ExJ9uYq9pszYdwc69DLwyVNLnUUhRjSS2dbbkpF9sTjr",
+      "block_height": 246249893,
+      "status": {
+        "SuccessReceiptId": "27zzjRQLBbFnrw6jyWULCUhJYEeUdotPEiieDywxqP4W"
+      }
+    },
+    {
+      "step": "execute_trigger",
+      "signer": "x.mike.testnet",
+      "receiver_id": "smart-account.x.mike.testnet",
+      "tx_hash": "87NS2komjXvHPPMdn28xA7LGxP6szHEUnNZ8Mt345DxL",
+      "block_hash": "8PAvNEmFVBpytudWaLnu4QXP2yQf4FfrnFA2LhbN3Fwa",
+      "block_height": 246249897,
+      "status": {
+        "SuccessReceiptId": "4GQ2xpRH2veorUfXKc3xoWnG3Cx24vnquzw4wTTPA1tv"
+      }
+    }
+  ]
+}

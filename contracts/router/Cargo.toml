@@ -1,0 +1,15 @@
+[package]
+name = "router"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Exercises every cross-contract-call shape the trace viewer distinguishes (single-hop, .then() callback, promise_and fan-out, yield/resume)."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.26.1"
+
+[dev-dependencies]
+near-sdk = { version = "5.26.1", features = ["unit-testing"] }

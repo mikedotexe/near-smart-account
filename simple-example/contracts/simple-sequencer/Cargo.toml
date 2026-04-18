@@ -1,0 +1,15 @@
+[package]
+name = "simple-sequencer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Minimal NEP-519 receipt sequencer that stages direct downstream calls and resumes them in caller-chosen order."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.26.1"
+
+[dev-dependencies]
+near-sdk = { version = "5.26.1", features = ["unit-testing"] }

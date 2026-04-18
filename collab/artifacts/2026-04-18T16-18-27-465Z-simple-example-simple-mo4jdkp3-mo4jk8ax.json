@@ -1,0 +1,357 @@
+{
+  "generated_at": "2026-04-18T16:18:46.758Z",
+  "run_id": "mo4jk8ax",
+  "network": "testnet",
+  "signer": "mike.testnet",
+  "master": "x.mike.testnet",
+  "prefix": "simple-mo4jdkp3",
+  "contract_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+  "recorder_id": "simple-recorder-simple-mo4jdkp3.x.mike.testnet",
+  "method": "record",
+  "action_gas_tgas": 250,
+  "downstream_call_gas_tgas": 30,
+  "run_gas_tgas": 100,
+  "stage_timeout_ms": 30000,
+  "downstream_call_deposit_yocto": "0",
+  "submitted_actions": [
+    {
+      "step_id": "alpha",
+      "value": 1
+    },
+    {
+      "step_id": "beta",
+      "value": 2
+    },
+    {
+      "step_id": "gamma",
+      "value": 3
+    }
+  ],
+  "sequence_order_requested": [
+    "beta",
+    "alpha",
+    "gamma"
+  ],
+  "run_sequence_args": {
+    "caller_id": "mike.testnet",
+    "order": [
+      "beta",
+      "alpha",
+      "gamma"
+    ]
+  },
+  "stage_primary_forensics": {
+    "tx_hash": "562QzDXoX4Evxym6HaXkJMTQJiay6vUdrGtBji4XxMYg",
+    "signer": "mike.testnet"
+  },
+  "txs": [
+    {
+      "step": "stage_batch",
+      "signer": "mike.testnet",
+      "receiver_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+      "tx_hash": "562QzDXoX4Evxym6HaXkJMTQJiay6vUdrGtBji4XxMYg",
+      "block_hash": "BVQ7Sgm8KMH4sXPhsQiiHecgD1xywCbdc9nHwt2QpDVP",
+      "block_height": 246329779,
+      "status": {
+        "SuccessReceiptId": "7NbFxukuGPj9FpSjHZSKwMzrKXbUR1mjvFAr23QgYQgp"
+      },
+      "decoded_success_value": null
+    },
+    {
+      "step": "run_sequence",
+      "signer": "mike.testnet",
+      "receiver_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+      "tx_hash": "HHLy5zjo8U6dYC19nkgvfq7S4khV41bFyag4hjUfMrU9",
+      "block_hash": "43zkKhvMCj3NkLPRj2wGJVDpxFNcBQHeSegzuY2b19JX",
+      "block_height": 246329792,
+      "status": {
+        "SuccessReceiptId": "C53jN3P5f5hav5wEAHNHsJvG35tJEsh6TAuFutAqpnyp"
+      },
+      "decoded_success_value": 3
+    }
+  ],
+  "recorder_state_before": {
+    "block_height": 246329772,
+    "block_hash": "2gHL2YrfavecG2sCQxNwLNrGpKbgVpNECXWkYgkgxmVK",
+    "logs": [],
+    "entries": []
+  },
+  "staged_calls_before_release": {
+    "ready": true,
+    "expected_count": 3,
+    "observed_count": 3,
+    "poll_ms": 2000,
+    "timeout_ms": 30000,
+    "block_height": 246329784,
+    "block_hash": "CnRAK8Bd6MTApKiahScTgkUuY9f5pRNpMiocPQcUAugW",
+    "staged_calls": [
+      {
+        "step_id": "alpha",
+        "target_id": "simple-recorder-simple-mo4jdkp3.x.mike.testnet",
+        "method_name": "record",
+        "args": "eyJzdGVwX2lkIjoiYWxwaGEiLCJ2YWx1ZSI6MX0=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 30,
+        "created_at_ms": 1776529109803
+      },
+      {
+        "step_id": "beta",
+        "target_id": "simple-recorder-simple-mo4jdkp3.x.mike.testnet",
+        "method_name": "record",
+        "args": "eyJzdGVwX2lkIjoiYmV0YSIsInZhbHVlIjoyfQ==",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 30,
+        "created_at_ms": 1776529109803
+      },
+      {
+        "step_id": "gamma",
+        "target_id": "simple-recorder-simple-mo4jdkp3.x.mike.testnet",
+        "method_name": "record",
+        "args": "eyJzdGVwX2lkIjoiZ2FtbWEiLCJ2YWx1ZSI6M30=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 30,
+        "created_at_ms": 1776529109803
+      }
+    ]
+  },
+  "recorder_state_after": {
+    "settled": true,
+    "expected_new_entries": 3,
+    "initial_entry_count": 0,
+    "observed_entry_count": 3,
+    "observed_new_entries": 3,
+    "poll_ms": 2000,
+    "timeout_ms": 90000,
+    "block_height": 246329803,
+    "block_hash": "4Ec3NXGrxVBpyXbkScoWFVfWxRAPDYofF5SJpmDJcUei",
+    "logs": [],
+    "entries": [
+      {
+        "step_id": "beta",
+        "value": 2,
+        "predecessor_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+        "signer_id": "mike.testnet",
+        "block_height": 246329795,
+        "timestamp_ms": 1776529117842
+      },
+      {
+        "step_id": "alpha",
+        "value": 1,
+        "predecessor_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+        "signer_id": "mike.testnet",
+        "block_height": 246329798,
+        "timestamp_ms": 1776529119346
+      },
+      {
+        "step_id": "gamma",
+        "value": 3,
+        "predecessor_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+        "signer_id": "mike.testnet",
+        "block_height": 246329801,
+        "timestamp_ms": 1776529120969
+      }
+    ],
+    "new_entries": [
+      {
+        "step_id": "beta",
+        "value": 2,
+        "predecessor_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+        "signer_id": "mike.testnet",
+        "block_height": 246329795,
+        "timestamp_ms": 1776529117842
+      },
+      {
+        "step_id": "alpha",
+        "value": 1,
+        "predecessor_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+        "signer_id": "mike.testnet",
+        "block_height": 246329798,
+        "timestamp_ms": 1776529119346
+      },
+      {
+        "step_id": "gamma",
+        "value": 3,
+        "predecessor_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+        "signer_id": "mike.testnet",
+        "block_height": 246329801,
+        "timestamp_ms": 1776529120969
+      }
+    ]
+  },
+  "traces": {
+    "stage_batch": {
+      "sender_id": "mike.testnet",
+      "classification": "FULL_SUCCESS",
+      "error": null
+    },
+    "run_sequence": {
+      "sender_id": "mike.testnet",
+      "classification": "FULL_SUCCESS",
+      "error": null
+    }
+  },
+  "fastnear_endpoints": [
+    {
+      "kind": "live_capture",
+      "transport": "RPC",
+      "endpoint": "EXPERIMENTAL_tx_status",
+      "base_url": "https://rpc.testnet.fastnear.com",
+      "archival_fallback_base_url": "https://archival-rpc.testnet.fastnear.com",
+      "helper": "traceTx(...) via scripts/lib/trace-rpc.mjs",
+      "how_we_use_it": {
+        "params": {
+          "tx_hash": "<stage_or_run_sequence_tx_hash>",
+          "sender_account_id": "<signer>",
+          "wait_until": "FINAL"
+        },
+        "behavior": "The helper queries the hot RPC first and retries on the archival RPC when the hot node returns UNKNOWN_TRANSACTION."
+      },
+      "why_we_use_it": "Classify the stage and run_sequence traces and preserve the receipt-DAG anchor we will inspect later for callback ordering."
+    },
+    {
+      "kind": "live_capture",
+      "transport": "RPC",
+      "endpoint": "query(call_function)",
+      "base_url": "https://rpc.testnet.fastnear.com",
+      "helper": "callViewMethod(...) via scripts/lib/near-cli.mjs",
+      "how_we_use_it": {
+        "params": {
+          "request_type": "call_function",
+          "account_id": "simple-sequencer-simple-mo4jdkp3.x.mike.testnet",
+          "method_name": "staged_calls_for",
+          "args_base64": "eyJjYWxsZXJfaWQiOiJtaWtlLnRlc3RuZXQifQ==",
+          "finality": "final"
+        },
+        "behavior": "After async stage submission, we poll simple-sequencer.staged_calls_for(caller_id) until the expected yielded steps materialize before sending run_sequence."
+      },
+      "why_we_use_it": "Avoid commit-style submission semantics and prove that the yielded handles are actually live before we try to resume them."
+    },
+    {
+      "kind": "live_capture",
+      "transport": "Transactions API",
+      "endpoint": "POST /v0/transactions",
+      "base_url": "https://tx.test.fastnear.com",
+      "helper": "buildTxArtifact(...) via scripts/lib/near-cli.mjs",
+      "how_we_use_it": {
+        "body": {
+          "tx_hashes": [
+            "<stage_tx_hash>",
+            "<run_sequence_tx_hash>"
+          ]
+        },
+        "behavior": "We call the endpoint once per transaction to enrich the run artifact with block_height, block_hash, receiver_id, and execution status."
+      },
+      "why_we_use_it": "Turn each tx hash into a durable forensic anchor that includes the exact block and receiver metadata we will want later on archival lookups."
+    },
+    {
+      "kind": "live_capture",
+      "transport": "RPC",
+      "endpoint": "query(call_function)",
+      "base_url": "https://rpc.testnet.fastnear.com",
+      "helper": "callViewMethod(...) via scripts/lib/near-cli.mjs",
+      "how_we_use_it": {
+        "params": {
+          "request_type": "call_function",
+          "account_id": "simple-recorder-simple-mo4jdkp3.x.mike.testnet",
+          "method_name": "get_entries",
+          "args_base64": "e30=",
+          "finality": "final"
+        },
+        "behavior": "We read simple-recorder.get_entries() before the run and poll it after run_sequence until the expected new entries appear or the timeout expires."
+      },
+      "why_we_use_it": "Capture durable state proof of actual downstream effect order, not just the transaction and receipt metadata."
+    },
+    {
+      "kind": "follow_up_analysis",
+      "transport": "Transactions API",
+      "endpoint": "POST /v0/receipt",
+      "base_url": "https://tx.test.fastnear.com",
+      "helper": "scripts/receipt-to-tx.mjs",
+      "how_we_use_it": {
+        "body": {
+          "receipt_id": "<receipt_id>"
+        },
+        "behavior": "Use it interactively after trace inspection to pivot any interesting yielded or downstream receipt back to its originating transaction."
+      },
+      "why_we_use_it": "Receipt ids show up all over the DAG; this is the fastest way to reconnect any one of them to the originating tx for deeper forensic work."
+    },
+    {
+      "kind": "follow_up_analysis",
+      "transport": "Transactions API",
+      "endpoint": "POST /v0/block",
+      "base_url": "https://tx.test.fastnear.com",
+      "helper": "fetchBlock(...) via scripts/investigate-tx.mjs",
+      "how_we_use_it": {
+        "body": {
+          "block_id": "<included_or_cascade_block_height_or_hash>",
+          "with_receipts": true,
+          "with_transactions": false
+        },
+        "behavior": "The investigation report fetches the included block plus each cascade block, with receipts, to reconstruct the per-block execution timeline."
+      },
+      "why_we_use_it": "Translate the DAG into an actual block-by-block story suitable for later forensic analysis and chapter writing."
+    },
+    {
+      "kind": "follow_up_analysis",
+      "transport": "Transactions API",
+      "endpoint": "POST /v0/account",
+      "base_url": "https://tx.test.fastnear.com",
+      "helper": "fetchAccountHistory(...) via scripts/investigate-tx.mjs",
+      "how_we_use_it": {
+        "body": {
+          "account_id": "<one of simple-sequencer-simple-mo4jdkp3.x.mike.testnet or simple-recorder-simple-mo4jdkp3.x.mike.testnet>",
+          "is_function_call": true,
+          "limit": 50
+        },
+        "behavior": "The investigation report narrows account activity to the tx window so we can correlate contract-local history with the DAG and state snapshots."
+      },
+      "why_we_use_it": "Adds the account-activity surface, which is often the fastest human-readable way to confirm that a contract participated in the cascade at the blocks we expect."
+    },
+    {
+      "kind": "follow_up_analysis",
+      "transport": "RPC",
+      "endpoint": "query(call_function)",
+      "base_url": "https://rpc.testnet.fastnear.com",
+      "helper": "callViewMethod(...) via scripts/investigate-tx.mjs",
+      "how_we_use_it": {
+        "params": {
+          "request_type": "call_function",
+          "account_id": "simple-recorder-simple-mo4jdkp3.x.mike.testnet",
+          "method_name": "get_entries",
+          "args_base64": "e30=",
+          "block_id": "<interesting_block_height>"
+        },
+        "behavior": "The investigation report can replay recorder state at specific block heights with the view spec that send-demo prints in its investigate command."
+      },
+      "why_we_use_it": "Turns the recorder into a time series so we can prove not just final order, but when the observable state changed block by block."
+    },
+    {
+      "kind": "follow_up_analysis",
+      "transport": "CLI wrapper",
+      "endpoint": "run_sequence contract call",
+      "base_url": null,
+      "helper": "send-demo command output",
+      "how_we_use_it": {
+        "args": {
+          "caller_id": "mike.testnet",
+          "order": [
+            "beta",
+            "alpha",
+            "gamma"
+          ]
+        },
+        "behavior": "The artifact preserves the exact run_sequence payload used to release the yielded callbacks so later analysis never depends on memory."
+      },
+      "why_we_use_it": "The chosen release order is part of the evidence; saving the payload alongside the tx/block metadata makes the run decision-complete for later forensics."
+    }
+  ],
+  "commands": {
+    "run_sequence": "NEAR_ENV=testnet near call simple-sequencer-simple-mo4jdkp3.x.mike.testnet run_sequence '{\"caller_id\":\"mike.testnet\",\"order\":[\"beta\",\"alpha\",\"gamma\"]}' --accountId mike.testnet",
+    "trace_stage": "./scripts/trace-tx.mjs 562QzDXoX4Evxym6HaXkJMTQJiay6vUdrGtBji4XxMYg mike.testnet --wait FINAL",
+    "trace_run_sequence": "./scripts/trace-tx.mjs HHLy5zjo8U6dYC19nkgvfq7S4khV41bFyag4hjUfMrU9 mike.testnet --wait FINAL",
+    "state_recorder": "./scripts/state.mjs simple-recorder-simple-mo4jdkp3.x.mike.testnet --method get_entries",
+    "investigate_stage": "./scripts/investigate-tx.mjs 562QzDXoX4Evxym6HaXkJMTQJiay6vUdrGtBji4XxMYg mike.testnet --wait FINAL --accounts simple-sequencer-simple-mo4jdkp3.x.mike.testnet,simple-recorder-simple-mo4jdkp3.x.mike.testnet --view '{\"account\":\"simple-recorder-simple-mo4jdkp3.x.mike.testnet\",\"method\":\"get_entries\"}'",
+    "receipt_to_tx": "./scripts/receipt-to-tx.mjs <receipt_id>"
+  },
+  "artifacts_file": "/Users/mikepurvis/near/smart-account-contract/collab/artifacts/2026-04-18T16-18-27-465Z-simple-example-simple-mo4jdkp3-mo4jk8ax.json"
+}

@@ -1,0 +1,85 @@
+:root {
+  --accent: #00c08b;
+  --accent-warn: #f5a623;
+  --accent-fail: #d0021b;
+  --accent-pending: #4a90e2;
+}
+
+body { font-family: "Inter", system-ui, sans-serif; }
+.code, pre, input.code { font-family: "Fira Code", ui-monospace, monospace; }
+
+.demo-btn {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0.5rem 0.5rem 0;
+  transition: opacity 0.15s;
+}
+.demo-btn:hover:not(:disabled) { opacity: 0.85; }
+.demo-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Receipt-tree rendering */
+.trace-node {
+  border-left: 2px solid #ccc;
+  padding-left: 0.8rem;
+  margin: 0.3rem 0;
+}
+.trace-node[data-status="SuccessValue"]      { border-color: var(--accent); }
+.trace-node[data-status="SuccessReceiptId"]  { border-color: var(--accent-pending); }
+.trace-node[data-status="Failure"]           { border-color: var(--accent-fail); }
+.trace-node[data-status="pending_yield"]     { border-color: var(--accent-warn); background: #fff8ea; }
+.trace-node[data-status="Unknown"]           { border-color: #888; }
+
+.trace-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.trace-badge {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  background: #eee;
+}
+.trace-badge[data-status="SuccessValue"]     { background: #d4f4e0; color: #0a6a3e; }
+.trace-badge[data-status="SuccessReceiptId"] { background: #e0ecfa; color: #1c4a86; }
+.trace-badge[data-status="Failure"]          { background: #fbdede; color: #8a0a0a; }
+.trace-badge[data-status="pending_yield"]    { background: #fff0cc; color: #7a5200; }
+
+.trace-meta {
+  color: #666;
+  font-size: 0.72rem;
+}
+.trace-logs {
+  margin: 0.2rem 0 0;
+  padding: 0.3rem 0.5rem;
+  background: #f0f0f0;
+  border-radius: 2px;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+.trace-resume-btn {
+  background: var(--accent-warn);
+  border: 0; color: #fff; padding: 2px 8px; border-radius: 3px;
+  font-size: 0.7rem; cursor: pointer; margin-left: 0.5rem;
+}
+.classify {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+.classify-FULL_SUCCESS { background: #d4f4e0; color: #0a6a3e; }
+.classify-PARTIAL_FAIL { background: #fff0cc; color: #7a5200; }
+.classify-HARD_FAIL    { background: #fbdede; color: #8a0a0a; }
+.classify-PENDING      { background: #e0ecfa; color: #1c4a86; }
+
+.user-info .code { font-size: 0.75rem; }

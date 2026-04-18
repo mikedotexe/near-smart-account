@@ -1,0 +1,6 @@
+[alias]
+pretty = "fmt --all"
+# cargo test --workspace works — cfg(test) bypasses near-sdk's host-target
+# compile guard, so on-chain crates test fine. The check alias for the wasm
+# split lives in scripts/check.sh because aliases can't chain commands.
+t = ["test", "--workspace"]

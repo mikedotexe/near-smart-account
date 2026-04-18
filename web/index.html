@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta content="width=device-width,initial-scale=1.0" name="viewport"/>
+  <title>smart-account · receipt trace viewer</title>
+
+  <link href="https://unpkg.com/tachyons@4.12.0/css/tachyons.min.css" rel="stylesheet"/>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Fira+Code:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- @fastnear/api via unpkg UMD; no bundler, matches reference-static-template -->
+  <script src="https://unpkg.com/@fastnear/api/dist/umd/browser.global.js"></script>
+
+  <!-- Optional local config (gitignored). Sets window.FASTNEAR_API_KEY.
+       404 here is harmless — it's a deliberately-optional override file. -->
+  <script src="./config.local.js" onerror="void 0"></script>
+
+  <script type="module">
+    /** @type { import("https://unpkg.com/@fastnear/api/dist/esm/index.d.ts") } */
+    /* global near */
+    await import("https://unpkg.com/@fastnear/api/dist/umd/browser.global.js");
+
+    import { wireUpAppEarly, wireUpAppLate } from "./index.js";
+
+    wireUpAppEarly();
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", wireUpAppLate);
+    } else {
+      wireUpAppLate();
+    }
+  </script>
+
+  <link href="style.css" rel="stylesheet"/>
+</head>
+<body class="sans-serif near-black bg-near-white min-vh-100">
+
+<header class="bg-black-80 white pa3 flex items-center justify-between">
+  <div>
+    <span class="f4 fw6">smart-account</span>
+    <span class="f6 o-60 ml2">receipt trace viewer</span>
+  </div>
+  <div id="auth" class="user-info"></div>
+</header>
+
+<main class="mw8 center pa3">
+
+  <section class="bg-white pa3 br2 shadow-1 mb3">
+    <h2 class="f5 fw6 mt0 mb2">Config</h2>
+    <div class="flex flex-wrap">
+      <label class="mr3 mb2">
+        <span class="f7 db o-70">router</span>
+        <input id="cfg-router" class="input-reset ba b--black-20 pa1 br1 w-100" value="router.x.mike.testnet"/>
+      </label>
+      <label class="mr3 mb2">
+        <span class="f7 db o-70">echo A</span>
+        <input id="cfg-echo-a" class="input-reset ba b--black-20 pa1 br1 w-100" value="echo.x.mike.testnet"/>
+      </label>
+      <label class="mr3 mb2">
+        <span class="f7 db o-70">echo B</span>
+        <input id="cfg-echo-b" class="input-reset ba b--black-20 pa1 br1 w-100" value="echo-b.x.mike.testnet"/>
+      </label>
+      <label class="mr3 mb2 flex-auto">
+        <span class="f7 db o-70">FastNEAR API key · optional, skips rate limit</span>
+        <input id="cfg-api-key" type="password" autocomplete="off" spellcheck="false"
+               class="input-reset ba b--black-20 pa1 br1 w-100 code" placeholder="paste to enable"/>
+      </label>
+    </div>
+    <p class="f7 o-60 mt1 mb0">network: <span class="code">testnet</span> · RPC: <span class="code">rpc.testnet.fastnear.com</span> (archival failover on <code>UNKNOWN_*</code>) · key stored in <code>localStorage</code></p>
+  </section>
+
+  <section class="bg-white pa3 br2 shadow-1 mb3">
+    <h2 class="f5 fw6 mt0 mb2">Run a demo</h2>
+    <p class="f7 o-60 mt0 mb2">each button submits one transaction; the resulting tx_hash auto-populates the trace panel below.</p>
+    <div class="mb2">
+      <div class="f7 fw6 ttu tracked mb1 o-70">flat promise shapes · router</div>
+      <div class="flex flex-wrap">
+        <button id="demo-single-hop" class="demo-btn">single-hop · route_echo(42)</button>
+        <button id="demo-then"       class="demo-btn">then-callback · route_echo_then(7)</button>
+        <button id="demo-and"        class="demo-btn">promise_and · route_echo_and([A,B], 3)</button>
+      </div>
+    </div>
+    <p class="f7 o-60 mt2 mb0" id="demo-status">not signed in — click sign-in on the right to create a session key</p>
+  </section>
+
+  <section class="bg-white pa3 br2 shadow-1 mb3">
+    <h2 class="f5 fw6 mt0 mb2">Trace a hash</h2>
+    <div class="flex flex-wrap items-end">
+      <label class="mr3 mb2 flex-auto">
+        <span class="f7 db o-70">tx_hash</span>
+        <input id="trace-hash" class="input-reset ba b--black-20 pa1 br1 w-100 code" placeholder="6zgh…"/>
+      </label>
+      <label class="mr3 mb2">
+        <span class="f7 db o-70">sender</span>
+        <input id="trace-sender" class="input-reset ba b--black-20 pa1 br1 w-100"/>
+      </label>
+      <label class="mr3 mb2">
+        <span class="f7 db o-70">wait_until</span>
+        <select id="trace-wait" class="input-reset ba b--black-20 pa1 br1">
+          <option>EXECUTED_OPTIMISTIC</option>
+          <option>EXECUTED</option>
+          <option selected>FINAL</option>
+        </select>
+      </label>
+      <button id="trace-run" class="demo-btn">Trace</button>
+    </div>
+  </section>
+
+  <section class="bg-white pa3 br2 shadow-1">
+    <h2 class="f5 fw6 mt0 mb2">Trace output</h2>
+    <div id="trace-summary" class="f6 o-80 mb2"></div>
+    <pre id="trace-tree" class="code f6 ma0 pa2 bg-near-white br1 overflow-auto"></pre>
+  </section>
+
+</main>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+[package]
+name = "compat-adapter"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "wrap.testnet adapter that collapses near_deposit -> ft_transfer into one honest top-level success/failure surface."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.26.1"
+smart-account-types = { path = "../../types", version = "0.1.0" }
+
+[dev-dependencies]
+near-sdk = { version = "5.26.1", features = ["unit-testing"] }

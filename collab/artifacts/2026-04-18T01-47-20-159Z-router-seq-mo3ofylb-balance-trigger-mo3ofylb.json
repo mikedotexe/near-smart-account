@@ -1,0 +1,123 @@
+{
+  "generated_at": "2026-04-18T01:47:36.892Z",
+  "network": "testnet",
+  "contract": "smart-account.x.mike.testnet",
+  "router": "router.x.mike.testnet",
+  "echo": "echo.x.mike.testnet",
+  "owner_signer": "x.mike.testnet",
+  "executor_signer": "x.mike.testnet",
+  "sequence_id": "router-seq-mo3ofylb",
+  "trigger_id": "balance-trigger-mo3ofylb",
+  "owner_gas_tgas": 100,
+  "execute_gas_tgas": 500,
+  "call_gas_tgas": 40,
+  "min_balance_yocto": "1000000000000000000000000",
+  "max_runs": 3,
+  "calls": [
+    {
+      "order": 0,
+      "label": "alpha",
+      "route": "router.x.mike.testnet.route_echo({ callee: echo.x.mike.testnet, n: 1 })"
+    },
+    {
+      "order": 1,
+      "label": "beta",
+      "route": "router.x.mike.testnet.route_echo({ callee: echo.x.mike.testnet, n: 2 })"
+    },
+    {
+      "order": 2,
+      "label": "gamma",
+      "route": "router.x.mike.testnet.route_echo({ callee: echo.x.mike.testnet, n: 3 })"
+    }
+  ],
+  "artifacts_file": "/Users/mikepurvis/near/smart-account-contract/collab/artifacts/2026-04-18T01-47-20-159Z-router-seq-mo3ofylb-balance-trigger-mo3ofylb.json",
+  "sequence_template_view": {
+    "sequence_id": "router-seq-mo3ofylb",
+    "calls": [
+      {
+        "label": "alpha",
+        "target_id": "router.x.mike.testnet",
+        "method_name": "route_echo",
+        "args": "eyJjYWxsZWUiOiJlY2hvLngubWlrZS50ZXN0bmV0IiwibiI6MX0=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 40
+      },
+      {
+        "label": "beta",
+        "target_id": "router.x.mike.testnet",
+        "method_name": "route_echo",
+        "args": "eyJjYWxsZWUiOiJlY2hvLngubWlrZS50ZXN0bmV0IiwibiI6Mn0=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 40
+      },
+      {
+        "label": "gamma",
+        "target_id": "router.x.mike.testnet",
+        "method_name": "route_echo",
+        "args": "eyJjYWxsZWUiOiJlY2hvLngubWlrZS50ZXN0bmV0IiwibiI6M30=",
+        "attached_deposit_yocto": "0",
+        "gas_tgas": 40
+      }
+    ],
+    "saved_at_ms": 1776476842445,
+    "total_attached_deposit_yocto": "0"
+  },
+  "balance_trigger_view": {
+    "trigger_id": "balance-trigger-mo3ofylb",
+    "sequence_id": "router-seq-mo3ofylb",
+    "min_balance_yocto": "1000000000000000000000000",
+    "max_runs": 3,
+    "runs_started": 0,
+    "in_flight": false,
+    "last_executor_id": null,
+    "last_started_at_ms": null,
+    "last_finished_at_ms": null,
+    "last_run_namespace": null,
+    "last_run_outcome": null,
+    "created_at_ms": 1776476846026
+  },
+  "execution_view": {
+    "trigger_id": "balance-trigger-mo3ofylb",
+    "sequence_id": "router-seq-mo3ofylb",
+    "sequence_namespace": "auto:balance-trigger-mo3ofylb:1",
+    "run_nonce": 1,
+    "executor_id": "x.mike.testnet",
+    "started_at_ms": 1776476848493,
+    "call_count": 3
+  },
+  "txs": [
+    {
+      "step": "save_sequence_template",
+      "signer": "x.mike.testnet",
+      "receiver_id": "smart-account.x.mike.testnet",
+      "tx_hash": "4xSDcvULr5kNyfLA4x56H6jmJZ6RKhsJcvNQCyB1Cj4S",
+      "block_hash": "HVLNgxiDC5JJPmEUXvwfDPnw2xwJmvqTxUex8r4AAmgm",
+      "block_height": 246237303,
+      "status": {
+        "SuccessReceiptId": "BcmnMzfbG3ZzVwFKQmyWVnfeT31Bp4YS7Z7pAKwavJhE"
+      }
+    },
+    {
+      "step": "create_balance_trigger",
+      "signer": "x.mike.testnet",
+      "receiver_id": "smart-account.x.mike.testnet",
+      "tx_hash": "HZuMYmPZydUmhnvchDUkQ7dawzFCssDA1gfp4nUUM43b",
+      "block_hash": "9yUdHL1soqnLsXbBVig3iHFWp1bF8cHvJoU6KVL7svcy",
+      "block_height": 246237309,
+      "status": {
+        "SuccessReceiptId": "7HQ8E24oGwCvrU9b9GHw6pyuWkTUf8yBoyrHRKjLhdwZ"
+      }
+    },
+    {
+      "step": "execute_trigger",
+      "signer": "x.mike.testnet",
+      "receiver_id": "smart-account.x.mike.testnet",
+      "tx_hash": "A9n6vFH5Z3p95PfSjw1f8CMpcGDhZ7pW974XUteMbYng",
+      "block_hash": "8ayJfN2pAEvzeRXdAaWCBraUsuGoadAteqR7oLpV5UGd",
+      "block_height": 246237313,
+      "status": {
+        "SuccessReceiptId": "7V4Fi51FspNswqqGXnyf1iwds8ukkQGBHxe4rRN53wuM"
+      }
+    }
+  ]
+}

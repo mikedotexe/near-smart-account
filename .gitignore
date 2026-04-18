@@ -1,0 +1,18 @@
+#IDE
+.idea
+
+target
+neardev
+
+# OS X
+.DS_Store
+
+res/social_db_local.wasm
+
+# Local secrets
+.env
+web/config.local.js
+
+# Local build/import artifacts
+.docker-target-*/
+smart-account.zip

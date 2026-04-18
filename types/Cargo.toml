@@ -1,0 +1,16 @@
+[package]
+name = "smart-account-types"
+version = "0.1.0"
+authors = ["Mike Purvis @mikedotexe"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Shared types for the smart-account NEAR contract. Lightweight crate intended to be consumed by other contracts and off-chain tooling that want to speak the same shapes."
+repository = "https://github.com/mikedotexe/smart-account-contract"
+readme = "README.md"
+keywords = ["near", "smart-account", "execution-abstraction", "account-abstraction", "erc-4337"]
+
+# `non-contract-usage` lets this crate compile on the host (off-chain tooling,
+# tests in downstream crates) as well as wasm (when pulled in by another
+# contract). Without it near-sdk's compile-time guard rejects non-wasm builds.
+[dependencies]
+near-sdk = { version = "5.26.1", default-features = false, features = ["non-contract-usage"] }

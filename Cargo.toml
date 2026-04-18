@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/smart-account",
+    "contracts/compat-adapter",
+    "contracts/demo-adapter",
+    "contracts/echo",
+    "contracts/router",
+    "contracts/wild-router",
+    "types",
+]
+
+[profile.release]
+codegen-units = 1
+# Optimize for small code size (wasm contracts).
+opt-level = "s"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+strip = "symbols"
