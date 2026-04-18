@@ -21,6 +21,59 @@ What remains is the kernel claim:
 > later `run_sequence` can release real downstream cross-contract work in a
 > deliberately different order than the original action order
 
+## 5-minute path
+
+If you only want the proof quickly:
+
+1. deploy a fresh pair
+2. run the bundled demo
+3. confirm the recorder ended in the declared release order
+
+```bash
+MASTER=x.mike.testnet ./simple-example/scripts/deploy-testnet.sh
+
+./simple-example/scripts/send-demo.mjs \
+  --master x.mike.testnet \
+  --prefix <printed-prefix> \
+  alpha:1 beta:2 gamma:3 \
+  --sequence-order beta,alpha,gamma
+```
+
+Expected recorder outcome:
+
+- `beta`
+- `alpha`
+- `gamma`
+
+## Tiny flow
+
+```text
+tx 1: stage batch
+  user -> simple-sequencer.stage_call(alpha)
+  user -> simple-sequencer.stage_call(beta)
+  user -> simple-sequencer.stage_call(gamma)
+  result: three yielded callbacks are staged and waiting
+
+tx 2: ordered release
+  user -> simple-sequencer.run_sequence(beta, alpha, gamma)
+  simple-sequencer resumes beta  -> recorder.record(beta, 2)
+  simple-sequencer resumes alpha -> recorder.record(alpha, 1)
+  simple-sequencer resumes gamma -> recorder.record(gamma, 3)
+
+recorder state
+  [beta, alpha, gamma]
+```
+
+## What you'll observe
+
+- The first transaction stages yielded callbacks in the original submission
+  order.
+- The second transaction chooses a different release order.
+- The real downstream recorder entries follow the release order, not the
+  original action order.
+- The stage transaction's trace is the primary proof surface, because the
+  yielded callbacks live on that original tree.
+
 ## Layout
 
 | Path | Role |
@@ -78,25 +131,7 @@ Run the bundled demo wrapper against that fresh deployment:
   --sequence-order beta,alpha,gamma
 ```
 
-By default, `send-demo.mjs` now does all of this:
-
-- submits the multi-action stage batch tx asynchronously
-- polls `simple-sequencer.staged_calls_for(caller_id)` until the yielded steps materialize
-- submits the later `run_sequence(...)` tx
-- waits for `simple-recorder.get_entries()` to reflect the downstream work
-- writes a run artifact under `collab/artifacts/`
-- prints ready-to-rerun `trace-tx`, `state`, and `investigate-tx` commands
-
-The artifact captures:
-
-- network, signer, master, prefix, and deployed contract ids
-- submitted action specs and requested sequence order
-- both tx hashes and block heights
-- recorder state before and after the run
-- the new recorder entries for this run
-- trace classifications and command strings for later archival work
-
-## Evidence surfaces
+## Deeper inspection
 
 These are the four proof surfaces to look at after a run:
 
@@ -143,6 +178,25 @@ entries should appear in:
 This is the easiest way to reconstruct the three-surfaces story later, even
 after the run has fallen out of the hot retention window and needs archival RPC
 for trace recovery.
+
+By default, `send-demo.mjs` does all of this for you:
+
+- submits the multi-action stage batch tx asynchronously
+- polls `simple-sequencer.staged_calls_for(caller_id)` until the yielded steps
+  materialize
+- submits the later `run_sequence(...)` tx
+- waits for `simple-recorder.get_entries()` to reflect the downstream work
+- writes a run artifact under `collab/artifacts/`
+- prints ready-to-rerun `trace-tx`, `state`, and `investigate-tx` commands
+
+The artifact captures:
+
+- network, signer, master, prefix, and deployed contract ids
+- submitted action specs and requested sequence order
+- both tx hashes and block heights
+- recorder state before and after the run
+- the new recorder entries for this run
+- trace classifications and command strings for later archival work
 
 ## FastNEAR endpoints this flow uses
 

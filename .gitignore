@@ -7,11 +7,20 @@ neardev
 # OS X
 .DS_Store
 
-res/social_db_local.wasm
-
 # Local secrets
 .env
 web/config.local.js
+
+# Generated build outputs
+res/*.wasm
+simple-example/res/*.wasm
+
+# Generated investigation artifacts
+# Keep only two curated reference reports tracked in git.
+collab/artifacts/*.json
+collab/artifacts/*.md
+!collab/artifacts/2026-04-18T01-47-20-159Z-router-seq-mo3ofylb-balance-trigger-mo3ofylb.json
+!collab/artifacts/2026-04-18T13-20-54-668Z-wrap-seq-mo4d7wjw-balance-trigger-mo4d7wjw.json
 
 # Local build/import artifacts
 .docker-target-*/
