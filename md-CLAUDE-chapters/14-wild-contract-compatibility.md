@@ -142,21 +142,21 @@ That is intentional. Protocol-specific truth stays in the adapter layer.
 
 ### `Asserted`
 
-Reserved, but deliberately not implemented yet.
+Shipped in v1. After the target settles successfully, the kernel fires a
+caller-specified check call and compares its return bytes to caller-specified
+expected bytes. Match → sequence advances. Mismatch → sequence halts
+identically to any other settle failure.
 
-This keeps room for a future mode like:
+This is the right answer when the returned promise chain is truthful for
+"the call happened" but the caller ultimately wants a postcondition check
+against target state — counter incremented, balance updated, sentinel flag
+set. Chapter 21 documents the full design, cascade structure, and four
+testnet probes that catch noop and decoy pathologies `Direct` is blind to.
 
-- execute the call
-- then perform a state assertion
-- only advance if that assertion passes
-
-For now, `Asserted` is rejected explicitly so the type surface can evolve
-without pretending the behavior exists already.
-
-This is also the next serious design frontier. `Adapter` is the right v1 answer
-when the returned promise chain itself is the truthful completion surface.
-`Asserted` becomes interesting for the harder cases where even a truthfully
-returned promise chain is still not the surface we ultimately want to trust.
+`Adapter` remains the right answer when the completion surface itself
+requires non-trivial reconciliation (multi-poll, retry, cross-contract
+aggregation); `Asserted` is the right answer when one view-call on target
+state is enough to distinguish honest from fraudulent completion.
 
 ## 3. Kernel changes
 

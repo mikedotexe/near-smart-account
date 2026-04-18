@@ -21,8 +21,30 @@ pub enum SettlePolicy {
         adapter_id: AccountId,
         adapter_method: String,
     },
-    /// Reserved for a future "post-call assertion" mode.
-    Asserted,
+    /// Post-call assertion mode. After the target settles successfully, fire
+    /// a caller-specified postcheck call and advance the sequence only if the
+    /// postcheck returns bytes matching `expected_return` exactly. Mismatch
+    /// halts the sequence as `DownstreamFailed`, same as any other settle
+    /// failure.
+    Asserted {
+        /// Contract hosting the postcheck call. Often the target itself
+        /// (asking the target to prove its own state), but any contract works.
+        assertion_id: AccountId,
+        /// Method on `assertion_id` to call after the target settles. Called
+        /// as a regular FunctionCall receipt (not an enforced read-only view),
+        /// so gas and receipts are real and the caller must choose a
+        /// trustworthy postcheck surface.
+        assertion_method: String,
+        /// Raw bytes the postcheck call receives as its JSON body. Use
+        /// base64-of-`{}` (`"e30="`) on the wire for no-arg methods.
+        assertion_args: Base64VecU8,
+        /// Exact bytes the postcheck call must return. Compared byte-for-byte
+        /// against `env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES)`.
+        expected_return: Base64VecU8,
+        /// Gas for the `assertion_id.assertion_method` postcheck FunctionCall,
+        /// in TGas.
+        assertion_gas_tgas: u64,
+    },
 }
 
 /// Standard argument shape the smart account uses when dispatching an adapter

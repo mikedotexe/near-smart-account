@@ -25,8 +25,14 @@ import {
   callViewMethod,
   connectNearWithSigners,
   sendFunctionCall,
+  sendTransactionAsync,
 } from "../../scripts/lib/near-cli.mjs";
 import { traceTx } from "../../scripts/lib/trace-rpc.mjs";
+import {
+  diagnoseStageTransaction,
+  renderStageOutcomeSummary,
+} from "../../scripts/lib/staged-sequence.mjs";
+import { buildDemoExecutionPlan } from "./demo-plan.mjs";
 
 const MAX_TX_GAS_TGAS = 1_000;
 
@@ -48,6 +54,7 @@ const { values, positionals } = parseArgs({
     "poll-ms": { type: "string", default: "2000" },
     "stage-timeout-ms": { type: "string", default: "30000" },
     "settle-timeout-ms": { type: "string", default: "90000" },
+    "stage-only": { type: "boolean", default: false },
     dry: { type: "boolean", default: false },
     json: { type: "boolean", default: false },
   },
@@ -110,6 +117,9 @@ const networkConfig = getNetworkConfig(values.network);
 const artifactsFile =
   values["artifacts-file"] ||
   defaultArtifactsFile({ prefix: values.prefix, signer: values.signer, runId });
+const executionPlan = buildDemoExecutionPlan({
+  stageOnly: values["stage-only"],
+});
 const commands = commandSet({
   network: values.network,
   signer: values.signer,
@@ -135,6 +145,7 @@ if (values.dry) {
         total_action_gas_tgas: totalActionGasTgas,
         downstream_call_gas_tgas: callGasTgas,
         run_gas_tgas: runGasTgas,
+        stage_only: executionPlan.stageOnly,
         downstream_call_deposit_yocto: values["call-deposit-yocto"],
         sequence_order: sequenceOrder,
         stage_timeout_ms: stageTimeoutMs,
@@ -182,19 +193,103 @@ const actions = specs.map((spec) =>
 );
 
 const stageResult = await sendTransactionAsync(account, contractId, actions);
-const stagedState = await waitForStagedCalls({
+const stageArtifact = await buildTxArtifact(
+  values.network,
+  stageResult,
+  values.signer,
+  "stage_batch"
+);
+const stageDiagnosis = await diagnoseStageTransaction({
   network: values.network,
+  txHash: stageArtifact.tx_hash,
+  signer: values.signer,
   contractId,
-  callerId: values.signer,
   expectedCount: specs.length,
   pollMs,
   timeoutMs: stageTimeoutMs,
 });
-if (!stagedState.ready) {
+const stageTrace = await safeTrace(values.network, stageArtifact.tx_hash, values.signer);
+
+if (executionPlan.stageOnly) {
+  const stageOnlyCommands = commandSet({
+    network: values.network,
+    signer: values.signer,
+    contractId,
+    targetId,
+    runSequenceArgs,
+    stageTxHash: stageArtifact.tx_hash,
+    runSequenceTxHash: "<run_sequence_tx_hash>",
+  });
+  const stageOnlyOutput = {
+    generated_at: new Date().toISOString(),
+    run_id: runId,
+    network: values.network,
+    signer: values.signer,
+    master: values.master,
+    prefix: values.prefix || null,
+    contract_id: contractId,
+    recorder_id: targetId,
+    method: values.method,
+    action_gas_tgas: actionGasTgas,
+    downstream_call_gas_tgas: callGasTgas,
+    stage_timeout_ms: stageTimeoutMs,
+    submitted_actions: specs,
+    sequence_order_requested: sequenceOrder,
+    stage_only: true,
+    stage_primary_forensics: {
+      tx_hash: stageArtifact.tx_hash,
+      signer: values.signer,
+    },
+    txs: [
+      {
+        ...stageArtifact,
+        decoded_success_value: null,
+      },
+    ],
+    recorder_state_before: recorderBefore,
+    staged_calls_before_release: stageDiagnosis.staged_state,
+    stage_outcome: stageDiagnosis.stage_outcome,
+    traces: {
+      stage_batch: stageTrace,
+    },
+    commands: stageOnlyCommands,
+  };
+
+  if (values.json) {
+    console.log(JSON.stringify(stageOnlyOutput, null, 2));
+    process.exit(0);
+  }
+
+  console.log(
+    `network=${values.network} signer=${values.signer} contract=${contractId} recorder=${targetId}`
+  );
+  console.log(
+    `stage_batch: tx_hash=${stageArtifact.tx_hash} block_height=${stageArtifact.block_height ?? "?"} signer=${values.signer}`
+  );
+  console.log(renderStageOutcomeSummary(stageDiagnosis.stage_outcome));
+  for (const spec of specs) {
+    console.log(
+      `  ${spec.step_id} -> ${targetId}.${values.method}({"step_id":"${spec.step_id}","value":${spec.value}})`
+    );
+  }
+  console.log(`trace(stage_batch): ${stageOnlyCommands.trace_stage}`);
+  console.log(`state(recorder): ${stageOnlyCommands.state_recorder}`);
+  console.log(`investigate(stage_batch): ${stageOnlyCommands.investigate_stage}`);
+  if (stageDiagnosis.stage_outcome.classification === "pending_until_resume") {
+    console.log(`run_sequence: ${stageOnlyCommands.run_sequence}`);
+  } else {
+    console.log("run_sequence: skipped until stage_outcome becomes pending_until_resume");
+  }
+  console.log(`short=stage:${shortHash(stageArtifact.tx_hash)}`);
+  process.exit(0);
+}
+
+if (stageDiagnosis.stage_outcome.classification !== "pending_until_resume") {
   throw new Error(
-    `stage batch ${stageResult.transaction.hash} did not materialize ${specs.length} staged calls within ${stageTimeoutMs} ms`
+    `stage batch ${stageArtifact.tx_hash} did not remain pending: ${stageDiagnosis.stage_outcome.classification}`
   );
 }
+
 const runSequenceResult = await sendFunctionCall(
   nearApi,
   account,
@@ -211,12 +306,6 @@ const recorderAfter = await waitForRecorderEntries({
   pollMs,
   settleTimeoutMs,
 });
-const stageArtifact = await buildTxArtifact(
-  values.network,
-  stageResult,
-  values.signer,
-  "stage_batch"
-);
 const runSequenceArtifact = await buildTxArtifact(
   values.network,
   runSequenceResult,
@@ -232,11 +321,6 @@ const finalCommands = commandSet({
   stageTxHash: stageArtifact.tx_hash,
   runSequenceTxHash: runSequenceArtifact.tx_hash,
 });
-const stageTrace = await safeTrace(
-  values.network,
-  stageArtifact.tx_hash,
-  values.signer
-);
 const runSequenceTrace = await safeTrace(
   values.network,
   runSequenceArtifact.tx_hash,
@@ -267,7 +351,7 @@ const artifacts = {
   txs: [
     {
       ...stageArtifact,
-      decoded_success_value: decodeSuccessValue(stageResult.status?.SuccessValue) || null,
+      decoded_success_value: null,
     },
     {
       ...runSequenceArtifact,
@@ -276,7 +360,8 @@ const artifacts = {
     },
   ],
   recorder_state_before: recorderBefore,
-  staged_calls_before_release: stagedState,
+  staged_calls_before_release: stageDiagnosis.staged_state,
+  stage_outcome: stageDiagnosis.stage_outcome,
   recorder_state_after: recorderAfter,
   traces: {
     stage_batch: stageTrace,
@@ -307,6 +392,7 @@ console.log(
 console.log(
   `stage_batch: tx_hash=${stageArtifact.tx_hash} block_height=${stageArtifact.block_height ?? "?"} signer=${values.signer}`
 );
+console.log(renderStageOutcomeSummary(stageDiagnosis.stage_outcome));
 console.log(
   `run_sequence: tx_hash=${runSequenceArtifact.tx_hash} block_height=${runSequenceArtifact.block_height ?? "?"} signer=${values.signer}`
 );
@@ -411,56 +497,6 @@ async function readRecorderState(network, targetId) {
     block_hash: view.block_hash,
     logs: view.logs,
     entries,
-  };
-}
-
-async function sendTransactionAsync(account, receiverId, actions) {
-  const [, signedTransaction] = await account.signTransaction(receiverId, actions);
-  const txHash = await account.connection.provider.sendTransactionAsync(
-    signedTransaction
-  );
-  return {
-    transaction: {
-      hash: txHash,
-      receiver_id: receiverId,
-    },
-  };
-}
-
-async function waitForStagedCalls({
-  network,
-  contractId,
-  callerId,
-  expectedCount,
-  pollMs,
-  timeoutMs,
-}) {
-  const deadline = Date.now() + timeoutMs;
-  let last = await readStagedCalls(network, contractId, callerId);
-  while (last.staged_calls.length < expectedCount && Date.now() < deadline) {
-    await sleep(pollMs);
-    last = await readStagedCalls(network, contractId, callerId);
-  }
-  return {
-    ready: last.staged_calls.length >= expectedCount,
-    expected_count: expectedCount,
-    observed_count: last.staged_calls.length,
-    poll_ms: pollMs,
-    timeout_ms: timeoutMs,
-    block_height: last.block_height,
-    block_hash: last.block_hash,
-    staged_calls: last.staged_calls,
-  };
-}
-
-async function readStagedCalls(network, contractId, callerId) {
-  const view = await callViewMethod(network, contractId, "staged_calls_for", {
-    caller_id: callerId,
-  });
-  return {
-    block_height: view.block_height,
-    block_hash: view.block_hash,
-    staged_calls: Array.isArray(view.value) ? view.value : [],
   };
 }
 

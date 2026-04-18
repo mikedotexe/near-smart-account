@@ -1,0 +1,15 @@
+[package]
+name = "pathological-router"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Probe target for wild-contract taxonomy: four methods that each exhibit a distinct pathological behavior a contract in the wild might have (gas burn, false success, decoy-promise return, oversized payload). Companion to wild-router's fire-and-forget; covers shapes wild-router does not."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.26.1"
+
+[dev-dependencies]
+near-sdk = { version = "5.26.1", features = ["unit-testing"] }
