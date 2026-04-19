@@ -216,13 +216,14 @@ FS-6 (add an intra-intents.near `transfer` between deposit and withdraw) is a ni
 
 ## 6 · Open questions (not blockers for Pass 2)
 
-These stay open; none gate the FS-5 build.
+Some of these were answered by mainnet battletests on 2026-04-18; see §10
+for tx-level detail. Remaining open items flagged below.
 
-- **1Click API surface.** Does it return a signed intent pair the developer can submit via their own tx, or does it always broadcast server-side? Resolve before FS-1 upgrade. Endpoints partially 404'd — likely needs direct OpenAPI spec fetch or an email to the intents team.
-- **Nonce management across long plans.** NEP-413 nonce is per-signer replay-prevention. If a plan signs intent A with nonce X and intent B with nonce Y, the verifier checks both at submission time. Question: does the verifier treat nonces as strictly-ascending or just not-previously-seen? Matters for concurrent plans from the same signer. Resolve before FS-6 lands (two signed intents from same signer).
-- **Deadline semantics in multi-hop plans.** Intent signed with `deadline = now + 5min`. If step 1 takes 4 minutes to settle and step 2 fires at minute 4.5, its deadline has 30s to resolve on the verifier. How tight can we go? Live-probe during FS-5 live run.
-- **Withdraw destination storage.** `ft_withdraw` to an unregistered NEP-141 account fails. Our signer's own wNEAR storage is already registered (they hold wNEAR to deposit). Preflight check is `wrap.near.storage_balance_of(signer)` before submission. Add to FS-5 preflight.
-- **`simulate_intents` as an Asserted dry-run.** Could a future `StepPolicy::SimulatedAsserted` use `simulate_intents` to verify an intent will settle *before* firing `execute_intents` itself? Powerful pattern — defer as future design.
+- **1Click API surface.** Does it return a signed intent pair the developer can submit via their own tx, or does it always broadcast server-side? Resolve before FS-1 upgrade. Endpoints partially 404'd — likely needs direct OpenAPI spec fetch or an email to the intents team. **OPEN.**
+- **Nonce management across long plans.** NEP-413 nonce is per-signer replay-prevention. If a plan signs intent A with nonce X and intent B with nonce Y, the verifier checks both at submission time. Question: does the verifier treat nonces as strictly-ascending or just not-previously-seen? **RESOLVED by battletest B3b** (`7vpyLVKs1ttdLE3Dyb1MdBiboymnnJ3ovPxaAPpAYjm6`): back-to-back round-trips within seconds produced distinct 32-byte-random nonces and both settled cleanly. The verifier is "not-previously-seen" semantics, not strictly-ascending.
+- **Deadline semantics in multi-hop plans.** Intent signed with `deadline = now + 5min`. How much headroom does a 3-step sequence actually consume? **RESOLVED by phase-6 round-trip** (`7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ`): end-to-end resolve latency was ~10s, leaving ~290s of deadline slack. 5min default is comfortable even if one leg stalls.
+- **Withdraw destination storage.** `ft_withdraw` to an unregistered NEP-141 account fails. **RESOLVED by phase-6 round-trip**: `mike.near`'s storage on `wrap.near` was already registered; withdraw landed cleanly. Preflight in `sequential-intents.mjs` checks both `smart-account` and `credit-to` storage before sending.
+- **`simulate_intents` as an Asserted dry-run.** Could a future `StepPolicy::SimulatedAsserted` use `simulate_intents` to verify an intent will settle *before* firing `execute_intents` itself? Powerful pattern — **OPEN**, deferred as future design.
 
 ## 7 · Pass-2 work items (commit after this note is approved)
 
@@ -251,3 +252,78 @@ Gate for Pass 2 ship: all of (1)–(5) pass `./scripts/check.sh` and dry-run pro
 - https://raw.githubusercontent.com/near/intents/main/contracts/defuse/src/intents.rs (Intents trait: `execute_intents`, `simulate_intents`)
 - Live mainnet probes via `./scripts/state.mjs intents.near` at block ~194627000 (compact summary).
 - Existing flagship (now `examples/sequential-intents.mjs`, formerly `intent-onboard.mjs`) — DepositMessage shape and Asserted wire format proven.
+- `MAINNET-V3-JOURNAL.md` — canonical log of every tx landed against `sequential-intents.mike.near`, with block ranges for archival lookup.
+
+## 10 · Battletest findings (mainnet v3, 2026-04-18)
+
+Five battletests probed distinct kernel edges on `sequential-intents.mike.near`. Full tx-level record in `MAINNET-V3-JOURNAL.md`; below are the design-relevant observations.
+
+### 10.1 `sequence_halted` semantics
+
+`sequence_halted` is emitted by the *next* step's `on_step_resumed`
+callback when it receives a failed upstream resolution — **not** by the
+step that fails. Two observable regimes:
+
+- **Mid-sequence failure** (failed step has a successor): `sequence_halted` fires on the successor's resume callback. Because the kernel doesn't proactively cancel the successor's yielded promise, the cleanup waits for NEAR's ~200-block yield decay — **~122s** empirically (see B1 `7gzutLq…`, B5 `4K4jXXZ…`).
+- **Terminal-step failure** (no successor): **NO `sequence_halted` event fires.** Only `step_resolved_err`. Cleanup is ~10s, synchronous with the failed step's resolve. See B2 (`AG7Mwxd…`).
+
+Implication for indexers: don't treat the absence of `sequence_halted`
+as "sequence completed OK." The authoritative end-of-sequence signal is
+either `sequence_completed` (success) OR `step_resolved_err` on any step
+(failure); `sequence_halted` is an optional *cleanup* marker that only
+appears when there were dangling steps.
+
+### 10.2 `assertion_checked` outcome taxonomy
+
+The Asserted policy's postcheck event discriminates three cases:
+
+| `outcome` | Meaning | `match` | `actual_return` | Extra fields |
+|---|---|---|---|---|
+| `matched` | Bytes equal expected | `true` | decoded bytes | — |
+| `mismatch` | View returned cleanly, bytes differ | `false` | decoded bytes | — |
+| `postcheck_failed` | View call itself errored (e.g. `MethodNotFound`) | `false` | `null` | `error_kind`, `error_msg` |
+
+All three halt variants trigger the same `step_resolved_err` + halt
+machinery downstream; the `outcome` field lets operators and indexers
+distinguish misprediction from protocol-level failure. See B1/B2 for
+`mismatch`, B5 (`4K4jXXZ…`) for `postcheck_failed`.
+
+### 10.3 Halt latency bifurcation
+
+- Terminal-step halt: **~10s** (synchronous resolve of the failing step)
+- Mid-sequence halt: **~122s** (yield decay of the dangling successor)
+
+If the 2-min mid-sequence cleanup becomes load-bearing, a kernel
+optimisation is to proactively resolve the successor's yielded promise
+with a halt sentinel when the failed step writes `step_resolved_err`.
+Out of scope for v3; noted here for future consideration.
+
+### 10.4 Namespace separation holds under mixed traffic
+
+Manual flagship runs use `manual:<caller_id>`; automation-triggered runs
+use `auto:<trigger_id>:<run_nonce>`. Proven in B4 (DCA) where
+`execute_trigger` spawned `auto:dca-intents-trigger-mo5bmbsr:1` while
+`manual:mike.near` had just drained from B3b a few seconds earlier. No
+cross-namespace interference; both were observable in `registered_steps_for`
+independently.
+
+### 10.5 Back-to-back idempotency proven
+
+B3a → B3b landed two clean round-trips within ~15 seconds. The kernel
+cleaned `manual:mike.near` after B3a drained and accepted fresh
+`register_step` calls for B3b without any wait or manual namespace
+management. Nonce freshness is maintained by `crypto.randomBytes(32)`
+per intent (collision probability 2^-128).
+
+### 10.6 DCA path works under v3
+
+The automation layer — `save_sequence_template` → `create_balance_trigger`
+→ `execute_trigger` — works end-to-end after the Phase-A rename. B4c
+emitted a new event not present in the manual path: `run_finished` with
+`{trigger_id, namespace, sequence_id, run_nonce, executor_id, status, duration_ms, failed_step_id}`. This is the correlation identifier indexers should key on for recurring runs.
+
+### 10.7 What battletests did NOT prove
+
+- **`Direct` policy failure path** — all battletests kept step 1 (`near_deposit`, Direct) succeeding. We haven't live-tested what happens if a Direct step's target contract fails. Next probe candidate.
+- **Multi-signer plans** — every signed intent so far was signed by `mike.near`. Haven't exercised `--credit-to <other-account>` where the other account is a *different* signer whose credential is loaded.
+- **Deadline expiry** — every signed intent was executed well within its 5-min deadline. Haven't validated that an *expired* intent halts cleanly via `postcheck_failed`.

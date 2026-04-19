@@ -26,7 +26,16 @@ collab/artifacts/*.md
 !collab/artifacts/2026-04-19T04-44-03-387Z-intent-sequence-round-trip-mike-near-mo5a72rf.json
 # dca mainnet reference run (one-shot tick via balance trigger + template)
 !collab/artifacts/2026-04-19T05-28-46-853Z-dca-dca-intents-mo5bslc5-dca-intents-trigger-mo5bslc5.json
-# battletest reference runs: halt-path pair (byte mismatch + view-call error)
+# battletest sweep — complete set referenced by MAINNET-V3-JOURNAL.md
+# B1 poison-step=2 (mid-sequence halt, ~122s decay)
+!collab/artifacts/2026-04-19T05-13-31-443Z-intent-sequence-round-trip-mike-near-mo5b8z03.json
+# B2 poison-step=3 (terminal-step halt, ~10s synchronous, no sequence_halted)
+!collab/artifacts/2026-04-19T05-21-57-242Z-intent-sequence-round-trip-mike-near-mo5bjta2.json
+# B4 DCA battletest (distinct from canonical DCA reference mo5bslc5)
+!collab/artifacts/2026-04-19T05-23-54-555Z-dca-dca-intents-mo5bmbsr-dca-intents-trigger-mo5bmbsr.json
+# B5 bogus-method=2 (view-call-error halt, outcome=postcheck_failed)
+!collab/artifacts/2026-04-19T05-24-23-324Z-intent-sequence-round-trip-mike-near-mo5bmxzw.json
+# later same-session re-runs (duplicate the B1/B5 halt paths with fresh nonces)
 !collab/artifacts/2026-04-19T05-31-11-418Z-intent-sequence-round-trip-mike-near-mo5bvovu.json
 !collab/artifacts/2026-04-19T05-37-22-069Z-intent-sequence-round-trip-mike-near-mo5c3mvp.json
 

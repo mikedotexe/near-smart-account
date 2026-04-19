@@ -146,22 +146,11 @@ DCA one-tick reference (`examples/dca.mjs`, balance-trigger automation):
 - create_balance_trigger : `AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`
 - execute_trigger        : `E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`
 
-Battletest pair — Asserted halt proved on both kernel paths:
-
-- `9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj` — `--poison-step=2`:
-  byte-mismatch path. Postcheck view call succeeds, returns real bytes,
-  kernel's comparator rejects (`actual` vs `expected` differ by +1 yocto);
-  `assertion_checked.outcome: "mismatch"`; deposit lands.
-- `AhmPjiNE6Jh4cpE53vMo6hYD5Ax7XP1rSByjMEbpPYEE` — `--bogus-method=2`:
-  view-call-error path. Postcheck view call fails with `MethodResolveError:
-  MethodNotFound` at runtime level; `assertion_checked.outcome:
-  "postcheck_failed"`, `actual_return: null`; deposit still lands.
-
-Both halt with the same step-level pattern (`step_resolved_err`
-`error_kind: downstream_failed`, step 3 times out ~200 blocks later
-triggering `sequence_halted reason: resume_failed`). The distinguishing
-field is `assertion_checked.outcome` — `"mismatch"` (bytes differ) vs
-`"postcheck_failed"` (check couldn't run) — useful for operator triage.
+Battletest sweep (5 kernel edges proved on mainnet v3): full tx-level log
+in [`MAINNET-V3-JOURNAL.md`](./MAINNET-V3-JOURNAL.md); design-relevant
+findings (halt semantics, outcome taxonomy, halt latency bifurcation,
+namespace separation, back-to-back idempotency) distilled in
+[`SEQUENTIAL-INTENTS-DESIGN.md` §10](./SEQUENTIAL-INTENTS-DESIGN.md).
 
 Safety rules:
 
