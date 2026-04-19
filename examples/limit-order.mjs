@@ -53,10 +53,10 @@ import {
   connectNearWithSigners,
   sendTransactionAsync,
 } from "../scripts/lib/near-cli.mjs";
-import { flattenReceiptTree, traceTx } from "../scripts/lib/trace-rpc.mjs";
+import { extractBlockInfo, flattenReceiptTree, traceTx } from "../scripts/lib/trace-rpc.mjs";
 import { renderStepOutcomeSummary } from "../scripts/lib/step-sequence.mjs";
 
-const NETWORK = "testnet";
+const NETWORK = process.env.NETWORK || "testnet";
 const GATE_CONTRACT_DEFAULT = "pathological-router.x.mike.testnet";
 const TARGET_CONTRACT_DEFAULT = "pathological-router.x.mike.testnet";
 const { values } = parseArgs({
@@ -208,6 +208,7 @@ const artifact = {
   run_id: runId,
   short_hash: shortHash(txHash),
   tx_hash: txHash,
+  block_info: extractBlockInfo(trace),
   network: NETWORK,
   smart_account: smartAccount,
   signer,

@@ -238,6 +238,33 @@ export function flattenReceiptTree(tree) {
   return flat;
 }
 
+/**
+ * Extract block-hash anchors from a trace for archival retrospective.
+ * Returns:
+ *   - transaction_block_hash: block hash where the tx itself was included
+ *   - receipts: [{ receipt_id, block_hash }] for every non-dedupe node in
+ *     the trace tree, in walk order
+ *
+ * Block heights are intentionally omitted here — the trace tree doesn't
+ * carry them, and the per-event `runtime.block_height` in the structured
+ * events captures them at the event granularity retrospectives need.
+ * block_hashes are the pin-in-history anchor that lets an archival node
+ * answer `view_state` / `view_account` at exactly that block.
+ */
+export function extractBlockInfo(trace) {
+  if (!trace || !trace.tree) {
+    return null;
+  }
+  const receipts = flattenReceiptTree(trace.tree).map((r) => ({
+    receipt_id: r.id,
+    block_hash: r.blockHash,
+  }));
+  return {
+    transaction_block_hash: trace.tree.includedBlockHash ?? null,
+    receipts,
+  };
+}
+
 export function indexTraceBlockMetadata(tree, blockResponses) {
   const blockInfoByHash = new Map();
   const receiptLocations = new Map();

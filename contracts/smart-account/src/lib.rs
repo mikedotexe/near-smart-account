@@ -205,6 +205,26 @@ pub struct AutomationRun {
     pub failed_step_id: Option<String>,
 }
 
+/// JSON-facing view of an `AutomationRun` row. Carries the
+/// `sequence_namespace` key (`auto:{trigger_id}:{run_nonce}`) alongside
+/// the stored struct fields, plus a computed `duration_ms` for
+/// terminal runs. Used by `list_automation_runs` /
+/// `get_automation_run` for retrospective inspection.
+#[near(serializers = [json])]
+#[derive(Clone, Debug)]
+pub struct AutomationRunView {
+    pub sequence_namespace: String,
+    pub trigger_id: String,
+    pub sequence_id: String,
+    pub run_nonce: u32,
+    pub executor_id: AccountId,
+    pub started_at_ms: u64,
+    pub finished_at_ms: Option<u64>,
+    pub status: AutomationRunStatus,
+    pub failed_step_id: Option<String>,
+    pub duration_ms: Option<u64>,
+}
+
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
 pub struct BalanceTrigger {
@@ -373,7 +393,7 @@ impl Contract {
     /// operators and aggregators can probe "which kernel shape is live
     /// here?" without parsing state.
     pub fn contract_version(&self) -> String {
-        "v4.0.0-pregate".to_string()
+        "v4.0.2-ops".to_string()
     }
 
     // --- Manual yielded execution ---
@@ -1287,6 +1307,93 @@ impl Contract {
             );
         }
         n
+    }
+
+    /// Public hygiene action. Anyone can call; prunes `automation_runs`
+    /// entries whose status is terminal (`Succeeded`, `DownstreamFailed`,
+    /// or `ResumeFailed`). Returns the number of pruned rows.
+    ///
+    /// Closes the only monotonic-growth vector in contract state:
+    /// every `execute_trigger` call inserts an `AutomationRun` keyed by
+    /// its unique `auto:{trigger_id}:{run_nonce}` namespace, and without
+    /// this method rows accumulate for the account's lifetime.
+    ///
+    /// No security implication — `InFlight` runs are preserved, and
+    /// terminal rows carry only historical bookkeeping (status, times,
+    /// failed_step_id). Retrospectives should snapshot via view RPC
+    /// BEFORE calling this. Can be scheduled as a `BalanceTrigger`
+    /// step itself for periodic self-cleanup.
+    pub fn prune_finished_automation_runs(&mut self) -> u32 {
+        let terminal: Vec<String> = self
+            .automation_runs
+            .iter()
+            .filter(|(_, run)| run.status != AutomationRunStatus::InFlight)
+            .map(|(namespace, _)| namespace.clone())
+            .collect();
+        let n = terminal.len() as u32;
+        if n == 0 {
+            return 0;
+        }
+        for namespace in &terminal {
+            self.automation_runs.remove(namespace);
+        }
+        Self::emit_event(
+            "automation_runs_pruned",
+            json!({
+                "pruned_count": n,
+                "namespaces": terminal,
+            }),
+        );
+        n
+    }
+
+    /// Fetch a single automation run by its `auto:{trigger_id}:{run_nonce}`
+    /// namespace. Returns `None` if not present (never inserted or already
+    /// pruned via `prune_finished_automation_runs`).
+    pub fn get_automation_run(&self, sequence_namespace: String) -> Option<AutomationRunView> {
+        self.automation_runs
+            .get(&sequence_namespace)
+            .map(|run| Self::automation_run_view(sequence_namespace, run))
+    }
+
+    /// Paginated list of all automation runs (both `InFlight` and
+    /// terminal). Pagination over an `IterableMap` walks in insertion
+    /// order. `limit` is capped at 100 so a single view call stays
+    /// under gas ceilings even when thousands of terminal rows
+    /// accumulate before an operator prunes.
+    pub fn list_automation_runs(&self, from_index: u32, limit: u32) -> Vec<AutomationRunView> {
+        let capped = limit.min(100);
+        self.automation_runs
+            .iter()
+            .skip(from_index as usize)
+            .take(capped as usize)
+            .map(|(namespace, run)| Self::automation_run_view(namespace.clone(), run))
+            .collect()
+    }
+
+    /// Total number of automation runs currently in state. Useful to
+    /// drive `list_automation_runs` pagination and to sanity-check
+    /// state growth before invoking `prune_finished_automation_runs`.
+    pub fn automation_runs_count(&self) -> u32 {
+        self.automation_runs.iter().count() as u32
+    }
+
+    fn automation_run_view(namespace: String, run: &AutomationRun) -> AutomationRunView {
+        let duration_ms = run
+            .finished_at_ms
+            .map(|finished| finished.saturating_sub(run.started_at_ms));
+        AutomationRunView {
+            sequence_namespace: namespace,
+            trigger_id: run.trigger_id.clone(),
+            sequence_id: run.sequence_id.clone(),
+            run_nonce: run.run_nonce,
+            executor_id: run.executor_id.clone(),
+            started_at_ms: run.started_at_ms,
+            finished_at_ms: run.finished_at_ms,
+            status: run.status,
+            failed_step_id: run.failed_step_id.clone(),
+            duration_ms,
+        }
     }
 
     pub fn get_session(&self, session_public_key: String) -> Option<SessionGrantView> {
@@ -4941,5 +5048,192 @@ mod tests {
         assert_eq!(parsed["sequence_namespace"], manual_namespace(&owner()));
         // Target receipt must NOT have fired yet — we're still gating.
         assert!(find_function_call(&receipts, &router()).is_none());
+    }
+
+    #[test]
+    fn prune_finished_automation_runs_returns_zero_when_empty() {
+        let mut c = Contract::new_with_owner(owner());
+        assert_eq!(c.prune_finished_automation_runs(), 0);
+    }
+
+    #[test]
+    fn prune_finished_automation_runs_removes_terminal_rows_only() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
+        c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 3);
+
+        // Run 1: succeeds → terminal row.
+        ctx(owner());
+        let run1 = c.execute_trigger("balance-demo".into());
+        callback_ctx(PromiseResult::Successful(vec![1]));
+        c.on_step_resolved(run1.sequence_namespace.clone(), "alpha".into());
+
+        // Run 2: fails downstream → terminal row.
+        ctx(owner());
+        let run2 = c.execute_trigger("balance-demo".into());
+        callback_ctx(PromiseResult::Failed);
+        c.on_step_resolved(run2.sequence_namespace.clone(), "alpha".into());
+
+        // Run 3: still in flight.
+        ctx(owner());
+        let run3 = c.execute_trigger("balance-demo".into());
+
+        // Sanity: 3 rows in automation_runs before prune.
+        assert!(c.automation_runs.get(&run1.sequence_namespace).is_some());
+        assert!(c.automation_runs.get(&run2.sequence_namespace).is_some());
+        assert!(c.automation_runs.get(&run3.sequence_namespace).is_some());
+
+        let pruned = c.prune_finished_automation_runs();
+        assert_eq!(pruned, 2);
+
+        assert!(c.automation_runs.get(&run1.sequence_namespace).is_none());
+        assert!(c.automation_runs.get(&run2.sequence_namespace).is_none());
+        // InFlight row untouched.
+        let still_in_flight = c
+            .automation_runs
+            .get(&run3.sequence_namespace)
+            .cloned()
+            .unwrap();
+        assert_eq!(still_in_flight.status, AutomationRunStatus::InFlight);
+    }
+
+    #[test]
+    fn prune_finished_automation_runs_is_idempotent() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
+        c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 1);
+
+        ctx(owner());
+        let run = c.execute_trigger("balance-demo".into());
+        callback_ctx(PromiseResult::Successful(vec![1]));
+        c.on_step_resolved(run.sequence_namespace, "alpha".into());
+
+        assert_eq!(c.prune_finished_automation_runs(), 1);
+        assert_eq!(c.prune_finished_automation_runs(), 0);
+    }
+
+    #[test]
+    fn prune_finished_automation_runs_is_public() {
+        // Anyone can call — no owner/executor check.
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
+        c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 1);
+        ctx(owner());
+        let run = c.execute_trigger("balance-demo".into());
+        callback_ctx(PromiseResult::Successful(vec![1]));
+        c.on_step_resolved(run.sequence_namespace, "alpha".into());
+
+        ctx(stranger());
+        assert_eq!(c.prune_finished_automation_runs(), 1);
+    }
+
+    #[test]
+    fn prune_finished_automation_runs_sweeps_resume_failed() {
+        // Force a ResumeFailed terminal by removing the next step's
+        // registered_steps entry before resume, mirroring
+        // `missing_next_step_marks_resume_failure_and_clears_leftovers`.
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template(
+            "router-demo".into(),
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
+        );
+        c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
+
+        ctx(owner());
+        let started = c.execute_trigger("balance-demo".into());
+        c.registered_steps
+            .remove(&registered_step_key(&started.sequence_namespace, "beta"));
+        callback_ctx(PromiseResult::Successful(vec![1]));
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
+
+        let run = c
+            .automation_runs
+            .get(&started.sequence_namespace)
+            .cloned()
+            .unwrap();
+        assert_eq!(run.status, AutomationRunStatus::ResumeFailed);
+
+        assert_eq!(c.prune_finished_automation_runs(), 1);
+        assert!(c
+            .automation_runs
+            .get(&started.sequence_namespace)
+            .is_none());
+    }
+
+    #[test]
+    fn list_automation_runs_empty_returns_empty_vec() {
+        let c = Contract::new_with_owner(owner());
+        assert!(c.list_automation_runs(0, 100).is_empty());
+        assert_eq!(c.automation_runs_count(), 0);
+        assert!(c.get_automation_run("auto:nope:1".into()).is_none());
+    }
+
+    #[test]
+    fn list_automation_runs_paginates_and_views_carry_namespace() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
+        c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 5);
+
+        // Fire + complete 3 runs so each has a stable terminal status.
+        let mut namespaces = Vec::new();
+        for _ in 0..3 {
+            ctx(owner());
+            let started = c.execute_trigger("balance-demo".into());
+            namespaces.push(started.sequence_namespace.clone());
+            callback_ctx(PromiseResult::Successful(vec![1]));
+            c.on_step_resolved(started.sequence_namespace, "alpha".into());
+        }
+
+        assert_eq!(c.automation_runs_count(), 3);
+
+        // List all.
+        let all = c.list_automation_runs(0, 100);
+        assert_eq!(all.len(), 3);
+        for (i, view) in all.iter().enumerate() {
+            assert_eq!(view.sequence_namespace, namespaces[i]);
+            assert_eq!(view.trigger_id, "balance-demo");
+            assert_eq!(view.sequence_id, "adapter-demo");
+            assert_eq!(view.run_nonce, (i + 1) as u32);
+            assert_eq!(view.status, AutomationRunStatus::Succeeded);
+            // Terminal run → duration_ms is computed.
+            assert!(view.duration_ms.is_some());
+        }
+
+        // Paginate mid-range.
+        let page = c.list_automation_runs(1, 1);
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].sequence_namespace, namespaces[1]);
+
+        // Tail page past the end returns empty.
+        assert!(c.list_automation_runs(10, 5).is_empty());
+
+        // Limit > 100 gets capped to 100 (silently) — we only have 3
+        // rows here, so effective behavior is identical to capped=3.
+        let capped = c.list_automation_runs(0, u32::MAX);
+        assert_eq!(capped.len(), 3);
+    }
+
+    #[test]
+    fn get_automation_run_returns_in_flight_status() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
+        c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 1);
+
+        ctx(owner());
+        let started = c.execute_trigger("balance-demo".into());
+
+        let view = c
+            .get_automation_run(started.sequence_namespace.clone())
+            .expect("in-flight run should be fetchable");
+        assert_eq!(view.status, AutomationRunStatus::InFlight);
+        assert!(view.finished_at_ms.is_none());
+        // In-flight → duration_ms is None, since finished_at_ms is None.
+        assert!(view.duration_ms.is_none());
     }
 }

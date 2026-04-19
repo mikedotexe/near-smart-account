@@ -75,8 +75,10 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
   `register_step` / `run_steps`, per-step `StepPolicy` + optional
   `PreGate` + optional `save_result` / `args_template` for value
   threading, balance-trigger automation (`save_sequence_template` /
-  `create_balance_trigger` / `execute_trigger`), session-key
-  auth hub (`enroll_session` / `revoke_session` /
+  `create_balance_trigger` / `execute_trigger` /
+  `get_automation_run` / `list_automation_runs` /
+  `automation_runs_count` / `prune_finished_automation_runs`),
+  session-key auth hub (`enroll_session` / `revoke_session` /
   `revoke_expired_sessions` / `get_session` / `list_active_sessions`).
 - `contracts/compat-adapter/`
   Real external-protocol adapter surface; currently wrap-specific
@@ -319,7 +321,7 @@ python3 -m http.server 8000 -d web
 - **Pre-dispatch gate (ch. 23):** `PreGate { gate_id, gate_method, gate_args, min_bytes, max_bytes, comparison, gate_gas_tgas }`. Comparison kinds: `U128Json` / `I128Json` / `LexBytes`.
 - **Value threading (ch. 24):** `SaveResult { as_name, kind }`, `ArgsTemplate { template, substitutions }`, `Substitution { reference, op }`, `SubstitutionOp` (`Raw` / `DivU128 { denominator }` / `PercentU128 { bps }`); errors: `MaterializeError::{MissingSavedResult, UnparseableSavedResult, NumericOverflow, InvalidBps, PlaceholderNotFound}`; pure function `materialize_args(template, substitutions, saved_results)`. Terminology locked 2026-04-19: `sequence` (not "plan"), `saved_results` (not "captures"), `SaveResult` (not `CaptureSpec`), `save_result` field (not `capture_return`), `Substitution.reference` (not `.token`).
 - **Session keys (ch. 25):** `SessionGrant { session_public_key, granted_at_ms, expires_at_ms, allowed_trigger_ids, max_fire_count, fire_count, label }`, `SessionGrantView` adds computed `active: bool`.
-- **NEP-297 events:** `step_registered`, `step_resumed`, `step_resolved_ok`, `step_resolved_err`, `sequence_started`, `sequence_completed`, `sequence_halted`, `assertion_checked`, `run_finished` (automation only), `pre_gate_checked` (ch. 23), `result_saved` (ch. 24), `session_enrolled` / `session_fired` / `session_revoked` (ch. 25). Sequence-halted `reason` tags: `downstream_failed`, `resume_failed`, `pre_gate_failed`, `args_materialize_failed`.
+- **NEP-297 events:** `step_registered`, `step_resumed`, `step_resolved_ok`, `step_resolved_err`, `sequence_started`, `sequence_completed`, `sequence_halted`, `assertion_checked`, `run_finished` (automation only), `automation_runs_pruned` (public hygiene), `pre_gate_checked` (ch. 23), `result_saved` (ch. 24), `session_enrolled` / `session_fired` / `session_revoked` (ch. 25). Sequence-halted `reason` tags: `downstream_failed`, `resume_failed`, `pre_gate_failed`, `args_materialize_failed`.
 - **Older spellings** — `yield_promise` / `run_sequence` / `resolution_policy` (pre-Phase-A); `stage_call` / `settle_policy` (earlier still); `latch` / `conduct` / `gated_call` / `label` (historical) — survive only in archived chapters, treat as period-accurate prose.
 - historical docs may still mention `latch`, `conduct`, `gated_call`, or
   `label`; treat those as period-accurate historical terms

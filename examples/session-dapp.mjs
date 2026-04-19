@@ -50,9 +50,9 @@ import {
   connectNearWithSigners,
   sendTransactionAsync,
 } from "../scripts/lib/near-cli.mjs";
-import { flattenReceiptTree, traceTx } from "../scripts/lib/trace-rpc.mjs";
+import { extractBlockInfo, flattenReceiptTree, traceTx } from "../scripts/lib/trace-rpc.mjs";
 
-const NETWORK = "testnet";
+const NETWORK = process.env.NETWORK || "testnet";
 
 const { values } = parseArgs({
   options: {
@@ -174,10 +174,14 @@ if (!enrollOk) {
   process.exit(1);
 }
 
-// Add the ephemeral key to the keystore under the SMART ACCOUNT's
-// (network, accountId) slot. Subsequent `near.account(smartAccount)`
-// calls will sign with this key. The owner's FAK remains stored under
-// (network, owner) so the owner can still sign revoke at step 3.
+// Save whatever key currently lives under (network, smartAccount) so
+// we can restore it before revoke. When `signer !== smartAccount` this
+// slot is empty and the save returns null. When `signer === smartAccount`
+// (e.g. deploying to the root identity account and signing from it) the
+// slot holds the owner's FAK and we must restore it after the session-key
+// fires, otherwise revoke_session gets rejected as a method disallowed
+// by the FCAK allowlist.
+const priorSmartAccountKey = await keyStore.getKey(NETWORK, smartAccount);
 await keyStore.setKey(NETWORK, smartAccount, ephemeralKeyPair);
 const sessionAccount = await near.account(smartAccount);
 
@@ -224,6 +228,12 @@ if (grantAfterFires) {
 }
 
 // ---------- 4. Owner revokes + post-revoke fire fails ---------------
+// Restore the owner's FAK into the (network, smartAccount) slot if we
+// overwrote it at step 2. Required when signer === smartAccount, no-op
+// otherwise.
+if (priorSmartAccountKey) {
+  await keyStore.setKey(NETWORK, smartAccount, priorSmartAccountKey);
+}
 let grantAfterRevoke = null;
 if (!skipRevoke) {
   console.log("\n[4/4] owner signing revoke_session …");
@@ -255,6 +265,11 @@ if (!skipRevoke) {
 
   // Try one more fire with the (now-revoked) key. Expect NEAR runtime
   // to reject: "access key <pk> does not exist" or similar.
+  //
+  // Swap the ephemeral key back into the (network, smartAccount) slot
+  // so `sessionAccount` signs with it — otherwise the restored owner
+  // FAK would bypass the test and land a real fire.
+  await keyStore.setKey(NETWORK, smartAccount, ephemeralKeyPair);
   console.log("  attempting one post-revoke fire (should reject) …");
   try {
     const postRevokeTx = await sessionAccount.signAndSendTransaction({
@@ -314,6 +329,11 @@ const artifact = {
     label,
   },
   tx_hashes: txHashes,
+  block_info: {
+    enroll: extractBlockInfo(enrollTrace),
+    fires: fireTraces.map(extractBlockInfo),
+    revoke: extractBlockInfo(revokeTrace),
+  },
   grant_after_fires: grantAfterFires,
   grant_after_revoke: grantAfterRevoke,
   events: allEvents,
