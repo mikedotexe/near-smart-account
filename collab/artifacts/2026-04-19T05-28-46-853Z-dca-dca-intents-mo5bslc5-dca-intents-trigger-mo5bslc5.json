@@ -1,0 +1,141 @@
+{
+  "generated_at": "2026-04-19T05:29:03.088Z",
+  "run_id": "mo5bslc5",
+  "network": "mainnet",
+  "signer": "mike.near",
+  "smart_account": "sequential-intents.mike.near",
+  "executor": "mike.near",
+  "credit_to": "mike.near",
+  "wrap": "wrap.near",
+  "intents": "intents.near",
+  "token_id": "nep141:wrap.near",
+  "amount_near": "0.01",
+  "amount_yocto": "10000000000000000000000",
+  "min_balance_yocto": "1000000000000000000000000",
+  "max_runs": 100,
+  "sequence_id": "dca-intents-mo5bslc5",
+  "trigger_id": "dca-intents-trigger-mo5bslc5",
+  "owner_gas_tgas": 50,
+  "execute_gas_tgas": 750,
+  "preflight": {
+    "wrap_storage_smart_account": {
+      "total": "1250000000000000000000",
+      "available": "0"
+    },
+    "wrap_missing_smart_account": false
+  },
+  "template": [
+    {
+      "step_id": "wrap",
+      "target_id": "wrap.near",
+      "method_name": "near_deposit",
+      "args": "e30=",
+      "attached_deposit_yocto": "10000000000000000000000",
+      "gas_tgas": 30
+    },
+    {
+      "step_id": "deposit",
+      "target_id": "wrap.near",
+      "method_name": "ft_transfer_call",
+      "args": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IjEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwibXNnIjoie1wicmVjZWl2ZXJfaWRcIjpcIm1pa2UubmVhclwiLFwicmVmdW5kX2lmX2ZhaWxzXCI6dHJ1ZX0ifQ==",
+      "attached_deposit_yocto": "1",
+      "gas_tgas": 150
+    }
+  ],
+  "skip_execute": false,
+  "artifacts_file": "/Users/mikepurvis/near/smart-account-contract/collab/artifacts/2026-04-19T05-28-46-853Z-dca-dca-intents-mo5bslc5-dca-intents-trigger-mo5bslc5.json",
+  "prev_intents_balance_yocto": "40000000000000000000000",
+  "new_intents_balance_yocto": "50000000000000000000000",
+  "intents_balance_delta_yocto": "10000000000000000000000",
+  "sequence_template_view": {
+    "sequence_id": "dca-intents-mo5bslc5",
+    "calls": [
+      {
+        "step_id": "wrap",
+        "target_id": "wrap.near",
+        "method_name": "near_deposit",
+        "args": "e30=",
+        "attached_deposit_yocto": "10000000000000000000000",
+        "gas_tgas": 30,
+        "policy": "Direct"
+      },
+      {
+        "step_id": "deposit",
+        "target_id": "wrap.near",
+        "method_name": "ft_transfer_call",
+        "args": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IjEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwibXNnIjoie1wicmVjZWl2ZXJfaWRcIjpcIm1pa2UubmVhclwiLFwicmVmdW5kX2lmX2ZhaWxzXCI6dHJ1ZX0ifQ==",
+        "attached_deposit_yocto": "1",
+        "gas_tgas": 150,
+        "policy": "Direct"
+      }
+    ],
+    "contains_adapter_calls": false,
+    "contains_asserted_calls": false,
+    "contains_non_direct_calls": false,
+    "saved_at_ms": 1776576528342,
+    "total_attached_deposit_yocto": "10000000000000000000001"
+  },
+  "balance_trigger_view": {
+    "trigger_id": "dca-intents-trigger-mo5bslc5",
+    "sequence_id": "dca-intents-mo5bslc5",
+    "min_balance_yocto": "1000000000000000000000000",
+    "max_runs": 100,
+    "runs_started": 0,
+    "in_flight": false,
+    "last_executor_id": null,
+    "last_started_at_ms": null,
+    "last_finished_at_ms": null,
+    "last_run_namespace": null,
+    "last_run_outcome": null,
+    "created_at_ms": 1776576532509
+  },
+  "trigger_execution_view": {
+    "trigger_id": "dca-intents-trigger-mo5bslc5",
+    "sequence_id": "dca-intents-mo5bslc5",
+    "sequence_namespace": "auto:dca-intents-trigger-mo5bslc5:1",
+    "run_nonce": 1,
+    "executor_id": "mike.near",
+    "started_at_ms": 1776576535486,
+    "call_count": 2
+  },
+  "txs": [
+    {
+      "step": "save_sequence_template",
+      "signer": "mike.near",
+      "receiver_id": "sequential-intents.mike.near",
+      "tx_hash": "5UuUtZTi3fVu6q1Kd991fTYUwe7EcmZzuweKdXLhw42j",
+      "block_hash": "6Efah4z1jse3HDUoXewkeQic44LXjJ1pB2herSpEXV7J",
+      "block_height": null,
+      "status": {
+        "SuccessValue": "eyJzZXF1ZW5jZV9pZCI6ImRjYS1pbnRlbnRzLW1vNWJzbGM1IiwiY2FsbHMiOlt7InN0ZXBfaWQiOiJ3cmFwIiwidGFyZ2V0X2lkIjoid3JhcC5uZWFyIiwibWV0aG9kX25hbWUiOiJuZWFyX2RlcG9zaXQiLCJhcmdzIjoiZTMwPSIsImF0dGFjaGVkX2RlcG9zaXRfeW9jdG8iOiIxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsImdhc190Z2FzIjozMCwicG9saWN5IjoiRGlyZWN0In0seyJzdGVwX2lkIjoiZGVwb3NpdCIsInRhcmdldF9pZCI6IndyYXAubmVhciIsIm1ldGhvZF9uYW1lIjoiZnRfdHJhbnNmZXJfY2FsbCIsImFyZ3MiOiJleUp5WldObGFYWmxjbDlwWkNJNkltbHVkR1Z1ZEhNdWJtVmhjaUlzSW1GdGIzVnVkQ0k2SWpFd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdJaXdpYlhObklqb2llMXdpY21WalpXbDJaWEpmYVdSY0lqcGNJbTFwYTJVdWJtVmhjbHdpTEZ3aWNtVm1kVzVrWDJsbVgyWmhhV3h6WENJNmRISjFaWDBpZlE9PSIsImF0dGFjaGVkX2RlcG9zaXRfeW9jdG8iOiIxIiwiZ2FzX3RnYXMiOjE1MCwicG9saWN5IjoiRGlyZWN0In1dLCJjb250YWluc19hZGFwdGVyX2NhbGxzIjpmYWxzZSwiY29udGFpbnNfYXNzZXJ0ZWRfY2FsbHMiOmZhbHNlLCJjb250YWluc19ub25fZGlyZWN0X2NhbGxzIjpmYWxzZSwic2F2ZWRfYXRfbXMiOjE3NzY1NzY1MjgzNDIsInRvdGFsX2F0dGFjaGVkX2RlcG9zaXRfeW9jdG8iOiIxMDAwMDAwMDAwMDAwMDAwMDAwMDAwMSJ9"
+      }
+    },
+    {
+      "step": "create_balance_trigger",
+      "signer": "mike.near",
+      "receiver_id": "sequential-intents.mike.near",
+      "tx_hash": "AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy",
+      "block_hash": "55a63XwyHjztWu3Q5iuAUANBbV7xXA4W8oMQZBzaxfMq",
+      "block_height": 194638448,
+      "status": {
+        "SuccessReceiptId": "3rP5F6NwgmymgchP2MrYQC8LjXGo4sWAAGTkZKZMRPWK"
+      }
+    },
+    {
+      "step": "execute_trigger",
+      "signer": "mike.near",
+      "receiver_id": "sequential-intents.mike.near",
+      "tx_hash": "E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX",
+      "block_hash": "42HgSkz8XGuQu9txc5VdvpNTTNp63PcqmtRTd816hGHU",
+      "block_height": 194638453,
+      "status": {
+        "SuccessReceiptId": "4kjEkEB3EQwqpmZnsw9rt7irhFM6nLXLdUxeB938q9rG"
+      }
+    }
+  ],
+  "commands": {
+    "execute_one_tick": "near call sequential-intents.mike.near execute_trigger '{\"trigger_id\":\"dca-intents-trigger-mo5bslc5\"}' --accountId mike.near --gas 800000000000000",
+    "trigger_state": "./scripts/state.mjs sequential-intents.mike.near --method get_balance_trigger --args '{\"trigger_id\":\"dca-intents-trigger-mo5bslc5\"}'",
+    "intents_balance_view": "./scripts/state.mjs intents.near --method mt_balance_of --args '{\"account_id\":\"mike.near\",\"token_id\":\"nep141:wrap.near\"}'"
+  }
+}

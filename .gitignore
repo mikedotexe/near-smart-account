@@ -24,6 +24,8 @@ collab/artifacts/*.md
 # sequential-intents mainnet reference runs (see examples/README.md + CLAUDE.md)
 !collab/artifacts/2026-04-19T04-43-09-884Z-intent-sequence-deposit-only-mike-near-mo5a5xh8.json
 !collab/artifacts/2026-04-19T04-44-03-387Z-intent-sequence-round-trip-mike-near-mo5a72rf.json
+# dca mainnet reference run (one-shot tick via balance trigger + template)
+!collab/artifacts/2026-04-19T05-28-46-853Z-dca-dca-intents-mo5bslc5-dca-intents-trigger-mo5bslc5.json
 
 # Local build/import artifacts
 .docker-target-*/

@@ -140,6 +140,12 @@ for `examples/sequential-intents.mjs`):
 - deposit-only: `3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD`
 - round-trip  : `7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ`
 
+DCA one-tick reference (`examples/dca.mjs`, balance-trigger automation):
+
+- save_sequence_template : `5UuUtZTi3fVu6q1Kd991fTYUwe7EcmZzuweKdXLhw42j`
+- create_balance_trigger : `AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`
+- execute_trigger        : `E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`
+
 Safety rules:
 
 - treat the account as disposable infrastructure; do not move meaningful

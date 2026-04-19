@@ -103,6 +103,11 @@ near call sa-wallet.mike.near execute_trigger '{"trigger_id":"<id>"}' \
   --accountId <executor> --gas 800000000000000
 ```
 
+Reference mainnet run on `sequential-intents.mike.near` (2026-04-18):
+- `save_sequence_template`: [`5UuUtZTi3fVu6q1Kd991fTYUwe7EcmZzuweKdXLhw42j`](https://www.nearblocks.io/txns/5UuUtZTi3fVu6q1Kd991fTYUwe7EcmZzuweKdXLhw42j)
+- `create_balance_trigger`: [`AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`](https://www.nearblocks.io/txns/AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy)
+- `execute_trigger` (one tick): [`E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`](https://www.nearblocks.io/txns/E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX)
+
 ## Preflights and funding
 
 All flagships assume:
