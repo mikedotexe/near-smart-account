@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "run_id": "20260419T17051",
+  "short_hash": "9BQbtM...s2nL",
+  "tx_hash": "9BQbtMwEgA6TvEaeCANbk8PoRjShUSEzhKdFLtXks2nL",
+  "block_info": {
+    "transaction_block_hash": "3b3KyHu1UozT5Yax5gWhapZ58aW4xDtJUUbpNPqQptzm",
+    "receipts": [
+      {
+        "receipt_id": "GZ5T8RmKv4AFQTatcs62D7Ru2aMCcV8B91JozpXxPiXG",
+        "block_hash": "3b3KyHu1UozT5Yax5gWhapZ58aW4xDtJUUbpNPqQptzm"
+      },
+      {
+        "receipt_id": "CVrZgSxrT2pM95uo3XAHE5Zh7pWnVP2yQkyw6hqFwVZj",
+        "block_hash": "EG9cxJwJFL929cKnYT7cbHfhsp3XkvotzD4BxbFN6XXj"
+      },
+      {
+        "receipt_id": "DoycEM1B56sr324ScF75RupQ362ZcN28YooXpumGq47m",
+        "block_hash": "FpBqvLz52VG17bd61LbVYVS6woich589coxozp2149fT"
+      },
+      {
+        "receipt_id": "4PmQqddBz9cY42KrDLTwcshmLStvVj9BXz2UvyPfGnVt",
+        "block_hash": "8hhnSXS4BBzECFgsQKyLiwtk1ZHZgmdjuFwx7AdjYJnP"
+      },
+      {
+        "receipt_id": "DbWB9bPvbraSbWn212ed6jWinkGDhARM8FqBBET4moNp",
+        "block_hash": "8hhnSXS4BBzECFgsQKyLiwtk1ZHZgmdjuFwx7AdjYJnP"
+      },
+      {
+        "receipt_id": "947hx3yh1eXTWPWoZUqfk1b1DKLRjtCQSggLYyJQtdML",
+        "block_hash": "Ac9ahoqWm1CeawfGe4SessPeKkr5RwBXYUqbfL78xwep"
+      },
+      {
+        "receipt_id": "2JEcJVFpYUf8h1e83HfiX4AjDFoccK4xbtMRbPB3VsE2",
+        "block_hash": "FpBqvLz52VG17bd61LbVYVS6woich589coxozp2149fT"
+      },
+      {
+        "receipt_id": "9iQdzX2YNoD38Rpikpm5CJJp3rLCndKxttYtCxCc9NBj",
+        "block_hash": "Ac9ahoqWm1CeawfGe4SessPeKkr5RwBXYUqbfL78xwep"
+      },
+      {
+        "receipt_id": "J2A1TgCYdhKXEUPq34BY6iE7E9StWLAsqsPGNoTgAeSE",
+        "block_hash": "DodTsvLotPBgJpNgXKTGB15wcc9jBdVe4USvMCEsr4sL"
+      },
+      {
+        "receipt_id": "8W3rQgjUGjAeyUvPDnJa5UcJm9ibEL38fZRTrc5ntJAt",
+        "block_hash": "Ar7em4FLg2up8yFQZQ4X1wjn2Dt9SwrHeGuBUE6erjVg"
+      },
+      {
+        "receipt_id": "eWVVymP8yA6Lnj28kJEy9Th5kFPKYBkRQYbKXJ5wLnM",
+        "block_hash": "Ar7em4FLg2up8yFQZQ4X1wjn2Dt9SwrHeGuBUE6erjVg"
+      },
+      {
+        "receipt_id": "Gig7ehDPg3qoWEJAv8zVeTG3WgtQKSvZqFoECc5wsEKg",
+        "block_hash": "J6utJ9bRgDrHxKEhLFbRd9mtcsW71VqqVgMGdCXFaqfX"
+      },
+      {
+        "receipt_id": "GKgPUa4GCamSLVQPtGXkWyE5p3BnqZyyuoVjdJ5rNK93",
+        "block_hash": "DodTsvLotPBgJpNgXKTGB15wcc9jBdVe4USvMCEsr4sL"
+      },
+      {
+        "receipt_id": "7wjd5axdj8oWLoKDQtAxVgmXQ1ZDcERLVTN7rZjGGGSq",
+        "block_hash": "J6utJ9bRgDrHxKEhLFbRd9mtcsW71VqqVgMGdCXFaqfX"
+      },
+      {
+        "receipt_id": "UbWeYrz4DHVUkH7a8VT2b95yeaPRov4hRrVaPAX7p8t",
+        "block_hash": "2LHmVxvxq2MDj39d2xK2njkanL7vD67YRnMmYZawB7h9"
+      },
+      {
+        "receipt_id": "CYSuhCxcSMpdLS3pubP4Xk3ecjZid3F1oRH2UKVtbfZD",
+        "block_hash": "DkL6GKAJWBhNq3h5CQrqP7ivnMvnxQ2KA3ojhrY6MbE8"
+      },
+      {
+        "receipt_id": "3ZuZ4WUyfvF58JQiYDscGVi2CgZ38Sg8tdtoAKv7Xoe3",
+        "block_hash": "DkL6GKAJWBhNq3h5CQrqP7ivnMvnxQ2KA3ojhrY6MbE8"
+      },
+      {
+        "receipt_id": "4LxNzuNqXY2NphKiEnh5b3SrLLYkYD9X5odaAxg1287g",
+        "block_hash": "6DHmTxhAL7FPCbQSKSt1XRWrFBHP7vQ1eRLfnsEh1TsU"
+      },
+      {
+        "receipt_id": "5NmrBgPAZviwTHdYLxpj8oLG5B6rad87F1j97NMWnd2j",
+        "block_hash": "2LHmVxvxq2MDj39d2xK2njkanL7vD67YRnMmYZawB7h9"
+      }
+    ]
+  },
+  "network": "mainnet",
+  "smart_account": "mike.near",
+  "signer": "mike.near",
+  "ladder_bps": 5000,
+  "plan": [
+    {
+      "step_id": "ladder-step1-20260419T17051",
+      "target_id": "probe-v4.mike.near",
+      "method_name": "do_honest_work",
+      "args": "eyJsYWJlbCI6ImxhZGRlci1wcmltZS0yMDI2MDQxOVQxNzA1MSJ9",
+      "attached_deposit_yocto": "0",
+      "gas_tgas": 40
+    },
+    {
+      "step_id": "ladder-step2-20260419T17051",
+      "target_id": "probe-v4.mike.near",
+      "method_name": "get_calls_completed",
+      "args": "e30=",
+      "attached_deposit_yocto": "0",
+      "gas_tgas": 40,
+      "save_result": {
+        "as_name": "counter",
+        "kind": "U128Json"
+      }
+    },
+    {
+      "step_id": "ladder-step3-20260419T17051",
+      "target_id": "probe-v4.mike.near",
+      "method_name": "do_honest_work",
+      "args": "eyJsYWJlbCI6IiR7Y291bnRlcn0ifQ==",
+      "attached_deposit_yocto": "0",
+      "gas_tgas": 40,
+      "args_template": {
+        "template": "eyJsYWJlbCI6IiR7Y291bnRlcn0ifQ==",
+        "substitutions": [
+          {
+            "reference": "counter",
+            "op": {
+              "PercentU128": {
+                "bps": 5000
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "pre_counter": 23,
+  "counter_after": 25,
+  "last_burst_after": "12",
+  "outcome": "completed",
+  "structured_events": [
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "step_resolved_ok",
+      "data": {
+        "step_id": "ladder-step1-20260419T17051",
+        "namespace": "manual:mike.near",
+        "result_bytes_len": 39,
+        "next_step_id": "ladder-step2-20260419T17051",
+        "registered_at_ms": 1776618320089,
+        "resolve_latency_ms": 1430,
+        "call": {
+          "target_id": "probe-v4.mike.near",
+          "method": "do_honest_work",
+          "args_bytes_len": 39,
+          "deposit_yocto": "0",
+          "gas_tgas": 40,
+          "policy": "direct",
+          "dispatch_summary": "direct probe-v4.mike.near.do_honest_work"
+        },
+        "runtime": {
+          "block_height": 194707967,
+          "block_timestamp_ms": 1776618321519,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625482095903307299915596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 555616,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "result_saved",
+      "data": {
+        "step_id": "ladder-step2-20260419T17051",
+        "namespace": "manual:mike.near",
+        "as_name": "counter",
+        "kind": "u128_json",
+        "bytes_len": 2,
+        "runtime": {
+          "block_height": 194707970,
+          "block_timestamp_ms": 1776618323381,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625494450292133950715596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 555233,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "step_resolved_ok",
+      "data": {
+        "step_id": "ladder-step2-20260419T17051",
+        "namespace": "manual:mike.near",
+        "result_bytes_len": 2,
+        "next_step_id": "ladder-step3-20260419T17051",
+        "registered_at_ms": 1776618320089,
+        "resolve_latency_ms": 3292,
+        "call": {
+          "target_id": "probe-v4.mike.near",
+          "method": "get_calls_completed",
+          "args_bytes_len": 2,
+          "deposit_yocto": "0",
+          "gas_tgas": 40,
+          "policy": "direct",
+          "dispatch_summary": "direct probe-v4.mike.near.get_calls_completed"
+        },
+        "runtime": {
+          "block_height": 194707970,
+          "block_timestamp_ms": 1776618323381,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625494450292133950715596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 555233,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "step_resolved_ok",
+      "data": {
+        "step_id": "ladder-step3-20260419T17051",
+        "namespace": "manual:mike.near",
+        "result_bytes_len": 14,
+        "next_step_id": null,
+        "registered_at_ms": 1776618320089,
+        "resolve_latency_ms": 5070,
+        "call": {
+          "target_id": "probe-v4.mike.near",
+          "method": "do_honest_work",
+          "args_bytes_len": 22,
+          "deposit_yocto": "0",
+          "gas_tgas": 40,
+          "policy": "direct",
+          "dispatch_summary": "direct probe-v4.mike.near.do_honest_work"
+        },
+        "runtime": {
+          "block_height": 194707973,
+          "block_timestamp_ms": 1776618325159,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625506752290804108115596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554887,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "sequence_completed",
+      "data": {
+        "namespace": "manual:mike.near",
+        "final_step_id": "ladder-step3-20260419T17051",
+        "final_result_bytes_len": 14,
+        "runtime": {
+          "block_height": 194707973,
+          "block_timestamp_ms": 1776618325159,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625506752290804108115596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554887,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    }
+  ]
+}

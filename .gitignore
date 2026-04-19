@@ -19,6 +19,9 @@ simple-example/res/*.wasm
 # Keep only curated reference reports tracked in git.
 collab/artifacts/*.json
 collab/artifacts/*.md
+# v4.0.2-ops mainnet proof runs (see MAINNET-PROOF.md)
+!collab/artifacts/reference/
+!collab/artifacts/reference/*.json
 !collab/artifacts/2026-04-18T01-47-20-159Z-router-seq-mo3ofylb-balance-trigger-mo3ofylb.json
 !collab/artifacts/2026-04-18T13-20-54-668Z-wrap-seq-mo4d7wjw-balance-trigger-mo4d7wjw.json
 # sequential-intents mainnet reference runs (see examples/README.md + CLAUDE.md)

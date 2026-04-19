@@ -156,6 +156,34 @@ gate — so a retrospective user with just `tx_hash + signer_id`
 can reconstruct a run without needing to involve the account
 owner.
 
+## Phase 4 — reference runs against `v4.0.2-ops` (2026-04-19)
+
+Fresh flagship runs against the post-migrate kernel. Captured with
+full `block_info` anchors and curated under
+`collab/artifacts/reference/` for the
+[`MAINNET-PROOF.md`](./MAINNET-PROOF.md) verification story.
+
+| Primitive | Tx hash | Block hash | Reference artifact |
+|---|---|---|---|
+| T1 PreGate (limit-order) | `9quv5g2S1c4ZeLJQrMZmSpuGwfYM4fX4Y61GfA7vf4Cr` | `hdRtm4YTx3a5UXDNYj96hw4aGBk1HCWvqWB64DnYHcA` | `collab/artifacts/reference/mike-near-v4.0.2-limit-order.json` |
+| T2 value threading (ladder-swap) | `9BQbtMwEgA6TvEaeCANbk8PoRjShUSEzhKdFLtXks2nL` | `3b3KyHu1UozT5Yax5gWhapZ58aW4xDtJUUbpNPqQptzm` | `collab/artifacts/reference/mike-near-v4.0.2-ladder-swap.json` |
+| T3 session keys — enroll | `8xfeHbuSHRoX1sbG6VSTgBNMHG9ssRKhwHd9Ur5jLYDY` | `94m7qCxDTEEUkySxs1BR4DFeyZDPALaRzVzbXfzZHvis` | `collab/artifacts/reference/mike-near-v4.0.2-session-dapp.json` |
+| T3 session keys — fire #1 | `C1tise22QTZ9n78u1ABXyfC3Safw4zaWmhd22wKXFgkU` | (in artifact) | ↑ |
+| T3 session keys — fire #2 | `8TRodh9z7kMYRHjBGsUuxzg7VKBA33SAkFAZ3US8vRzq` | (in artifact) | ↑ |
+| T3 session keys — fire #3 | `ACtiPBXRRuZL5C1Vt6SRb7KzUJxt4cBaRiuGA5okJdLs` | (in artifact) | ↑ |
+| T3 session keys — revoke | `qtMAmsLzdaVPwyRNCWWR9MYZxbLzEZAbwMor7G6tVtw` | `DipZxEhqPPZMkv67qQ55FWhpxwU9JnWm1ytqKvidHFHA` | ↑ |
+
+### Live state post-Phase-4
+
+The three fire txs incremented `balance_triggers.session-trigger.runs_started`
+to 9 and landed 3 new `automation_runs` rows (namespaces
+`auto:session-trigger:7|8|9`, all status=`Succeeded`). They are
+deliberately LEFT UNPRUNED as part of the proof — a verifier can
+call `list_automation_runs(0, 10)` on `mike.near` right now and
+cross-reference the three rows against the fire tx hashes above.
+When the proof no longer needs to be live-inspectable,
+`prune_finished_automation_runs()` returns state to clean.
+
 ## Session-dapp bug surfaced + fixed during Phase 2
 
 **Symptom.** First Phase 2 run of `session-dapp.mjs` crashed at the

@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "run_id": "20260419T17050",
+  "short_hash": "9quv5g...f4Cr",
+  "tx_hash": "9quv5g2S1c4ZeLJQrMZmSpuGwfYM4fX4Y61GfA7vf4Cr",
+  "block_info": {
+    "transaction_block_hash": "hdRtm4YTx3a5UXDNYj96hw4aGBk1HCWvqWB64DnYHcA",
+    "receipts": [
+      {
+        "receipt_id": "G2qtaZCfn62hpLmhpNbRHJEdG5PYLuzBb2FGVbbeyhkQ",
+        "block_hash": "hdRtm4YTx3a5UXDNYj96hw4aGBk1HCWvqWB64DnYHcA"
+      },
+      {
+        "receipt_id": "2mrPD2Kh4undqZcYzyJecftSZkmZb6nXCEeLtAX9D91x",
+        "block_hash": "CBaNuEMPYmhNTEubmtEU2Lk5BR4cU4rxVxEXdwGoUXwi"
+      },
+      {
+        "receipt_id": "98rEAaqFCgoL83ZU4VbWrLot6tGb9hMMSCFJRGPnrXSN",
+        "block_hash": "J3c4ER83wGWSJptJnRti12KJnKTN8pAjQ3QWYA9CYGiz"
+      },
+      {
+        "receipt_id": "DJhdRnupR6FY5fwJL8SPDzdRfAC6p43wmJmnGkQu9oaS",
+        "block_hash": "u8AAaJjCyUv6cxnAjJwPyWKmVF1DF5SoQEfL6We2yFt"
+      },
+      {
+        "receipt_id": "E4BPmw2pJ4RHPUwgGd5F8PzWsqD9EYa4gNvVuqGJWujs",
+        "block_hash": "u8AAaJjCyUv6cxnAjJwPyWKmVF1DF5SoQEfL6We2yFt"
+      },
+      {
+        "receipt_id": "81dXyMVniDAnHN5yUmrzo5ahP2gLZfWdEF9DHWQVwmT5",
+        "block_hash": "7b7cwEDeLU2WF1VZHJmhdiXySK3JYt5JAoH2xGAUE446"
+      },
+      {
+        "receipt_id": "G3ULUCFhBMGQCWtBwbouCRxH8nFTdYSgqJkqsFZLaAXp",
+        "block_hash": "12w58kU9AvUwJWsmzCxywA82iyQVKfSuABnpnP4gsFpk"
+      },
+      {
+        "receipt_id": "45UGj1YYRaaUXFJecq7BXKmQr5hecjeMfM1mrQUdyDkK",
+        "block_hash": "12w58kU9AvUwJWsmzCxywA82iyQVKfSuABnpnP4gsFpk"
+      },
+      {
+        "receipt_id": "DBGEr2qHxmeq4ipmW6LG3PRvCHNxEhrFVWH8sRzcYot8",
+        "block_hash": "DqBFiKTuMgAhKgkA2QnECCLTnoDn1M3mfP3Jzo4sPmrj"
+      },
+      {
+        "receipt_id": "5AV9fUxpYMxXudjC8Zz6EamxW6rHkg1fcKN3CvcWxj9A",
+        "block_hash": "7b7cwEDeLU2WF1VZHJmhdiXySK3JYt5JAoH2xGAUE446"
+      },
+      {
+        "receipt_id": "ABn3UxNM2PNGomHKVJSNotVpn4FZZQfCcj2XNeXZb8aC",
+        "block_hash": "J3c4ER83wGWSJptJnRti12KJnKTN8pAjQ3QWYA9CYGiz"
+      }
+    ]
+  },
+  "network": "mainnet",
+  "smart_account": "mike.near",
+  "signer": "mike.near",
+  "plan": {
+    "step_id": "limit-order-20260419T17050",
+    "target_id": "probe-v4.mike.near",
+    "method_name": "do_honest_work",
+    "args": "eyJsYWJlbCI6ImxpbWl0LW9yZGVyLWRlbW8ifQ==",
+    "attached_deposit_yocto": "0",
+    "gas_tgas": 40,
+    "pre_gate": {
+      "gate_id": "probe-v4.mike.near",
+      "gate_method": "get_calls_completed",
+      "gate_args": "e30=",
+      "min_bytes": null,
+      "max_bytes": "MTAwMA==",
+      "comparison": "U128Json",
+      "gate_gas_tgas": 30
+    }
+  },
+  "gate": {
+    "contract": "probe-v4.mike.near",
+    "method": "get_calls_completed",
+    "args_json": "{}",
+    "min": null,
+    "max": "1000"
+  },
+  "outcome": "completed",
+  "gate_value_after": 23,
+  "structured_events": [
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "pre_gate_checked",
+      "data": {
+        "step_id": "limit-order-20260419T17050",
+        "namespace": "manual:mike.near",
+        "outcome": "in_range",
+        "matched": true,
+        "expected_min_bytes_len": null,
+        "expected_max_bytes_len": 4,
+        "actual_bytes_len": 2,
+        "actual_return": "MjI=",
+        "comparison": "u128_json",
+        "call": {
+          "target_id": "probe-v4.mike.near",
+          "method": "do_honest_work",
+          "args_bytes_len": 28,
+          "deposit_yocto": "0",
+          "gas_tgas": 40,
+          "policy": "direct",
+          "dispatch_summary": "direct probe-v4.mike.near.do_honest_work"
+        },
+        "runtime": {
+          "block_height": 194707948,
+          "block_timestamp_ms": 1776618310403,
+          "epoch_height": 4279,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 85,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625503430191999275315596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554752,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "step_resolved_ok",
+      "data": {
+        "step_id": "limit-order-20260419T17050",
+        "namespace": "manual:mike.near",
+        "result_bytes_len": 28,
+        "next_step_id": null,
+        "registered_at_ms": 1776618308690,
+        "resolve_latency_ms": 2940,
+        "call": {
+          "target_id": "probe-v4.mike.near",
+          "method": "do_honest_work",
+          "args_bytes_len": 28,
+          "deposit_yocto": "0",
+          "gas_tgas": 40,
+          "policy": "direct",
+          "dispatch_summary": "direct probe-v4.mike.near.do_honest_work"
+        },
+        "runtime": {
+          "block_height": 194707950,
+          "block_timestamp_ms": 1776618311630,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625509551082679321215596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554752,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "sequence_completed",
+      "data": {
+        "namespace": "manual:mike.near",
+        "final_step_id": "limit-order-20260419T17050",
+        "final_result_bytes_len": 28,
+        "runtime": {
+          "block_height": 194707950,
+          "block_timestamp_ms": 1776618311630,
+          "epoch_height": 4279,
+          "used_gas_tgas": 1,
+          "prepaid_gas_tgas": 20,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625509551082679321215596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554752,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    }
+  ],
+  "step_outcome_summary": "step_outcome=undefined\nreason=undefined\nregistered_visible=undefined\nobserved_registered_count=undefined\nregistered_view_error=none\nyielded_receipts=undefined\npending_yield_count=undefined\nresumed_before_run=undefined\nresume_failed_count=undefined\ntrace_classification=unknown"
+}

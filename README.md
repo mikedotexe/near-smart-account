@@ -155,6 +155,18 @@ registered. Discovered by battletest B6; see
 
 ## Validated on mainnet
 
+**`mike.near` itself runs the v4 kernel as of 2026-04-19**
+(currently at `v4.0.2-ops`). Every new primitive has a live
+reference run with block-hash anchors anyone can verify on an
+archival NEAR RPC — see
+[`MAINNET-PROOF.md`](./MAINNET-PROOF.md) for the three reference
+artifacts (PreGate / value threading / session keys) plus
+copy-paste `curl` recipes that return the expected events.
+Full tx log in
+[`MAINNET-MIKE-NEAR-JOURNAL.md`](./MAINNET-MIKE-NEAR-JOURNAL.md);
+deploy recipe in
+[`DEPLOY-MIKE-NEAR.md`](./DEPLOY-MIKE-NEAR.md).
+
 `sequential-intents.mike.near` (v3) — deployed 2026-04-18, owner
 `mike.near`. Eight battletests covered the kernel's halt +
 idempotency + automation edges. Covers `Direct` / `Adapter` /
@@ -162,10 +174,6 @@ idempotency + automation edges. Covers `Direct` / `Adapter` /
 [`MAINNET-V3-JOURNAL.md`](./MAINNET-V3-JOURNAL.md); design
 observations in [`SEQUENTIAL-INTENTS-DESIGN.md`](./SEQUENTIAL-INTENTS-DESIGN.md)
 §10.
-
-The v4 kernel (`PreGate` + threading + session keys) is
-testnet-validated on fresh subaccounts of `x.mike.testnet` and
-awaits a `mike.near` mainnet deploy.
 
 ## Execution delegation — not signing delegation
 
@@ -217,8 +225,11 @@ full JSON artifacts to `collab/artifacts/` on every live run.
 - [`SESSION-KEYS.md`](./SESSION-KEYS.md) — annotated-FCAK session-key walkthrough (enroll → fire → revoke, safety model).
 - [`PROTOCOL-ONBOARDING.md`](./PROTOCOL-ONBOARDING.md) — adding a new protocol as a step; primitive decision tree.
 - [`DEPLOY-SEQUENTIAL-INTENTS.md`](./DEPLOY-SEQUENTIAL-INTENTS.md) — seven-phase mainnet deploy recipe.
+- [`DEPLOY-MIKE-NEAR.md`](./DEPLOY-MIKE-NEAR.md) — two-phase recipe for deploying v4 to the `mike.near` root identity account.
 - [`SEQUENTIAL-INTENTS-DESIGN.md`](./SEQUENTIAL-INTENTS-DESIGN.md) — design doc for the flagship `intents.near` round-trip: surface map, battletest findings, §10 critical discoveries.
 - [`MAINNET-V3-JOURNAL.md`](./MAINNET-V3-JOURNAL.md) — every on-chain tx landed against `sequential-intents.mike.near`, with block ranges for archival lookup.
+- [`MAINNET-MIKE-NEAR-JOURNAL.md`](./MAINNET-MIKE-NEAR-JOURNAL.md) — tx log for the v4 kernel on `mike.near` itself (Phase 1 lab → Phase 2 identity → Phase 3 ops migrate).
+- [`MAINNET-PROOF.md`](./MAINNET-PROOF.md) — three curated reference artifacts (one per new v4 primitive) with copy-paste `curl` recipes that resolve on any public archival RPC — definitive, independent verifiability.
 - [`HARDENING-REVIEW.md`](./HARDENING-REVIEW.md) — candid repo-shape critique.
 - [`START-HERE.md`](./START-HERE.md) — shortest reading path.
 - [`md-CLAUDE-chapters/README.md`](./md-CLAUDE-chapters/README.md) — chapter map: one chapter per primitive.

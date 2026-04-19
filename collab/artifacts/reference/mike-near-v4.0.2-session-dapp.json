@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "run_id": "20260419T17053",
+  "short_hash": "8xfeHb...LYDY",
+  "network": "mainnet",
+  "smart_account": "mike.near",
+  "owner_signer": "mike.near",
+  "trigger_id": "session-trigger",
+  "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+  "session": {
+    "granted_at_approx_ms": 1776618335457,
+    "expires_at_ms": 1776619235457,
+    "max_fires": 3,
+    "allowance_yocto": "100000000000000000000000",
+    "label": "session-dapp-20260419T17053"
+  },
+  "tx_hashes": {
+    "enroll": "8xfeHbuSHRoX1sbG6VSTgBNMHG9ssRKhwHd9Ur5jLYDY",
+    "fires": [
+      "C1tise22QTZ9n78u1ABXyfC3Safw4zaWmhd22wKXFgkU",
+      "8TRodh9z7kMYRHjBGsUuxzg7VKBA33SAkFAZ3US8vRzq",
+      "ACtiPBXRRuZL5C1Vt6SRb7KzUJxt4cBaRiuGA5okJdLs"
+    ],
+    "revoke": "qtMAmsLzdaVPwyRNCWWR9MYZxbLzEZAbwMor7G6tVtw",
+    "post_revoke_attempt": {
+      "rejected": true,
+      "message": "Signer \"mike.near\" doesn't have access key with the given public_key ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS"
+    }
+  },
+  "block_info": {
+    "enroll": {
+      "transaction_block_hash": "94m7qCxDTEEUkySxs1BR4DFeyZDPALaRzVzbXfzZHvis",
+      "receipts": [
+        {
+          "receipt_id": "DwU7HnfqaPneSfmG7MwWV2kSE9yszxAqggq2navDLzsm",
+          "block_hash": "94m7qCxDTEEUkySxs1BR4DFeyZDPALaRzVzbXfzZHvis"
+        },
+        {
+          "receipt_id": "J4Pud9vqPksXC6dctCFgEvZ9sQGvD911bjeSJjYvFvD",
+          "block_hash": "49CrzUtqUwgQSMsbRUiTkJT9Hpi8atYrJVJxFuu6srRa"
+        },
+        {
+          "receipt_id": "FJAf6c3eAswRquaEZX5QF7mSbjj7Eok2cJgix7yK6SUz",
+          "block_hash": "49CrzUtqUwgQSMsbRUiTkJT9Hpi8atYrJVJxFuu6srRa"
+        }
+      ]
+    },
+    "fires": [
+      {
+        "transaction_block_hash": "5SMDc5Pp8HGeV3niJ5ebFJpkV6GeFdgLFkTUXCZ8AsBs",
+        "receipts": [
+          {
+            "receipt_id": "5RwZtu1JfGuMVDzUX3xMXEP6FqjvgLeTTSondbguDKkU",
+            "block_hash": "5SMDc5Pp8HGeV3niJ5ebFJpkV6GeFdgLFkTUXCZ8AsBs"
+          },
+          {
+            "receipt_id": "5SeUphUoXcNAHUa9XUCUSe8Nr13c8VLAwWGHdtpdv9zu",
+            "block_hash": "D9UtCXu7VHVohCvsac1AKadqm1kfuRYDbx7SYB2DKRTD"
+          },
+          {
+            "receipt_id": "AsPASirn81WkLbpEmzi8As4LgcL31wA5uxtDUkvGs7MU",
+            "block_hash": "BiCuxwpDrPVRyJcfm1GJm6eSFuNSmSFZyXZAT7JSXbqx"
+          },
+          {
+            "receipt_id": "CzZQwfpr7aVDP8LhtKxJXR5rZoyCKtAcKnQzUfhgbghP",
+            "block_hash": "5J4TYBqJJxQwFbSxzbYhFTpfLFUDjf6YEQcogBKSMg1x"
+          },
+          {
+            "receipt_id": "7EtV14yjjiszL2H7YwVwg8nCF3WHyZG6e9igmgZ8Cgkk",
+            "block_hash": "5J4TYBqJJxQwFbSxzbYhFTpfLFUDjf6YEQcogBKSMg1x"
+          },
+          {
+            "receipt_id": "GCLpzeCkGthf4xhB7VeRx4zFpoJZKYUJQXWdk1t3LUMx",
+            "block_hash": "FZ8DxBLTiAbYPSAmcbSj4XdTrB43JfjY1PDQZw3LvCts"
+          },
+          {
+            "receipt_id": "9rQbRe5bPhRtgJMcy2bSVs8hVtoPK2PggvX4KFK2cKqX",
+            "block_hash": "BiCuxwpDrPVRyJcfm1GJm6eSFuNSmSFZyXZAT7JSXbqx"
+          }
+        ]
+      },
+      {
+        "transaction_block_hash": "7X6hm4gYk7YRf7VYX3Z3WvHUpttWGZuhatxVnDzNWVTC",
+        "receipts": [
+          {
+            "receipt_id": "HkxJtSjT99Hz6oQzpUJ2aNJ7MDZnro8Yyon7v1efi8q6",
+            "block_hash": "7X6hm4gYk7YRf7VYX3Z3WvHUpttWGZuhatxVnDzNWVTC"
+          },
+          {
+            "receipt_id": "9JVxntF2L6jZGuma4Xh1Dt97YxkZWez5yMKqD25Yhrg8",
+            "block_hash": "9d7mkEEP3Z1ZbmhjQzvJNfXMBnmwBAanuCW58Kxb51S9"
+          },
+          {
+            "receipt_id": "9AV5KkQYJeC4ifBdYZfZZKEVw2Uxcmewu9uY67AQep5T",
+            "block_hash": "3sz8KTQWTAJAC8Tx4anRFAM2oGgnQqvsuMBesgXxkFYV"
+          },
+          {
+            "receipt_id": "5hKtPagLqxEkaZGGtH15dzJWkidV4XGPB7Ch4U1UaFTK",
+            "block_hash": "3jHDTqtwuv9gmyh7y3dfwQamXcpnbLFhGzzATZzvz672"
+          },
+          {
+            "receipt_id": "Dt3XuTzUfd4idw2RBgr49oeTSxkBupNgXNRdKGkRKzWy",
+            "block_hash": "3jHDTqtwuv9gmyh7y3dfwQamXcpnbLFhGzzATZzvz672"
+          },
+          {
+            "receipt_id": "14Lsw2nrXRMmDE9CLzxNbptRGrgb3k97JZvb3Z8Bmeyu",
+            "block_hash": "7pUejRNTTpK7nYSEbqSow2GKHi7sH5NnbF7Mpq6cz63G"
+          },
+          {
+            "receipt_id": "BdTXeMXaj6ohA6cZvY8oX1uQgeKWK9bZbywKYEaZC4UU",
+            "block_hash": "3sz8KTQWTAJAC8Tx4anRFAM2oGgnQqvsuMBesgXxkFYV"
+          }
+        ]
+      },
+      {
+        "transaction_block_hash": "HquYdPjMTRmubF6ZDwWEisfW86hSRkdqvsGxpWc94mzm",
+        "receipts": [
+          {
+            "receipt_id": "A1pTjn1C2vYmqSfch9ZnUzRzYGA6HAjfdDbgJTR6DpZK",
+            "block_hash": "HquYdPjMTRmubF6ZDwWEisfW86hSRkdqvsGxpWc94mzm"
+          },
+          {
+            "receipt_id": "HoDUy1T2UqGJhqnmtzZWqWXU6Ank3DLYjtCbgsf9hZGP",
+            "block_hash": "9Zov6afnDzwpCYZfDNCi2NUfb4xLahEnsYKB6CrsbnPj"
+          },
+          {
+            "receipt_id": "BEosNhDazYabTuhViFdGBzWuiexfST3GyjJZQknNeHQo",
+            "block_hash": "GcvX21mb9CAJK6ubqoKirASAiQN6Hfkfm4Aph54W59Np"
+          },
+          {
+            "receipt_id": "GfA9rEHYX2ViBisEJvGQRfy4Tx4q84kKAbCL8UzJXSrJ",
+            "block_hash": "6o6h4GiPMsF7RBAt316Ax6CGbtEiXfzdJK487Ft5K1YY"
+          },
+          {
+            "receipt_id": "3zS3ZaEoqnFmup5smPxjkjMeELbGi3c6ZE6CNj1qf5ti",
+            "block_hash": "6o6h4GiPMsF7RBAt316Ax6CGbtEiXfzdJK487Ft5K1YY"
+          },
+          {
+            "receipt_id": "9hHm3M6cmKkxozYmdhNQwp5PiG25vbAd5HcDvBtYtxY2",
+            "block_hash": "8yqA38epCgfqpw51BJuRx8GjRPuVbvdA62dY3hwpKrL9"
+          },
+          {
+            "receipt_id": "Da71jEfstiUNeWViBshwAgmeBjDAFJEpPFfvvuQJUomr",
+            "block_hash": "GcvX21mb9CAJK6ubqoKirASAiQN6Hfkfm4Aph54W59Np"
+          }
+        ]
+      }
+    ],
+    "revoke": {
+      "transaction_block_hash": "DipZxEhqPPZMkv67qQ55FWhpxwU9JnWm1ytqKvidHFHA",
+      "receipts": [
+        {
+          "receipt_id": "yNRiagedPkVVHuGarejPGprFQCZi9ZpcjM6eGDHTGg3",
+          "block_hash": "DipZxEhqPPZMkv67qQ55FWhpxwU9JnWm1ytqKvidHFHA"
+        },
+        {
+          "receipt_id": "G2ggtt4DYFtF8VKBfC4Co8ixG75hnQunHDtVNdXUE1v8",
+          "block_hash": "GueVtarbWMdJ4hxApkizrydF8Zegf4JfBFC1FyMHshQV"
+        },
+        {
+          "receipt_id": "Dqt2vsjh6HN2hwwfJVgogRRTpEPvsqSJUocsWj1kRb1G",
+          "block_hash": "GueVtarbWMdJ4hxApkizrydF8Zegf4JfBFC1FyMHshQV"
+        }
+      ]
+    }
+  },
+  "grant_after_fires": {
+    "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+    "granted_at_ms": 1776618335973,
+    "expires_at_ms": 1776619235457,
+    "allowed_trigger_ids": [
+      "session-trigger"
+    ],
+    "max_fire_count": 3,
+    "fire_count": 3,
+    "label": "session-dapp-20260419T17053",
+    "active": false
+  },
+  "grant_after_revoke": null,
+  "events": [
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "session_enrolled",
+      "data": {
+        "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+        "granted_at_ms": 1776618335973,
+        "expires_at_ms": 1776619235457,
+        "allowed_trigger_ids": [
+          "session-trigger"
+        ],
+        "max_fire_count": 3,
+        "allowance_yocto": "100000000000000000000000",
+        "label": "session-dapp-20260419T17053",
+        "runtime": {
+          "block_height": 194707992,
+          "block_timestamp_ms": 1776618335973,
+          "epoch_height": 4279,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 100,
+          "attached_deposit_yocto": "1",
+          "account_balance_yocto": "2625498435169524789715596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554343,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "session_fired",
+      "data": {
+        "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+        "trigger_id": "session-trigger",
+        "fire_count_after": 1,
+        "max_fire_count": 3,
+        "label": "session-dapp-20260419T17053",
+        "runtime": {
+          "block_height": 194707996,
+          "block_timestamp_ms": 1776618338274,
+          "epoch_height": 4279,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 300,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625497905862001887915596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 554792,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "session_fired",
+      "data": {
+        "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+        "trigger_id": "session-trigger",
+        "fire_count_after": 2,
+        "max_fire_count": 3,
+        "label": "session-dapp-20260419T17053",
+        "runtime": {
+          "block_height": 194708005,
+          "block_timestamp_ms": 1776618343565,
+          "epoch_height": 4279,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 300,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625496658841660786315596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 555038,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "session_fired",
+      "data": {
+        "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+        "trigger_id": "session-trigger",
+        "fire_count_after": 3,
+        "max_fire_count": 3,
+        "label": "session-dapp-20260419T17053",
+        "runtime": {
+          "block_height": 194708014,
+          "block_timestamp_ms": 1776618349192,
+          "epoch_height": 4279,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 300,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625495411557981979815596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 555284,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "session_revoked",
+      "data": {
+        "session_public_key": "ed25519:6p27CNMzPvd34NzyYwL5VKrtcdiB4x1bSBsV1R5wbWBS",
+        "reason": "explicit",
+        "runtime": {
+          "block_height": 194708023,
+          "block_timestamp_ms": 1776618354566,
+          "epoch_height": 4279,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 50,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "2625519164095026954115596075",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 555530,
+          "predecessor_id": "mike.near",
+          "current_account_id": "mike.near",
+          "signer_id": "mike.near"
+        }
+      }
+    }
+  ]
+}
