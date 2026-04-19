@@ -1,0 +1,15 @@
+# Pinned Rust toolchain for reproducible smart-account builds.
+#
+# The kernel currently deployed on mainnet (`mike.near`, v4.0.2-ops) was
+# built with rustc 1.97.0-nightly (7af3402cd 2026-04-16), distributed as
+# the `nightly-2026-04-17` snapshot. Running
+# `./scripts/build-all.sh` under this pinned toolchain produces a
+# byte-exact match to the deployed code_hash
+# (base58: DytwYt4tMP849QjXAQZFeEMuvMYUVq1bvyhwk8JWQvy4).
+#
+# See REPRODUCIBLE-BUILD.md for the hash-and-compare recipe.
+
+[toolchain]
+channel = "nightly-2026-04-17"
+components = ["rust-src", "rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

@@ -107,7 +107,7 @@ What to do when the shape of the contract or its state moves under you.
 ## Vocabulary note
 
 Current prose uses the post-Phase-A spine: **`Step` / `StepPolicy` /
-`execute_steps` / `register_step` / `run_steps`**, with the internal
+`execute_steps` / `register_step` / `run_sequence`**, with the internal
 NEP-519 mechanics still described as **yield · resume · resolve ·
 decay**. Historical chapters use earlier spellings — `yield_promise`
 / `run_sequence` / `resolution_policy` (pre-Phase-A) and

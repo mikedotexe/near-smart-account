@@ -7,7 +7,8 @@
 //
 // This is the canonical helper for submitting registered-step batches in new work.
 // It supersedes the narrower send-step-echo-demo.mjs / send-step-mixed-demo.mjs
-// (which are kept only so their chapter recipes remain reproducible).
+// (now under scripts/chapter-recipes/ — kept only so their archive-chapter
+// recipes remain reproducible).
 //
 // Spec shape:
 //   {

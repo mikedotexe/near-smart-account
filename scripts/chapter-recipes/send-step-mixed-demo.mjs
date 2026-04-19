@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 //
-// Companion to scripts/send-step-echo-demo.mjs — same shape, but lets
-// individual steps target a different downstream method than the rest.
-// Used by the mixed-outcome run in
+// Companion to scripts/chapter-recipes/send-step-echo-demo.mjs — same
+// shape, but lets individual steps target a different downstream method
+// than the rest. Used by the mixed-outcome run in
 // md-CLAUDE-chapters/archive-staged-call-lineage.md to prove
 // mid-sequence halt-then-retry semantics: some steps get a real
 // `echo_log` downstream, one deliberately bad `not_a_method` downstream
 // sits in the middle of the declared order.
 //
 // NOTE: superseded by scripts/send-register-step-multi.mjs for new work.
-// Kept because the staged-call lineage archive (historical naming)'s recipes reference it;
-// the general multi
-// helper expresses the same shape via per-action JSON specs.
+// Lives under scripts/chapter-recipes/ because the staged-call lineage
+// archive's recipes reference it; the general multi helper expresses
+// the same shape via per-action JSON specs.
 //
 // Usage:
-//   scripts/send-step-mixed-demo.mjs alpha:1 beta:2 gamma:3 delta:4 \
+//   scripts/chapter-recipes/send-step-mixed-demo.mjs alpha:1 beta:2 gamma:3 delta:4 \
 //     --method echo_log --fail-method not_a_method --fail-step-ids beta \
 //     --action-gas 250 --call-gas 30 --sequence-order alpha,beta,gamma,delta
 //
@@ -22,8 +22,8 @@
 
 import process from "node:process";
 import { parseArgs } from "node:util";
-import { shortHash } from "./lib/fastnear.mjs";
-import { connectNearWithSigners } from "./lib/near-cli.mjs";
+import { shortHash } from "../lib/fastnear.mjs";
+import { connectNearWithSigners } from "../lib/near-cli.mjs";
 
 const MAX_CONTRACT_GAS_TGAS = 1_000;
 

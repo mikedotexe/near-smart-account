@@ -83,7 +83,7 @@ Also worth naming so we stay honest about scope:
   settlement ledger. An `Asserted` postcheck is a byte-equality check,
   not a settlement guarantee.
 - **No signing delegation.** The owner can grant another account
-  *execution* rights (`run_steps`, `execute_trigger`) without granting
+  *execution* rights (`run_sequence`, `execute_trigger`) without granting
   any *signing* rights. The automation path never holds the user's
   NEP-413 signing key.
 - **No batching substitute within one `execute_intents`.** If you can

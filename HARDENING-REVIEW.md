@@ -15,11 +15,13 @@ The goal is not "delete complexity." It is to separate:
 ## TL;DR (as of 2026-04-19)
 
 The core mechanism is in good shape, and the sequential-intents reshape
-has landed: `execute_steps` / `register_step` / `run_steps` / `StepPolicy`
-is the external surface; `sequential-intents.mike.near` is the mainnet
-reference rig; flagship gallery and mainnet battletest evidence are
-linked from the README. Most of the earlier audit's concrete trims have
-shipped:
+has landed: `execute_steps` / `register_step` / `run_sequence` / `StepPolicy`
+is the external surface; `mike.near` itself now runs the v4 kernel
+(`v4.0.2-ops`) with four curated reference artifacts under
+`collab/artifacts/reference/` — see
+[`MAINNET-PROOF.md`](./MAINNET-PROOF.md). The flagship gallery, mainnet
+battletest evidence, and v4 reference runs are all linked from the
+README. Most of the earlier audit's concrete trims have shipped:
 
 - root cruft (`smart-account.zip`) is gone
 - `AGENTS.md` is a short pointer to `CLAUDE.md`
@@ -31,9 +33,26 @@ shipped:
   `near.social`) with the forensic material split into
   `simple-example/OPERATOR-APPENDIX.md`
 
+Additional hardening landed later on 2026-04-19 (the "make it
+falsifiable" pass):
+
+- [`QUICK-VERIFY.md`](./QUICK-VERIFY.md) + `scripts/verify-mainnet-claims.sh`
+  turn the mainnet proof into a one-command check anyone can run
+  against public archival RPC
+- [`REPRODUCIBLE-BUILD.md`](./REPRODUCIBLE-BUILD.md) closes the
+  source-attestation gap named in earlier audits: `rust-toolchain.toml`
+  pins nightly, and the host build produces a byte-exact match to the
+  deployed `code_hash`
+- [`FLAGSHIP-HOWTO.md`](./FLAGSHIP-HOWTO.md) externalizes the implicit
+  knowledge for composing a new flagship
+- terminology audit reconciled repo-wide (`run_steps` phantom → actual
+  `run_sequence`)
+
 What remains is mostly architectural: `smart-account` contains two
 products in one crate, and `simple-example` still carries a parallel
-operational surface that could share more with the main one.
+operational surface that could share more with the main one. Both of
+these open findings, below, are unaffected by the 2026-04-19
+hardening pass.
 
 ## Open findings
 
@@ -43,7 +62,7 @@ operational surface that could share more with the main one.
 contains two distinct surfaces:
 
 - the narrow sequencing kernel (`execute_steps` / `register_step` /
-  `run_steps`, `on_step_resumed`, `on_step_resolved`, `StepPolicy`
+  `run_sequence`, `on_step_resumed`, `on_step_resolved`, `StepPolicy`
   dispatch)
 - the automation/product layer (templates, triggers, authorized
   executor, automation runs)
@@ -81,7 +100,7 @@ already reuse the shared libs; the older `deploy-testnet.sh` and
 These are the parts to protect from a reflex simplification pass:
 
 - **The sequencing kernel.**
-  `execute_steps` / `register_step` / `run_steps` / `on_step_resumed` /
+  `execute_steps` / `register_step` / `run_sequence` / `on_step_resumed` /
   `on_step_resolved` is the heart of the repo and earns its complexity.
 - **The three step policies.**
   `Direct`, `Adapter`, and `Asserted` each cover a distinct

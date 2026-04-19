@@ -8,13 +8,13 @@ import {
   decodeSuccessValue,
   REPO_ROOT,
   shortHash,
-} from "./lib/fastnear.mjs";
+} from "../lib/fastnear.mjs";
 import {
   buildTxArtifact,
   callView,
   connectNearWithSigners,
   sendFunctionCall,
-} from "./lib/near-cli.mjs";
+} from "../lib/near-cli.mjs";
 
 const WRAP_STORAGE_DEPOSIT_YOCTO = 1_250_000_000_000_000_000_000n;
 const FT_TRANSFER_DEPOSIT_YOCTO = 1n;

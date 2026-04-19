@@ -219,10 +219,58 @@ overwrite branch is a no-op).
   than sufficient for the `probe-v4.mike.near.do_honest_work`
   shape; tune upward if production targets land heavier targets.
 
+## Phase 5 — real-dapp flagship: `intents-deposit-limit` (2026-04-19)
+
+First composition of FOUR primitives in one live session on
+`mike.near` v4.0.2-ops: `PreGate × 2` (step 1 floor guard on
+`wrap.near.ft_balance_of`, step 2 limit check on
+`v2.ref-finance.near.get_return`, pool `3879`) + value threading
+(step 1's balance saved as `wnear_balance`, step 2 `amount`
+materialized via `PercentU128 { bps: 100 }`) + session key
+(2h expiry, 2 allowed triggers, 5 max fires).
+
+Both branches of the pre-dispatch gate proved in one session:
+a pass fire landed the deposit, a halt fire (identical session
+key, different trigger, threshold set intentionally high)
+refused at step 2 without touching `intents.near`.
+
+| Label | Tx hash | Block | Notes |
+|---|---|---|---|
+| `save_sequence_template` (pass) | `8zQpETNuWp15VnmvFYXhzdyroj4iAPLK2i6sYNC69Fvq` | — | stores two-step plan under `intents-deposit-limit-pass-*` |
+| `save_sequence_template` (halt) | `5e49WkcGtx1zMryn3qchjUu4NL82iKU7vUqv275Dj5uZ` | — | identical shape, higher `min_bytes` for proof-of-halt |
+| `create_balance_trigger` (pass) | `7LT7PMsknCv5AoZXRcJsq3hz7AVmCbkjEbpviqa74Dzd` | — | |
+| `create_balance_trigger` (halt) | `Em75Uq1QyPZnNC94ioXyGXood6CMAQu88sA6MMRtTjic` | — | |
+| `enroll_session` | `J3tM59hG87rFZsgpoTj4UPH4r3w2wptWnnYYXsZMGems` | 194711851 | 1 yoctoNEAR attached; allowlist covers both triggers |
+| `execute_trigger` (pass fire) | `65K4kDyd8Ab3vWnsdAB81YK5ptYLJ1Xem3ea1sRXZx9L` | 194711855–194711867 | `pre_gate_checked × 2 { in_range }`; `nep245/mt_mint` at `intents.near`; +0.445 wNEAR deposited; `sequence_completed` |
+| `execute_trigger` (halt fire) | `EEC83UhpqvckEcuMnYqekQgR6jpuLMGtJJctxE23HhX` | 194711874–194711882 | step 2 `pre_gate_checked { below_min }`; `sequence_halted { reason: pre_gate_failed, error_kind: pre_gate_below_min }`; no `mt_mint`, no balance change |
+| `revoke_session` | `DnYZB24ShHFz2BicgkmP1BS3GDAX79hSHCABJUoNxknD` | 194711890 | atomically deletes state + FCAK; post-revoke fire rejected by NEAR runtime |
+
+Reference artifact:
+[`collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json`](./collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json).
+
+Falsifiability path (60 s): [`QUICK-VERIFY.md`](./QUICK-VERIFY.md)
+(prose) or `./scripts/verify-mainnet-claims.sh` (script).
+Deep dive: [`MAINNET-PROOF.md`](./MAINNET-PROOF.md) Recipe 3.
+
+### Live state post-Phase-5
+
+`mike.near` now has two sequence templates
+(`intents-deposit-limit-pass-*` and `intents-deposit-limit-halt-*`),
+two balance triggers (likewise), and two more `automation_runs`
+entries at `auto:intents-deposit-limit-*:1`. Same LEFT-UNPRUNED
+convention as Phase 4 — verifier can call
+`list_automation_runs` and cross-reference.
+
 ## Next steps (not in this journal)
 
-- First "real" use: a `PreGate`-gated limit order against
-  `intents.near` quote surface, signed by a session key.
+- **`intents-autosettle.mjs`** — withdrawal-leg flagship pairing
+  with `intents-deposit-limit`. Session-key-fired
+  `mt_balance_of(USDT)` PreGate sequence where most fires halt
+  cleanly and one eventually passes after a solver fills.
+  Completes the deposit/withdraw bookend story.
+- **DAO-signed variant.** Any of the existing flagships re-run
+  where the owner is a Sputnik2 DAO contract rather than a
+  user FAK — proves the kernel works under multisig governance.
 - Consider a one-line `SESSION-KEYS.md` addendum clarifying the
   keystore-slot behavior for dapp integrators who sign from the
   same account that owns the smart account.

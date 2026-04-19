@@ -4,7 +4,7 @@
 > NEP-519 `yield_promise` / `resume` as the canonical mechanism rather
 > than collapsing it into a plain state-driven queue. The external
 > surface has since been renamed to `execute_steps` / `register_step`
-> / `run_steps`, and the callbacks became `on_step_resumed` /
+> / `run_sequence`, and the callbacks became `on_step_resumed` /
 > `on_step_resolved`, but the internal NEP-519 mechanics below are
 > unchanged — the argument is about *what the mechanism is*, not
 > about what we call it.

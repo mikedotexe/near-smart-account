@@ -5,6 +5,14 @@ Short continuity note for future Claude sessions.
 Primary sources of truth:
 
 - [README.md](./README.md) — public overview, flagship gallery, mainnet-validated runs
+- [QUICK-VERIFY.md](./QUICK-VERIFY.md) — 60-second falsifiable-proof
+  path: four curls against public archival RPC
+  ([`docs.fastnear.com`](https://docs.fastnear.com)) confirm the
+  4-primitive mainnet flagship
+- [MAINNET-PROOF.md](./MAINNET-PROOF.md) — deep verification dive:
+  trust-model table (three orthogonal surfaces, time-budgeted) and
+  per-recipe walkthroughs for all four reference artifacts in
+  `collab/artifacts/reference/`
 - [SEQUENTIAL-INTENTS-DESIGN.md](./SEQUENTIAL-INTENTS-DESIGN.md) —
   design doc: `intents.near` surface map, flagship shape, §10 battletest findings
 - [MAINNET-V3-JOURNAL.md](./MAINNET-V3-JOURNAL.md) — every on-chain
@@ -14,6 +22,9 @@ Primary sources of truth:
   seven-phase mainnet deploy recipe (prereq → build → create → deploy → register → validate → record)
 - [PROTOCOL-ONBOARDING.md](./PROTOCOL-ONBOARDING.md) — adding a new
   protocol as a sequential-intent step (policy decision tree)
+- [FLAGSHIP-HOWTO.md](./FLAGSHIP-HOWTO.md) — contributor guide:
+  composing primitives into a new runnable flagship. Decision
+  table + common skeleton + artifact conventions + worked example.
 - [INTENTS.md](./INTENTS.md) — positioning note: this smart account
   vs `intents.near`, when to use which
 - [SISTER-REPOS.md](./SISTER-REPOS.md) — three-repo positioning:
@@ -47,23 +58,40 @@ Primary sources of truth:
 
 ## Repo in one paragraph
 
-A NEAR smart account for **cross-contract composition with explicit
-trust boundaries**. Ships six composable primitives on NEP-519
-yield/resume, each answering one explicit question about a
-cross-contract call: `Direct` / `Adapter` / `Asserted` (execution
-trust), `PreGate` (pre-dispatch gate), `save_result` + `args_template`
-(value threading), session keys (per-account annotated FCAK
-delegation). Every combination is legal — one step can carry `PreGate`
-+ `Asserted` + `args_template` + session-key auth simultaneously.
-User calls `execute_steps(steps)` in one tx; the kernel registers each
-step as a yielded receipt and releases them sequentially — step N+1
-only fires after step N's resolution surface settles and its policy
-passes. `intents.near` is the primary target (NEP-413-signed deposits,
-swaps, withdrawals), but the kernel composes any multi-protocol plan.
-Mainnet-validated (`Direct` / `Adapter` / `Asserted`) on
-`sequential-intents.mike.near` (2026-04-18); testnet-validated
-(`PreGate` / threading / session keys) on three fresh subaccounts of
-`x.mike.testnet` (2026-04-19). See `MAINNET-V3-JOURNAL.md`.
+**The gap this fills.** Native NEAR `Actions` batch multiple
+`FunctionCall`s in one tx, but all must target one `receiver_id`;
+cross-contract workflows default to fire-and-forget async. This
+kernel ships **sequential, policy-gated, multi-receiver composition
+in one signed plan** — step N+1 only fires after step N's resolution
+surface settles AND its policy passes.
+
+**Mechanic: NEP-519 yield/resume.** A step yields its callback
+receipt; the receipt stays pending on-chain until the kernel resumes
+it (triggered by the target's resolution); after ~200 blocks an
+unresumed callback decays with `PromiseError::Failed`. The kernel
+registers each step as a yielded receipt and releases them
+sequentially. See chapter 18 for the canonical walkthrough.
+
+**Six composable primitives,** each answering one explicit question
+about a cross-contract call: `Direct` / `Adapter` / `Asserted`
+(execution trust), `PreGate` (pre-dispatch gate), `save_result` +
+`args_template` (value threading), session keys (per-account
+annotated FCAK delegation). Every combination is legal — one step
+can carry `PreGate` + `Asserted` + `args_template` + session-key
+auth simultaneously. User calls `execute_steps(steps)` in one tx.
+`intents.near` is the primary venue (NEP-413-signed deposits, swaps,
+withdrawals), but the kernel composes any multi-protocol plan.
+
+**Validation.** All six primitives mainnet-validated on `mike.near`
+as kernel version `v4.0.2-ops` (2026-04-19). Four reference
+artifacts in `collab/artifacts/reference/`: three isolate one
+primitive each (`limit-order` / `ladder-swap` / `session-dapp`); the
+fourth (`intents-deposit-limit`) composes four primitives in one
+real-dapp flow on `intents.near` — `PreGate × 2` + threading +
+session key, pass+halt both proved in one session. Falsifiable from
+public archival RPC in ≤ 2 minutes via `QUICK-VERIFY.md`; tx-level
+detail for the `sequential-intents` / DCA / battletest sweep lives
+in `MAINNET-V3-JOURNAL.md`.
 
 Sequential here means **receipt-release order**, not exclusive chain
 execution. Unrelated receipts can still interleave elsewhere on-chain.
@@ -72,7 +100,7 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
 
 - `contracts/smart-account/`
   Primary intent-executor. `execute_steps(steps)` facade, manual
-  `register_step` / `run_steps`, per-step `StepPolicy` + optional
+  `register_step` / `run_sequence`, per-step `StepPolicy` + optional
   `PreGate` + optional `save_result` / `args_template` for value
   threading, balance-trigger automation (`save_sequence_template` /
   `create_balance_trigger` / `execute_trigger` /
@@ -94,7 +122,10 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
   round-trip), `wrap-and-deposit.mjs` (cross-protocol), `dca.mjs`
   (scheduled automation), `limit-order.mjs` (PreGate demo),
   `ladder-swap.mjs` (value threading), `session-dapp.mjs`
-  (session-key lifecycle)
+  (session-key lifecycle), `intents-deposit-limit.mjs`
+  (4-primitive real-dapp flagship: `PreGate × 2` + threading +
+  session key, gating a wNEAR deposit into `intents.near` on a
+  live Ref Finance quote)
 - `scripts/lib/nep413-sign.mjs`
   NEP-413 signing helper used by `sequential-intents.mjs`
 - `scripts/investigate-tx.mjs`
@@ -213,11 +244,19 @@ Shared-rig churn rule:
 
 ## Mainnet lab rig
 
-Dedicated sacrificial child of `mike.near` for mainnet probes. Never
-deploy the smart-account contract to `mike.near` itself.
+The stable v4 kernel lives on `mike.near` itself; ancillary v3 +
+older probes live on child accounts.
 
-- `sequential-intents.mike.near` — **active v3** smart-account (post-Phase-A
-  `execute_steps` + `StepPolicy` rename); `owner_id = mike.near`; active
+- `mike.near` — **active v4 smart-account**, kernel version
+  `v4.0.2-ops` since 2026-04-19 (redeploys use `migrate()`, not
+  `new_with_owner`). Active target for `examples/limit-order.mjs`,
+  `examples/ladder-swap.mjs`, `examples/session-dapp.mjs`, and
+  `examples/intents-deposit-limit.mjs`. Four reference artifacts
+  in `collab/artifacts/reference/`; falsifiable-proof walkthrough
+  in [`QUICK-VERIFY.md`](./QUICK-VERIFY.md) /
+  [`MAINNET-PROOF.md`](./MAINNET-PROOF.md).
+- `sequential-intents.mike.near` — **v3** smart-account (post-Phase-A
+  `execute_steps` + `StepPolicy` rename); `owner_id = mike.near`;
   primary target for `examples/sequential-intents.mjs`,
   `examples/dca.mjs`, and `examples/wrap-and-deposit.mjs`. Deployed
   2026-04-18 via `DEPLOY-SEQUENTIAL-INTENTS.md`.
@@ -247,11 +286,12 @@ namespace separation, back-to-back idempotency) distilled in
 
 Safety rules:
 
-- treat the account as disposable infrastructure; do not move meaningful
-  assets into it
+- treat lab accounts as disposable infrastructure; do not move
+  meaningful assets into them
 - keep each probe small enough that a bad surprise is cheap
-- prefer a fresh child over making the primary identity account "also a
-  lab"
+- `mike.near` carries the stable v4 kernel today; use fresh child
+  accounts for *new* kernel work (migrations, schema probes, alpha
+  features) rather than redeploying over the production surface
 
 Mainnet gas matrix (multi-action `register_step` calibration on
 `sa-lab.mike.near`):
@@ -262,7 +302,7 @@ Mainnet gas matrix (multi-action `register_step` calibration on
   successfully but their yielded callbacks wake immediately with
   `PromiseError::Failed` instead of staying pending
 - two-step yielded batches at `300` and `400 TGas` per action stay
-  pending and drain cleanly on `run_steps`
+  pending and drain cleanly on `run_sequence`
 
 Useful framing: mainnet `register_step` is viable in the current
 contract shape, but **multi-action batches have a higher per-action gas
@@ -284,11 +324,14 @@ the current smart-account shape.
 ## Commands
 
 ```bash
-./scripts/check.sh
+./scripts/check.sh                        # offline fast check (CI-green gate)
 cargo test --workspace
 ./scripts/build-all.sh
 MASTER=x.mike.testnet ./scripts/deploy-testnet.sh
 python3 -m http.server 8000 -d web
+
+./scripts/verify-mainnet-claims.sh        # live-RPC falsifiability check
+                                          # (exits 0 iff reference artifact matches mainnet)
 ```
 
 ## Session-critical pitfalls
@@ -314,7 +357,7 @@ python3 -m http.server 8000 -d web
 
 ## Terminology
 
-- **External user-facing (post-Phase-A rename, current):** `execute_steps` / `register_step` / `run_steps` / `Step` / `StepInput` / `StepView` / `StepPolicy`. This is the API surface and the flagship scripts' vocabulary.
+- **External user-facing (current):** `execute_steps` / `register_step` / `run_sequence` / `Step` / `StepInput` / `StepView` / `StepPolicy`. This is the API surface and the flagship scripts' vocabulary. (`execute_steps` is the one-tx facade; `register_step` + `run_sequence` is the two-tx manual path — see `contracts/smart-account/src/lib.rs:417,463,496`.)
 - **Internal lifecycle (NEP-519 mechanics, unchanged):** yield · resume · resolve · decay. The prose spine for what happens *inside* the contract.
 - **Callback names:** `on_step_resumed`, `on_step_resolved` (renamed from `on_promise_*` during Phase A).
 - **Resolution policies (user-facing names, unchanged):** `Direct`, `Adapter`, `Asserted`.
@@ -322,6 +365,18 @@ python3 -m http.server 8000 -d web
 - **Value threading (ch. 24):** `SaveResult { as_name, kind }`, `ArgsTemplate { template, substitutions }`, `Substitution { reference, op }`, `SubstitutionOp` (`Raw` / `DivU128 { denominator }` / `PercentU128 { bps }`); errors: `MaterializeError::{MissingSavedResult, UnparseableSavedResult, NumericOverflow, InvalidBps, PlaceholderNotFound}`; pure function `materialize_args(template, substitutions, saved_results)`. Terminology locked 2026-04-19: `sequence` (not "plan"), `saved_results` (not "captures"), `SaveResult` (not `CaptureSpec`), `save_result` field (not `capture_return`), `Substitution.reference` (not `.token`).
 - **Session keys (ch. 25):** `SessionGrant { session_public_key, granted_at_ms, expires_at_ms, allowed_trigger_ids, max_fire_count, fire_count, label }`, `SessionGrantView` adds computed `active: bool`.
 - **NEP-297 events:** `step_registered`, `step_resumed`, `step_resolved_ok`, `step_resolved_err`, `sequence_started`, `sequence_completed`, `sequence_halted`, `assertion_checked`, `run_finished` (automation only), `automation_runs_pruned` (public hygiene), `pre_gate_checked` (ch. 23), `result_saved` (ch. 24), `session_enrolled` / `session_fired` / `session_revoked` (ch. 25). Sequence-halted `reason` tags: `downstream_failed`, `resume_failed`, `pre_gate_failed`, `args_materialize_failed`.
-- **Older spellings** — `yield_promise` / `run_sequence` / `resolution_policy` (pre-Phase-A); `stage_call` / `settle_policy` (earlier still); `latch` / `conduct` / `gated_call` / `label` (historical) — survive only in archived chapters, treat as period-accurate prose.
-- historical docs may still mention `latch`, `conduct`, `gated_call`, or
-  `label`; treat those as period-accurate historical terms
+- **Phantom Phase-A rename: `run_sequence` → ~~`run_steps`~~.**
+  Pre-2026-04-19 docs sometimes named the manual runner
+  `run_steps` as if Phase A renamed `run_sequence` → `run_steps`.
+  That rename was never executed in code; the function is still
+  `pub fn run_sequence` (lib.rs:496). Historical docs reading
+  `run_steps` should be read as `run_sequence` — reconciled
+  repo-wide 2026-04-19.
+- **Older spellings** — `yield_promise` / `resolution_policy`
+  (pre-Phase-A); `stage_call` / `settle_policy` (earlier still);
+  `latch` / `conduct` / `gated_call` / `label` (historical). These
+  survive in two legitimate contexts: (a) archived chapter files
+  (`md-CLAUDE-chapters/archive-*.md` + `02-latch-conduct-*`), and
+  (b) period-accurate historical narratives and run artifacts
+  under `collab/`. Active surfaces (user-facing docs, current
+  chapters, code doc-comments) should use current terminology.

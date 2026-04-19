@@ -1,5 +1,15 @@
 # Mainnet journal — `sequential-intents.mike.near` (v3)
 
+> **Historical — v3 era.** This journal captures the v3 smart-account
+> on `sequential-intents.mike.near` (deployed 2026-04-18). It remains
+> the canonical archival reference for those deploys + 8 battletests +
+> DCA + round-trip runs.
+>
+> **For current (v4) tx history, see**
+> **[`MAINNET-MIKE-NEAR-JOURNAL.md`](./MAINNET-MIKE-NEAR-JOURNAL.md).**
+> v4 runs directly on the `mike.near` root identity and carries the
+> current four reference artifacts under `collab/artifacts/reference/`.
+
 Chronological record of every on-chain transaction landed against the v3
 smart-account at `sequential-intents.mike.near`. Tx hashes are the
 load-bearing archival keys; block ranges narrow an archival-node query

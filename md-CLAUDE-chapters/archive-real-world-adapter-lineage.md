@@ -513,8 +513,8 @@ First live adapter run:
 
 ```bash
 near deploy compat-adapter.x.mike.testnet res/compat_adapter_local.wasm --networkId testnet
-./scripts/send-balance-trigger-wrap-demo.mjs --dry --mode mixed alpha:0.01 beta:0.02
-./scripts/send-balance-trigger-wrap-demo.mjs --mode mixed --execute-gas 800 alpha:0.01 beta:0.02
+./scripts/chapter-recipes/send-balance-trigger-wrap-demo.mjs --dry --mode mixed alpha:0.01 beta:0.02
+./scripts/chapter-recipes/send-balance-trigger-wrap-demo.mjs --mode mixed --execute-gas 800 alpha:0.01 beta:0.02
 ```
 
 Multi-contract intent (Ref + wrap, success path):

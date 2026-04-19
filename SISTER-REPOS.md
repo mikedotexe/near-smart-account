@@ -96,7 +96,7 @@ The same NEP-519 primitive under four vocabularies. The drift is
 |---|---|---|---|---|
 | NEP-519 raw primitive | `Promise::new_yield(...)` | `yield_id.resume(payload)` | `#[callback_result]` Ok | `#[callback_result]` Err |
 | `near-sequencer-demo` | `recipe_basic_yield` (and peers) | recipe's resume method | `on_basic_resumed` Ok | `on_basic_resumed` with `PromiseError` |
-| `smart-account-contract` (here) | `register_step` (inside `execute_steps`) | `run_steps` / `execute_trigger` | `on_step_resolved` Ok path | `on_step_resolved` Err / `Asserted` mismatch |
+| `smart-account-contract` (here) | `register_step` (inside `execute_steps`) | `run_sequence` / `execute_trigger` | `on_step_resolved` Ok path | `on_step_resolved` Err / `Asserted` mismatch |
 | `manim-visualizations` | `stage_call` (event: `yield_eject`) | `run_sequence` (events: `resume_data` / `resume_action`) | `on_stage_call_settled` Ok | `on_stage_call_settled` Err / decay |
 
 Why the drift is load-bearing:

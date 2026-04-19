@@ -30,26 +30,37 @@ investigative, or historical.
 
 ## Canonical demos
 
-- `send-step-echo-demo.mjs`
-  Smallest manual sequencing demo over the real smart-account kernel.
-- `send-balance-trigger-wrap-demo.mjs`
-  Canonical real-protocol automation demo using `wrap.testnet`.
 - `probe-pathological.mjs`
   Canonical Direct-pathology probe against `pathological-router`.
+- `verify-mainnet-claims.sh`
+  Four-path live-RPC falsifiability check against the 4-primitive
+  mainnet reference artifact. Exits 0 iff reality matches the
+  committed artifact.
+- `send-register-step-multi.mjs`
+  Canonical multi-step register/run helper for manual experiments.
+  On mainnet, the current observed two-step floor is `300 TGas` per
+  outer action; the helper prints that guidance explicitly.
 
 ## Useful reproduction helpers
 
-- `send-step-mixed-demo.mjs`
-  Manual mixed-outcome step-registration helper.
-- `send-register-step-multi.mjs`
-  Lower-level multi-step register/run helper for manual experiments. On mainnet,
-  the current observed two-step floor is `300 TGas` per outer action; the
-  helper prints that guidance explicitly.
 - `send-balance-trigger-router-demo.mjs`
-  Repo-local automation helper for direct / adapter / mixed router demos.
+  Repo-local automation helper for direct / adapter / mixed router
+  demos. Referenced by chapter 14 (wild-contract compatibility).
 
-These are still useful, but they are not the first scripts a new operator
-should reach for.
+## Archive chapter recipes
+
+Scripts kept solely so the archive chapter Recipes sections remain
+reproducible. For new work use `send-register-step-multi.mjs` (above)
+or a flagship under `examples/`. See
+[`chapter-recipes/README.md`](./chapter-recipes/README.md).
+
+- `chapter-recipes/send-step-echo-demo.mjs`
+  Smallest manual sequencing demo (archive chapters 03, 06, 07, 10).
+- `chapter-recipes/send-step-mixed-demo.mjs`
+  Mixed-outcome step-registration (archive staged-call lineage).
+- `chapter-recipes/send-balance-trigger-wrap-demo.mjs`
+  Real-protocol automation over `wrap.testnet` (archive
+  real-world-adapter-lineage).
 
 ## Build and deploy
 

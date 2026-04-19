@@ -1,23 +1,25 @@
 #!/usr/bin/env node
 //
-// scripts/send-step-echo-demo.mjs — submits a multi-action register_step tx
-// whose downstreams all target an echo-style method on one callee.
+// scripts/chapter-recipes/send-step-echo-demo.mjs — submits a multi-action
+// register_step tx whose downstreams all target an echo-style method on
+// one callee.
 //
 // NOTE: superseded by scripts/send-register-step-multi.mjs for new work.
-// This script is kept because chapters 03, 06, 07, and 10 reference it
-// in their Recipes sections and those recipes should remain reproducible.
-// New experiments should use send-register-step-multi.mjs which takes
-// per-action JSON specs instead of a single shared target/method.
+// Lives under scripts/chapter-recipes/ because chapters 03, 06, 07, and
+// 10 (archive) reference it in their Recipes sections and those recipes
+// should remain reproducible. New experiments should use
+// send-register-step-multi.mjs which takes per-action JSON specs
+// instead of a single shared target/method.
 
 import process from "node:process";
 import { parseArgs } from "node:util";
-import { shortHash } from "./lib/fastnear.mjs";
-import { connectNearWithSigners, sendTransactionAsync } from "./lib/near-cli.mjs";
+import { shortHash } from "../lib/fastnear.mjs";
+import { connectNearWithSigners, sendTransactionAsync } from "../lib/near-cli.mjs";
 import {
   diagnoseRegisterTransaction,
   getMainnetStepGasGuidance,
   renderStepOutcomeSummary,
-} from "./lib/step-sequence.mjs";
+} from "../lib/step-sequence.mjs";
 
 const MAX_CONTRACT_GAS_TGAS = 1_000;
 
