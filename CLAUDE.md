@@ -146,13 +146,22 @@ DCA one-tick reference (`examples/dca.mjs`, balance-trigger automation):
 - create_balance_trigger : `AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`
 - execute_trigger        : `E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`
 
-Battletest: `--poison-step=2` Asserted halt-on-mismatch proof:
+Battletest pair — Asserted halt proved on both kernel paths:
 
-- `9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj` — step 2's expected off
-  by +1 yocto; deposit lands on `intents.near`, postcheck mismatches
-  (actual vs expected differ in last digit), step 2 resolves as
-  `downstream_failed`, step 3 never resumes and NEP-519 times it out
-  ~200 blocks later; final namespace status `halted`, `1/3` steps ok.
+- `9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj` — `--poison-step=2`:
+  byte-mismatch path. Postcheck view call succeeds, returns real bytes,
+  kernel's comparator rejects (`actual` vs `expected` differ by +1 yocto);
+  `assertion_checked.outcome: "mismatch"`; deposit lands.
+- `AhmPjiNE6Jh4cpE53vMo6hYD5Ax7XP1rSByjMEbpPYEE` — `--bogus-method=2`:
+  view-call-error path. Postcheck view call fails with `MethodResolveError:
+  MethodNotFound` at runtime level; `assertion_checked.outcome:
+  "postcheck_failed"`, `actual_return: null`; deposit still lands.
+
+Both halt with the same step-level pattern (`step_resolved_err`
+`error_kind: downstream_failed`, step 3 times out ~200 blocks later
+triggering `sequence_halted reason: resume_failed`). The distinguishing
+field is `assertion_checked.outcome` — `"mismatch"` (bytes differ) vs
+`"postcheck_failed"` (check couldn't run) — useful for operator triage.
 
 Safety rules:
 

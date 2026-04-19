@@ -26,8 +26,9 @@ collab/artifacts/*.md
 !collab/artifacts/2026-04-19T04-44-03-387Z-intent-sequence-round-trip-mike-near-mo5a72rf.json
 # dca mainnet reference run (one-shot tick via balance trigger + template)
 !collab/artifacts/2026-04-19T05-28-46-853Z-dca-dca-intents-mo5bslc5-dca-intents-trigger-mo5bslc5.json
-# battletest reference run (--poison-step=2 halt-on-byte-mismatch proof)
+# battletest reference runs: halt-path pair (byte mismatch + view-call error)
 !collab/artifacts/2026-04-19T05-31-11-418Z-intent-sequence-round-trip-mike-near-mo5bvovu.json
+!collab/artifacts/2026-04-19T05-37-22-069Z-intent-sequence-round-trip-mike-near-mo5c3mvp.json
 
 # Local build/import artifacts
 .docker-target-*/

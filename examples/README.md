@@ -36,7 +36,8 @@ step 3 only fires after step 2's ledger credit is observed.
 Reference mainnet runs on `sequential-intents.mike.near` (2026-04-18):
 - deposit-only: [`3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD`](https://www.nearblocks.io/txns/3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD)
 - round-trip  : [`7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ`](https://www.nearblocks.io/txns/7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ)
-- battletest `--poison-step=2` (halt-on-byte-mismatch): [`9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj`](https://www.nearblocks.io/txns/9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj)
+- battletest `--poison-step=2` — halt-on-byte-mismatch (`outcome: "mismatch"`): [`9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj`](https://www.nearblocks.io/txns/9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj)
+- battletest `--bogus-method=2` — halt-on-view-call-error (`outcome: "postcheck_failed"`, `MethodResolveError: MethodNotFound`): [`AhmPjiNE6Jh4cpE53vMo6hYD5Ax7XP1rSByjMEbpPYEE`](https://www.nearblocks.io/txns/AhmPjiNE6Jh4cpE53vMo6hYD5Ax7XP1rSByjMEbpPYEE)
 
 Flags:
 - `--deposit-only` — collapse to steps 1+2 (original onboard flagship).
