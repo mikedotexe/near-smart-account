@@ -126,6 +126,20 @@ const { values } = parseArgs({
     "poll-ms": { type: "string", default: "2000" },
     "step-register-timeout-ms": { type: "string", default: "30000" },
     "resolve-timeout-ms": { type: "string", default: "180000" },
+    // Battletest: deliberately poison a step's Asserted expected_return
+    // so its postcheck will fail the byte-match, forcing the kernel to
+    // halt the sequence before subsequent steps fire. --poison-step=2
+    // makes step 2's expected off by +1 yocto; --poison-step=3 poisons
+    // step 3's withdraw postcheck. Use only on a dev/lab account — the
+    // preceding step's on-chain effect DOES land and is not rolled back.
+    "poison-step": { type: "string" },
+    // Battletest: substitute the Asserted policy's assertion_method with
+    // a non-existent method name on the target contract. Probes how the
+    // kernel handles *view-call errors* (MethodNotFound) during the
+    // postcheck phase, versus --poison-step which probes byte mismatch.
+    //   --bogus-method=2  → step 2's assertion_method becomes bogus
+    //   --bogus-method=3  → step 3's assertion_method becomes bogus
+    "bogus-method": { type: "string" },
     // Output.
     "artifacts-file": { type: "string" },
     dry: { type: "boolean", default: false },
@@ -171,6 +185,30 @@ const resolveTimeoutMs = parsePositiveInt(
   values["resolve-timeout-ms"],
   "--resolve-timeout-ms"
 );
+
+// Battletest poison parser. Only "2" and "3" are meaningful targets;
+// "1" is a Direct step with no Asserted postcheck to poison.
+let poisonStep = null;
+if (values["poison-step"]) {
+  if (values["poison-step"] !== "2" && values["poison-step"] !== "3") {
+    throw new Error("--poison-step must be '2' or '3' (step 1 is Direct)");
+  }
+  if (depositOnly && values["poison-step"] === "3") {
+    throw new Error("--poison-step=3 is incompatible with --deposit-only (no step 3)");
+  }
+  poisonStep = values["poison-step"];
+}
+let bogusMethodStep = null;
+if (values["bogus-method"]) {
+  if (values["bogus-method"] !== "2" && values["bogus-method"] !== "3") {
+    throw new Error("--bogus-method must be '2' or '3' (step 1 is Direct)");
+  }
+  if (depositOnly && values["bogus-method"] === "3") {
+    throw new Error("--bogus-method=3 is incompatible with --deposit-only (no step 3)");
+  }
+  bogusMethodStep = values["bogus-method"];
+}
+const BOGUS_METHOD_NAME = "bogus_method_does_not_exist";
 
 const stepCount = depositOnly ? 2 : 3;
 const totalOuterGasTgas = actionGasTgas * stepCount;
@@ -233,6 +271,13 @@ async function getWrapBalance(accountId) {
 function buildPlan({ prevIntentsBalance, prevSignerWrapBalance, signedWithdrawIntent }) {
   const expectedIntentsBalance = prevIntentsBalance + amountYocto;
   const expectedSignerWrapBalance = prevSignerWrapBalance + amountYocto;
+  // Battletest poisoning: off by +1 yocto on the target step's expected.
+  // The actual on-chain state lands normally; only the Asserted byte-match
+  // diverges, so we can observe the halt-on-mismatch behaviour cleanly.
+  const intentsExpectedForAssertion =
+    poisonStep === "2" ? expectedIntentsBalance + 1n : expectedIntentsBalance;
+  const signerWrapExpectedForAssertion =
+    poisonStep === "3" ? expectedSignerWrapBalance + 1n : expectedSignerWrapBalance;
 
   const wrapStep = {
     step_id: `wrap-${runId}`,
@@ -263,13 +308,13 @@ function buildPlan({ prevIntentsBalance, prevSignerWrapBalance, signedWithdrawIn
     policy: {
       Asserted: {
         assertion_id: intentsAddr,
-        assertion_method: "mt_balance_of",
+        assertion_method: bogusMethodStep === "2" ? BOGUS_METHOD_NAME : "mt_balance_of",
         assertion_args: base64Json({
           account_id: creditTo,
           token_id: tokenId,
         }),
         // mt_balance_of returns U128 (JSON-encoded as a string).
-        expected_return: base64Utf8(JSON.stringify(expectedIntentsBalance.toString())),
+        expected_return: base64Utf8(JSON.stringify(intentsExpectedForAssertion.toString())),
         assertion_gas_tgas: assertionGasTgas,
       },
     },
@@ -291,12 +336,12 @@ function buildPlan({ prevIntentsBalance, prevSignerWrapBalance, signedWithdrawIn
       policy: {
         Asserted: {
           assertion_id: wrapAddr,
-          assertion_method: "ft_balance_of",
+          assertion_method: bogusMethodStep === "3" ? BOGUS_METHOD_NAME : "ft_balance_of",
           assertion_args: base64Json({
             account_id: creditTo,
           }),
           expected_return: base64Utf8(
-            JSON.stringify(expectedSignerWrapBalance.toString())
+            JSON.stringify(signerWrapExpectedForAssertion.toString())
           ),
           assertion_gas_tgas: assertionGasTgas,
         },
