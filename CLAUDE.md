@@ -146,6 +146,14 @@ DCA one-tick reference (`examples/dca.mjs`, balance-trigger automation):
 - create_balance_trigger : `AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`
 - execute_trigger        : `E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`
 
+Battletest: `--poison-step=2` Asserted halt-on-mismatch proof:
+
+- `9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj` — step 2's expected off
+  by +1 yocto; deposit lands on `intents.near`, postcheck mismatches
+  (actual vs expected differ in last digit), step 2 resolves as
+  `downstream_failed`, step 3 never resumes and NEP-519 times it out
+  ~200 blocks later; final namespace status `halted`, `1/3` steps ok.
+
 Safety rules:
 
 - treat the account as disposable infrastructure; do not move meaningful

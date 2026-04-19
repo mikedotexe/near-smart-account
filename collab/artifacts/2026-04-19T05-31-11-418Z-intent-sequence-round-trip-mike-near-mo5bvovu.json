@@ -1,0 +1,209 @@
+{
+  "generated_at": "2026-04-19T05:33:20.455Z",
+  "run_id": "mo5bvovu",
+  "network": "mainnet",
+  "mode": "round-trip",
+  "step_count": 3,
+  "signer": "mike.near",
+  "smart_account": "sequential-intents.mike.near",
+  "credit_to": "mike.near",
+  "wrap": "wrap.near",
+  "intents": "intents.near",
+  "token_id": "nep141:wrap.near",
+  "amount_near": "0.01",
+  "amount_yocto": "10000000000000000000000",
+  "action_gas_tgas": 300,
+  "wrap_gas_tgas": 30,
+  "deposit_gas_tgas": 150,
+  "withdraw_gas_tgas": 150,
+  "assertion_gas_tgas": 15,
+  "intent_deadline_iso": "2026-04-19T05:36:11.418Z",
+  "preflight": {
+    "wrap_storage_smart_account": {
+      "total": "1250000000000000000000",
+      "available": "0"
+    },
+    "wrap_storage_signer": {
+      "total": "1250000000000000000000",
+      "available": "0"
+    },
+    "wrap_missing_smart_account": false,
+    "wrap_missing_signer": false
+  },
+  "plan": [
+    {
+      "step_id": "wrap-mo5bvovu",
+      "target_id": "wrap.near",
+      "method_name": "near_deposit",
+      "args": "e30=",
+      "attached_deposit_yocto": "10000000000000000000000",
+      "gas_tgas": 30
+    },
+    {
+      "step_id": "deposit-mo5bvovu",
+      "target_id": "wrap.near",
+      "method_name": "ft_transfer_call",
+      "args": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IjEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwibXNnIjoie1wicmVjZWl2ZXJfaWRcIjpcIm1pa2UubmVhclwiLFwicmVmdW5kX2lmX2ZhaWxzXCI6dHJ1ZX0ifQ==",
+      "attached_deposit_yocto": "1",
+      "gas_tgas": 150,
+      "policy": {
+        "Asserted": {
+          "assertion_id": "intents.near",
+          "assertion_method": "mt_balance_of",
+          "assertion_args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIiwidG9rZW5faWQiOiJuZXAxNDE6d3JhcC5uZWFyIn0=",
+          "expected_return": "IjYwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIg==",
+          "assertion_gas_tgas": 15
+        }
+      }
+    },
+    {
+      "step_id": "withdraw-mo5bvovu",
+      "target_id": "intents.near",
+      "method_name": "execute_intents",
+      "args": "eyJzaWduZWQiOlt7InN0YW5kYXJkIjoibmVwNDEzIiwicGF5bG9hZCI6eyJyZWNpcGllbnQiOiJpbnRlbnRzLm5lYXIiLCJub25jZSI6IkFKN2EzelF6UUdHRS9SbGdHS29hMEx3QlFkUStlVTk1ZlhadGNoWHc2cm89IiwibWVzc2FnZSI6IntcInNpZ25lcl9pZFwiOlwibWlrZS5uZWFyXCIsXCJkZWFkbGluZVwiOlwiMjAyNi0wNC0xOVQwNTozNjoxMS40MThaXCIsXCJpbnRlbnRzXCI6W3tcImludGVudFwiOlwiZnRfd2l0aGRyYXdcIixcInRva2VuXCI6XCJ3cmFwLm5lYXJcIixcInJlY2VpdmVyX2lkXCI6XCJtaWtlLm5lYXJcIixcImFtb3VudFwiOlwiMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDBcIn1dfSJ9LCJwdWJsaWNfa2V5IjoiZWQyNTUxOTo2c1hOWnVLNjhONnU0ZnhuaWsxNU00b0x0M1ZGNzlzODdtbXdnZUNjdkZRNiIsInNpZ25hdHVyZSI6ImVkMjU1MTk6MnZ4QnF6VFJEalBUTjNFVUFGOGtkclZmdGJpTGhCa0pENWtub3EyQkJCYTU4Z1BiYUJ0OUZXZ1ZrdXpTY0Z6ajJjWjduakFQVXhzYldKMXJBaG53QzRTeCJ9XX0=",
+      "attached_deposit_yocto": "0",
+      "gas_tgas": 150,
+      "policy": {
+        "Asserted": {
+          "assertion_id": "wrap.near",
+          "assertion_method": "ft_balance_of",
+          "assertion_args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIn0=",
+          "expected_return": "IjQ0NTE3ODIzNjYyNjg4NzQ1MjMxODQ1MTY1Ig==",
+          "assertion_gas_tgas": 15
+        }
+      }
+    }
+  ],
+  "signed_withdraw_intent": {
+    "standard": "nep413",
+    "payload": {
+      "recipient": "intents.near",
+      "nonce": "AJ7a3zQzQGGE/RlgGKoa0LwBQdQ+eU95fXZtchXw6ro=",
+      "message": "{\"signer_id\":\"mike.near\",\"deadline\":\"2026-04-19T05:36:11.418Z\",\"intents\":[{\"intent\":\"ft_withdraw\",\"token\":\"wrap.near\",\"receiver_id\":\"mike.near\",\"amount\":\"10000000000000000000000\"}]}"
+    },
+    "public_key": "ed25519:6sXNZuK68N6u4fxnik15M4oLt3VF79s87mmwgeCcvFQ6",
+    "signature": "ed25519:2vxBqzTRDjPTN3EUAF8kdrVftbiLhBkJD5knoq2BBBa58gPbaBt9FWgVkuzScFzj2cZ7njAPUxsbWJ1rAhnwC4Sx"
+  },
+  "wrap_balance_before_smart_account_yocto": "0",
+  "wrap_balance_before_signer_yocto": "44507823662688745231845165",
+  "prev_intents_balance_yocto": "50000000000000000000000",
+  "expected_intents_balance_yocto": "60000000000000000000000",
+  "expected_signer_wrap_balance_after_withdraw_yocto": "44517823662688745231845165",
+  "txs": [
+    {
+      "step": "execute_steps",
+      "signer": "mike.near",
+      "receiver_id": "sequential-intents.mike.near",
+      "tx_hash": "9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj",
+      "block_hash": null,
+      "block_height": null,
+      "status": null
+    }
+  ],
+  "register_diagnosis": {
+    "tx_hash": "9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj",
+    "registered_state": {
+      "ready": true,
+      "expected_count": 3,
+      "observed_count": 3,
+      "poll_ms": 2000,
+      "timeout_ms": 30000,
+      "block_height": 194638682,
+      "block_hash": "8p9daFip8DAMsKDrjSiNzAnG5Y4tEmkzKJ7DkFAYc1Z3",
+      "registered_steps": [
+        {
+          "step_id": "wrap-mo5bvovu",
+          "target_id": "wrap.near",
+          "method_name": "near_deposit",
+          "args": "e30=",
+          "attached_deposit_yocto": "10000000000000000000000",
+          "gas_tgas": 30,
+          "policy": "Direct",
+          "created_at_ms": 1776576673402
+        },
+        {
+          "step_id": "deposit-mo5bvovu",
+          "target_id": "wrap.near",
+          "method_name": "ft_transfer_call",
+          "args": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IjEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwibXNnIjoie1wicmVjZWl2ZXJfaWRcIjpcIm1pa2UubmVhclwiLFwicmVmdW5kX2lmX2ZhaWxzXCI6dHJ1ZX0ifQ==",
+          "attached_deposit_yocto": "1",
+          "gas_tgas": 150,
+          "policy": {
+            "Asserted": {
+              "assertion_id": "intents.near",
+              "assertion_method": "mt_balance_of",
+              "assertion_args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIiwidG9rZW5faWQiOiJuZXAxNDE6d3JhcC5uZWFyIn0=",
+              "expected_return": "IjYwMDAwMDAwMDAwMDAwMDAwMDAwMDAxIg==",
+              "assertion_gas_tgas": 15
+            }
+          },
+          "created_at_ms": 1776576673402
+        },
+        {
+          "step_id": "withdraw-mo5bvovu",
+          "target_id": "intents.near",
+          "method_name": "execute_intents",
+          "args": "eyJzaWduZWQiOlt7InN0YW5kYXJkIjoibmVwNDEzIiwicGF5bG9hZCI6eyJyZWNpcGllbnQiOiJpbnRlbnRzLm5lYXIiLCJub25jZSI6IkFKN2EzelF6UUdHRS9SbGdHS29hMEx3QlFkUStlVTk1ZlhadGNoWHc2cm89IiwibWVzc2FnZSI6IntcInNpZ25lcl9pZFwiOlwibWlrZS5uZWFyXCIsXCJkZWFkbGluZVwiOlwiMjAyNi0wNC0xOVQwNTozNjoxMS40MThaXCIsXCJpbnRlbnRzXCI6W3tcImludGVudFwiOlwiZnRfd2l0aGRyYXdcIixcInRva2VuXCI6XCJ3cmFwLm5lYXJcIixcInJlY2VpdmVyX2lkXCI6XCJtaWtlLm5lYXJcIixcImFtb3VudFwiOlwiMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDBcIn1dfSJ9LCJwdWJsaWNfa2V5IjoiZWQyNTUxOTo2c1hOWnVLNjhONnU0ZnhuaWsxNU00b0x0M1ZGNzlzODdtbXdnZUNjdkZRNiIsInNpZ25hdHVyZSI6ImVkMjU1MTk6MnZ4QnF6VFJEalBUTjNFVUFGOGtkclZmdGJpTGhCa0pENWtub3EyQkJCYTU4Z1BiYUJ0OUZXZ1ZrdXpTY0Z6ajJjWjduakFQVXhzYldKMXJBaG53QzRTeCJ9XX0=",
+          "attached_deposit_yocto": "0",
+          "gas_tgas": 150,
+          "policy": {
+            "Asserted": {
+              "assertion_id": "wrap.near",
+              "assertion_method": "ft_balance_of",
+              "assertion_args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIn0=",
+              "expected_return": "IjQ0NTE3ODIzNjYyNjg4NzQ1MjMxODQ1MTY1Ig==",
+              "assertion_gas_tgas": 15
+            }
+          },
+          "created_at_ms": 1776576673402
+        }
+      ],
+      "error": null
+    },
+    "register_trace": {
+      "senderId": "mike.near",
+      "classification": "ERROR",
+      "tree": null,
+      "error": "Error: POST https://rpc.mainnet.near.org/ timed out after 5000 ms"
+    },
+    "step_outcome": {
+      "classification": "pending_until_resume",
+      "reason": "registered step stayed pending for explicit run_sequence release",
+      "registered_visible": true,
+      "observed_registered_count": 3,
+      "registered_view_error": null,
+      "pending_yield_count": 0,
+      "yielded_receipt_count": 0,
+      "resumed_before_run": false,
+      "resumed_before_run_count": 0,
+      "resume_failed_count": 0,
+      "trace_classification": "ERROR"
+    }
+  },
+  "terminal_state": {
+    "reached": "drained",
+    "registered_step_count": 0,
+    "observed_at_block": 194638884,
+    "startedAfterBlock": 194638682
+  },
+  "wrap_balance_after_smart_account_yocto": "0",
+  "wrap_balance_after_signer_yocto": "44507823662688745231845165",
+  "new_intents_balance_yocto": "60000000000000000000000",
+  "intents_balance_delta_yocto": "10000000000000000000000",
+  "signer_wrap_balance_delta_yocto": "0",
+  "traces": {
+    "execute_steps": {
+      "sender_id": "mike.near",
+      "classification": "PARTIAL_FAIL",
+      "error": null
+    }
+  },
+  "artifacts_file": "/Users/mikepurvis/near/smart-account-contract/collab/artifacts/2026-04-19T05-31-11-418Z-intent-sequence-round-trip-mike-near-mo5bvovu.json",
+  "commands": {
+    "trace_execute": "./scripts/trace-tx.mjs 9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj mike.near --wait FINAL",
+    "investigate_execute": "./scripts/investigate-tx.mjs 9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj mike.near --wait FINAL --accounts sequential-intents.mike.near,wrap.near,intents.near",
+    "intents_balance_view": "./scripts/state.mjs intents.near --method mt_balance_of --args '{\"account_id\":\"mike.near\",\"token_id\":\"nep141:wrap.near\"}'",
+    "signer_wrap_balance_view": "./scripts/state.mjs wrap.near --method ft_balance_of --args '{\"account_id\":\"mike.near\"}'",
+    "registered_steps_view": "./scripts/state.mjs sequential-intents.mike.near --method registered_steps_for --args '{\"caller_id\":\"mike.near\"}'"
+  }
+}

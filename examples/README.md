@@ -36,6 +36,7 @@ step 3 only fires after step 2's ledger credit is observed.
 Reference mainnet runs on `sequential-intents.mike.near` (2026-04-18):
 - deposit-only: [`3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD`](https://www.nearblocks.io/txns/3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD)
 - round-trip  : [`7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ`](https://www.nearblocks.io/txns/7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ)
+- battletest `--poison-step=2` (halt-on-byte-mismatch): [`9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj`](https://www.nearblocks.io/txns/9NKmC7u7aqYT71PKqjDwSppPJ5LFZHk5z781Wvhr38Tj)
 
 Flags:
 - `--deposit-only` — collapse to steps 1+2 (original onboard flagship).
@@ -44,6 +45,13 @@ Flags:
   signs the `ft_withdraw` intent).
 - `--intent-deadline-ms <n>` — NEP-413 intent validity window from tx
   submission (default 5 min).
+- `--poison-step <2|3>` — battletest: off-by-+1 yocto on that step's
+  Asserted expected_return so its postcheck fails → sequence halts.
+  Preceding step's on-chain effect lands and is not rolled back
+  (lab accounts only).
+- `--bogus-method <2|3>` — battletest: substitute that step's
+  assertion_method with a nonexistent name → MethodNotFound during
+  postcheck → sequence halts (error path, not mismatch).
 
 Exit code: `0` when `intents.near` balance delta is `0` *and* signer's
 `wrap.near` balance is up by `--amount-near`; `1` otherwise.
