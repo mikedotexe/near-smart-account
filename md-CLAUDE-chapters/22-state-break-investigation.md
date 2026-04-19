@@ -1,4 +1,4 @@
-# STATE-BREAK-INVESTIGATION.md
+# Chapter 22 — State-break investigation
 
 Forensic write-up of why `smart-account.x.mike.testnet` returns
 "Cannot deserialize the contract state" and why chapters 20 and 21
@@ -60,13 +60,13 @@ expect today" question is a lookup, not a reread.
 |---|---|---|
 | `Contract` struct | `contracts/smart-account/src/lib.rs:207-217` | 7 fields: 2 primitives + 5 `IterableMap` collections |
 | `StorageKey` enum | `contracts/smart-account/src/lib.rs:57-65` | 5 variants, one prefix per collection |
-| `StagedCall` | `contracts/smart-account/src/lib.rs:102-108` | 3 fields |
-| `SequenceCall` | `contracts/smart-account/src/lib.rs:67-77` | 7 fields, includes `SettlePolicy` |
+| `YieldedPromise` | `contracts/smart-account/src/lib.rs:102-108` | 3 fields |
+| `SequenceCall` | `contracts/smart-account/src/lib.rs:67-77` | 7 fields, includes `ResolutionPolicy` |
 | `SequenceTemplate` | `contracts/smart-account/src/lib.rs:122-128` | 3 fields |
 | `BalanceTrigger` | `contracts/smart-account/src/lib.rs:164-178` | 11 fields, several `Option<T>` |
 | `AutomationRun` | `contracts/smart-account/src/lib.rs:150-162` | 9 fields |
 | `AutomationRunStatus` | `contracts/smart-account/src/lib.rs:141-148` | 4 variants |
-| `SettlePolicy` | `types/src/types.rs:12-48` | 3 variants: `Direct`, `Adapter{..}`, `Asserted{..}` |
+| `ResolutionPolicy` | `types/src/types.rs:12-48` | 3 variants: `Direct`, `Adapter{..}`, `Asserted{..}` |
 
 The contract derives `PanicOnDefault`. There is **no** migration
 function anywhere in the crate — no `#[init(ignore_state)]` handler,
@@ -103,7 +103,7 @@ fewer collections. Something like:
 ```rust
 pub struct Contract {
     pub owner_id: AccountId,
-    pub staged_calls: IterableMap<String, StagedCall>,
+    pub yielded_promises: IterableMap<String, YieldedPromise>,
     pub sequence_queue: IterableMap<String, Vec<String>>,
 }
 ```
@@ -115,7 +115,7 @@ new `Contract` grew from 3 fields to 7.
 Borsh is positional and strict. On redeploy over existing state, the
 SDK calls `env::state_read::<Contract>()` and walks the old bytes
 looking for field 1 (`owner_id`), field 2 (`authorized_executor` —
-new, missing in old bytes), field 3 (`staged_calls` — used to be field 2
+new, missing in old bytes), field 3 (`yielded_promises` — used to be field 2
 in the old layout), and so on. The reader falls off the end of the
 stored bytes long before hitting the new collection headers.
 `state_read` returns `None` (or a read error in modern SDKs), and
@@ -127,14 +127,14 @@ Unlikely for this repo, but worth flagging because it is the most
 insidious class.
 
 Borsh writes an enum variant as a 1-byte discriminant equal to the
-variant's position. If you reorder `SettlePolicy` from
+variant's position. If you reorder `ResolutionPolicy` from
 `[Direct, Adapter, Asserted]` to `[Adapter, Direct, Asserted]`, every
 stored `Direct=0` byte now deserializes as `Adapter` (wrong body
 length) and the reader either fails or silently misinterprets. Same
 story for `AutomationRunStatus`.
 
 The surviving evidence suggests positions have been stable:
-- `SettlePolicy` has always enumerated `Direct → Adapter → Asserted`
+- `ResolutionPolicy` has always enumerated `Direct → Adapter → Asserted`
   in that order across chapters 14, 20, 21.
 - `AutomationRunStatus::{InFlight, Succeeded, DownstreamFailed,
   ResumeFailed}` ordering appears in unit tests and artifact JSON that
@@ -144,7 +144,7 @@ So class 2 is probably not what happened.
 
 ### Class 3 — Changing a variant body
 
-The chapter-21 tranche reshaped `SettlePolicy::Asserted` from a
+The chapter-21 tranche reshaped `ResolutionPolicy::Asserted` from a
 unit variant to a struct variant with five fields
 (`types/src/types.rs:33-48`). That is a real wire-shape change.
 
@@ -152,7 +152,7 @@ But: borsh's discriminant for `Asserted` stays at position 2. Stored
 `Direct` and `Adapter` entries still deserialize correctly — their
 bytes and their reader haven't changed. Only a stored `Asserted`
 entry would break, and since `validate_sequence_call` rejected
-`Asserted` stage attempts while it was a unit variant (panic:
+`Asserted` yield attempts while it was a unit variant (panic:
 `"asserted settle policy is reserved but not implemented"`), no
 legitimate `Asserted` entry ever made it into state.
 
@@ -216,7 +216,7 @@ Three problems:
   `DeleteAccount` action on an account whose storage sweep would
   exceed the single-receipt gas budget. The threshold is not
   documented in precise bytes, but it is easy to cross with modest
-  contract state — a few dozen staged calls or a handful of balance
+  contract state — a few dozen yielded promises or a handful of balance
   triggers is enough. Funding the account with more NEAR does
   **not** help. The guard is about gas per receipt, not balance.
 
@@ -248,7 +248,7 @@ pub fn migrate() -> Self {
     Self {
         owner_id: old.owner_id,
         authorized_executor: None,
-        staged_calls: old.staged_calls,
+        yielded_promises: old.yielded_promises,
         // ... carry forward each old field; initialize new ones ...
         balance_triggers: IterableMap::new(StorageKey::BalanceTriggers),
         automation_runs: IterableMap::new(StorageKey::AutomationRuns),
@@ -311,7 +311,7 @@ so the option is known.
    ```
    This enumerates the stored keys with their borsh prefix byte.
 2. Match observed prefixes against the `StorageKey` variants.
-   - If you see only prefix `0` (`StagedCalls`) and `1`
+   - If you see only prefix `0` (`YieldedPromises`) and `1`
      (`SequenceQueue`) but no `3` (`BalanceTriggers`) or `4`
      (`AutomationRuns`), the break is class 1: added fields.
    - If you see prefixes that don't match any current `StorageKey`
@@ -327,7 +327,7 @@ so the option is known.
        Self {
            owner_id: old.owner_id,
            authorized_executor: None,
-           staged_calls: old.staged_calls,
+           yielded_promises: old.yielded_promises,
            sequence_queue: old.sequence_queue,
            sequence_templates: IterableMap::new(StorageKey::SequenceTemplates),
            balance_triggers: IterableMap::new(StorageKey::BalanceTriggers),
@@ -381,13 +381,13 @@ None of this is large. It is the delta between "interesting POC" and
 
 - `contracts/smart-account/src/lib.rs:57-65` — `StorageKey` enum
 - `contracts/smart-account/src/lib.rs:67-77` — `SequenceCall` with
-  `SettlePolicy`
+  `ResolutionPolicy`
 - `contracts/smart-account/src/lib.rs:141-148` — `AutomationRunStatus`
 - `contracts/smart-account/src/lib.rs:150-178` — `AutomationRun`,
   `BalanceTrigger`
 - `contracts/smart-account/src/lib.rs:207-237` — `Contract` struct and
   `new` / `new_with_owner` initializers (no migration)
-- `types/src/types.rs:12-48` — `SettlePolicy` enum (current shape)
+- `types/src/types.rs:12-48` — `ResolutionPolicy` enum (current shape)
 - `contracts/smart-account/Cargo.toml:11` — `near-sdk = "5.26.1"` pin
 - `scripts/deploy-testnet.sh:47-48` — the silently-failing delete +
   recreate
@@ -397,7 +397,7 @@ None of this is large. It is the delta between "interesting POC" and
 - `md-CLAUDE-chapters/20-pathological-contract-probe.md:326-328` —
   `sa-probe.x.mike.testnet` created because the original had
   "incompatible prior state"
-- `md-CLAUDE-chapters/21-asserted-settle-policy.md:282-285` —
+- `md-CLAUDE-chapters/21-asserted-resolve-policy.md:282-285` —
   `sa-asserted.x.mike.testnet` created; original is "left untouched"
 - `README.md:67-74`, `PROTOCOL-ONBOARDING.md:109-116` — the same
   churn rule, repeated for operator audiences
