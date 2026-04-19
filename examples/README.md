@@ -182,6 +182,54 @@ Reference mainnet run on `sequential-intents.mike.near` (2026-04-18):
 - `create_balance_trigger`: [`AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`](https://www.nearblocks.io/txns/AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy)
 - `execute_trigger` (one tick): [`E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`](https://www.nearblocks.io/txns/E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX)
 
+## [`intents-deposit-limit.mjs`](./intents-deposit-limit.mjs) — real-dapp 4-primitive composition
+
+Landing flagship for the four-primitive composition story: one signed
+session-key enrollment, two triggers behind the same grant, and a
+`PreGate` × 2 + `save_result` + `args_template` cascade on each fire —
+a programmable limit-order entry into `intents.near`.
+
+Per-fire template:
+1. Step 1 (`read-wnear-balance`) — `wrap.near.ft_balance_of` gated on
+   itself (`min_bytes: "1"` — zero-balance guard) and **saved** as
+   `wnear_balance` (U128Json).
+2. Step 2 (`deposit-into-intents`) — `wrap.near.ft_transfer_call` with
+   `args_template` substituting `PercentU128 { bps: 100 }` of
+   `wnear_balance` into the outer `amount` field (default: 1% sweep).
+   Pre-gated on `v2.ref-finance.near.get_return(pool_id=3879, wrap → USDT)`
+   above a user-chosen minimum.
+
+Both branches of the PreGate are demonstrated in one session:
+
+- **Pass trigger** (`--pass-min-usdt`, default 500_000 = $0.50) fires,
+  gate passes, wNEAR transferred, `intents.near.mt_balance_of`
+  credited, `sequence_completed`.
+- **Halt trigger** (`--halt-min-usdt`, default 5_000_000_000 = $5000
+  per NEAR) fires with the same session key, Ref quote is
+  `below_min`, `sequence_halted { reason: "pre_gate_failed",
+  error_kind: "pre_gate_below_min" }`, target never fires.
+
+```bash
+./examples/intents-deposit-limit.mjs \
+  --signer mike.near \
+  --smart-account mike.near \
+  --ref-pool-id 3879 \
+  --token-in wrap.near \
+  --token-out usdt.tether-token.near \
+  --ladder-bps 100 \
+  --pass-min-usdt 500000 \
+  --halt-min-usdt 5000000000
+```
+
+Reference mainnet run on `mike.near` (2026-04-19, `v4.0.2-ops`):
+- pass fire: [`65K4kDyd8Ab3vWnsdAB81YK5ptYLJ1Xem3ea1sRXZx9L`](https://www.nearblocks.io/txns/65K4kDyd8Ab3vWnsdAB81YK5ptYLJ1Xem3ea1sRXZx9L)
+- halt fire: [`EEC83UhpqvckEcuMnYqekQgR6jpuLMGtJJctxE23HhX`](https://www.nearblocks.io/txns/EEC83UhpqvckEcuMnYqekQgR6jpuLMGtJJctxE23HhX)
+- full artifact: [`collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json`](../collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json)
+- verification recipes in [`MAINNET-PROOF.md`](../MAINNET-PROOF.md)
+
+Mainnet-only — `intents.near` is a mainnet contract. Use tiny amounts
+(1% default sweep) while experimenting.
+
 ## Preflights and funding
 
 All flagships assume:

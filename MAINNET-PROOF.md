@@ -1,19 +1,25 @@
 # Mainnet proof — v4.0.2-ops on `mike.near`
 
-Three reference artifacts capture fresh live runs of each new v4
-primitive against the **currently-deployed** kernel on `mike.near`.
-Every tx hash and block hash below resolves on any public NEAR
-archival RPC — no coordination with the repo maintainer required.
+Four reference artifacts capture fresh live runs against the
+**currently-deployed** kernel on `mike.near`. The first three isolate
+a single new v4 primitive each; the fourth composes four primitives in
+one real-dapp flow on `intents.near`. Every tx hash and block hash
+below resolves on any public NEAR archival RPC — no coordination with
+the repo maintainer required.
 
-| Primitive | Reference artifact | Tx hash | Block hash |
-|---|---|---|---|
-| **T1 PreGate** | [`collab/artifacts/reference/mike-near-v4.0.2-limit-order.json`](./collab/artifacts/reference/mike-near-v4.0.2-limit-order.json) | `9quv5g2S1c4ZeLJQrMZmSpuGwfYM4fX4Y61GfA7vf4Cr` | `hdRtm4YTx3a5UXDNYj96hw4aGBk1HCWvqWB64DnYHcA` |
-| **T2 value threading** | [`mike-near-v4.0.2-ladder-swap.json`](./collab/artifacts/reference/mike-near-v4.0.2-ladder-swap.json) | `9BQbtMwEgA6TvEaeCANbk8PoRjShUSEzhKdFLtXks2nL` | `3b3KyHu1UozT5Yax5gWhapZ58aW4xDtJUUbpNPqQptzm` |
-| **T3 session keys** (enroll) | [`mike-near-v4.0.2-session-dapp.json`](./collab/artifacts/reference/mike-near-v4.0.2-session-dapp.json) | `8xfeHbuSHRoX1sbG6VSTgBNMHG9ssRKhwHd9Ur5jLYDY` | `94m7qCxDTEEUkySxs1BR4DFeyZDPALaRzVzbXfzZHvis` |
-| T3 session keys (fire #1) | ↑ same | `C1tise22QTZ9n78u1ABXyfC3Safw4zaWmhd22wKXFgkU` | (in artifact) |
-| T3 session keys (fire #2) | ↑ same | `8TRodh9z7kMYRHjBGsUuxzg7VKBA33SAkFAZ3US8vRzq` | (in artifact) |
-| T3 session keys (fire #3) | ↑ same | `ACtiPBXRRuZL5C1Vt6SRb7KzUJxt4cBaRiuGA5okJdLs` | (in artifact) |
-| T3 session keys (revoke) | ↑ same | `qtMAmsLzdaVPwyRNCWWR9MYZxbLzEZAbwMor7G6tVtw` | `DipZxEhqPPZMkv67qQ55FWhpxwU9JnWm1ytqKvidHFHA` |
+| Flagship | Primitives exercised | Reference artifact | Tx hash | Block hash |
+|---|---|---|---|---|
+| **T1 PreGate** | PreGate | [`mike-near-v4.0.2-limit-order.json`](./collab/artifacts/reference/mike-near-v4.0.2-limit-order.json) | `9quv5g2S1c4ZeLJQrMZmSpuGwfYM4fX4Y61GfA7vf4Cr` | `hdRtm4YTx3a5UXDNYj96hw4aGBk1HCWvqWB64DnYHcA` |
+| **T2 value threading** | `save_result` + `args_template` | [`mike-near-v4.0.2-ladder-swap.json`](./collab/artifacts/reference/mike-near-v4.0.2-ladder-swap.json) | `9BQbtMwEgA6TvEaeCANbk8PoRjShUSEzhKdFLtXks2nL` | `3b3KyHu1UozT5Yax5gWhapZ58aW4xDtJUUbpNPqQptzm` |
+| **T3 session keys** (enroll) | Session keys | [`mike-near-v4.0.2-session-dapp.json`](./collab/artifacts/reference/mike-near-v4.0.2-session-dapp.json) | `8xfeHbuSHRoX1sbG6VSTgBNMHG9ssRKhwHd9Ur5jLYDY` | `94m7qCxDTEEUkySxs1BR4DFeyZDPALaRzVzbXfzZHvis` |
+| T3 session keys (fire #1) | Session keys | ↑ same | `C1tise22QTZ9n78u1ABXyfC3Safw4zaWmhd22wKXFgkU` | (in artifact) |
+| T3 session keys (fire #2) | Session keys | ↑ same | `8TRodh9z7kMYRHjBGsUuxzg7VKBA33SAkFAZ3US8vRzq` | (in artifact) |
+| T3 session keys (fire #3) | Session keys | ↑ same | `ACtiPBXRRuZL5C1Vt6SRb7KzUJxt4cBaRiuGA5okJdLs` | (in artifact) |
+| T3 session keys (revoke) | Session keys | ↑ same | `qtMAmsLzdaVPwyRNCWWR9MYZxbLzEZAbwMor7G6tVtw` | `DipZxEhqPPZMkv67qQ55FWhpxwU9JnWm1ytqKvidHFHA` |
+| **Real-dapp** — `intents-deposit-limit` (pass fire) | PreGate × 2 + threading + session key | [`mike-near-v4.0.2-intents-deposit-limit.json`](./collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json) | `65K4kDyd8Ab3vWnsdAB81YK5ptYLJ1Xem3ea1sRXZx9L` | `8WWSCDqcBWusDP8SsTLLye5w42zjAm5ZuC85p5oMEY8F` |
+| Real-dapp (halt fire) | PreGate × 2 + threading + session key | ↑ same | `EEC83UhpqvckEcuMnYqekQgR6jpuLMGtJJctxE23HhX` | `6nCyyuMA3j9op6vaCJH1gS6yhi3F5HoL8R1oadGhNYMX` |
+| Real-dapp (enroll) | Session key | ↑ same | `J3tM59hG87rFZsgpoTj4UPH4r3w2wptWnnYYXsZMGems` | (in artifact) |
+| Real-dapp (revoke) | Session key | ↑ same | `DnYZB24ShHFz2BicgkmP1BS3GDAX79hSHCABJUoNxknD` | (in artifact) |
 
 **Archival endpoint used for every verification below:**
 `https://rpc.mainnet.fastnear.com` (public, free, archival).
@@ -143,6 +149,47 @@ chain the full lifecycle:
    runtime itself with `InvalidAccessKeyError` — that's NEAR
    enforcing that the key was atomically removed alongside the
    state.
+
+### Real-dapp — `intents-deposit-limit` (4-primitive composition)
+
+`mike-near-v4.0.2-intents-deposit-limit.json` is the first flagship
+that composes FOUR primitives in one real-dapp narrative on
+mainnet `intents.near`:
+
+- **PreGate × 2** per fire — step 1 gates on `wrap.near.ft_balance_of`
+  (floor guard) and step 2 gates on
+  `v2.ref-finance.near.get_return(pool_id=3879, wrap.near → usdt.tether-token.near)`
+  (the limit-order price check).
+- **`save_result` + `args_template`** — step 1's `ft_balance_of`
+  return is saved as `wnear_balance`; step 2's `ft_transfer_call`
+  `amount` field is materialized from it via
+  `PercentU128 { bps: 100 }` (1% of balance).
+- **Session key** — owner signs one `enroll_session` tx (1 yocto
+  attached); the ephemeral key fires two different triggers from the
+  same session grant (allowlist covers both pass and halt templates).
+
+The artifact carries **two fires** side by side:
+
+- **Pass fire** (`65K4kD…` @ block `8WWSCD…`) — Ref quote `1401639`
+  (USDT units, 6-dec) ≥ the 500000 min-bytes bound, gate passes,
+  target fires, `0.445 wNEAR` lands in `intents.near`'s mt ledger
+  credited to `mike.near`. Events end with `sequence_completed` +
+  `run_finished { status: "Succeeded" }`.
+- **Halt fire** (`EEC83U…` @ block `6nCyyu…`) — same session key,
+  same kernel, different trigger. Step 2's `pre_gate_checked` emits
+  `outcome: "below_min", matched: false` because `1401639 <
+  5000000000` (an intentionally-impossible $5000/NEAR threshold).
+  Target never fires; no deposit; sequence halts cleanly with
+  `sequence_halted { reason: "pre_gate_failed", error_kind:
+  "pre_gate_below_min" }`.
+
+Both branches of the gate are proved in one session. The
+`balances.intents_delta` field in the artifact shows the
+`+445078236626887452318451` yocto wNEAR delta in `intents.near`'s
+mt ledger — an `mt_mint` event in the pass fire's receipt tree
+confirms it on-chain, also reachable via
+`intents.near.mt_balance_of({account_id: "mike.near", token_id:
+"nep141:wrap.near"})`.
 
 ## General verification patterns
 

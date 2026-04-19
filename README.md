@@ -76,6 +76,15 @@ One script per primitive (or primitive combination):
   Owner enrolls an ephemeral key scoped to `execute_trigger` with
   `{expires, fire_cap, trigger allowlist, label}`; delegate fires N
   times, no main-wallet prompts; owner revokes atomically.
+- **[`intents-deposit-limit.mjs`](./examples/intents-deposit-limit.mjs)** —
+  four-primitive composition (PreGate × 2 + threading + session keys)
+  against mainnet `intents.near`. Owner signs one `enroll_session`
+  tx; dapp fires two triggers — pass fire sweeps 1% of the smart
+  account's wNEAR into `intents.near` gated on a live
+  `v2.ref-finance.near` quote above a user min; halt fire uses an
+  intentionally-impossible threshold and halts cleanly at the gate.
+  Both fires proven on mainnet as part of
+  [`MAINNET-PROOF.md`](./MAINNET-PROOF.md).
 
 Mainnet-validated runs (`Direct` / `Adapter` / `Asserted`) on
 `sequential-intents.mike.near` logged in
@@ -159,10 +168,11 @@ registered. Discovered by battletest B6; see
 (currently at `v4.0.2-ops`). Every new primitive has a live
 reference run with block-hash anchors anyone can verify on an
 archival NEAR RPC — see
-[`MAINNET-PROOF.md`](./MAINNET-PROOF.md) for the three reference
-artifacts (PreGate / value threading / session keys) plus
-copy-paste `curl` recipes that return the expected events.
-Full tx log in
+[`MAINNET-PROOF.md`](./MAINNET-PROOF.md) for four reference
+artifacts (PreGate / value threading / session keys / the
+four-primitive real-dapp `intents-deposit-limit` against
+`intents.near`) plus copy-paste `curl` recipes that return the
+expected events. Full tx log in
 [`MAINNET-MIKE-NEAR-JOURNAL.md`](./MAINNET-MIKE-NEAR-JOURNAL.md);
 deploy recipe in
 [`DEPLOY-MIKE-NEAR.md`](./DEPLOY-MIKE-NEAR.md).

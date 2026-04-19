@@ -19,7 +19,10 @@ simple-example/res/*.wasm
 # Keep only curated reference reports tracked in git.
 collab/artifacts/*.json
 collab/artifacts/*.md
-# v4.0.2-ops mainnet proof runs (see MAINNET-PROOF.md)
+# v4.0.2-ops mainnet proof runs (see MAINNET-PROOF.md); the reference
+# directory holds curated live runs including the four-primitive
+# intents-deposit-limit flagship composing PreGate × 2 + threading +
+# session keys against intents.near.
 !collab/artifacts/reference/
 !collab/artifacts/reference/*.json
 !collab/artifacts/2026-04-18T01-47-20-159Z-router-seq-mo3ofylb-balance-trigger-mo3ofylb.json

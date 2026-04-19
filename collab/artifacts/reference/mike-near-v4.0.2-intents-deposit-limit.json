@@ -1,0 +1,1362 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-19T17:44:05.324Z",
+  "run_id": "20260419T17432",
+  "short_hash": "J3tM59...Gems",
+  "network": "mainnet",
+  "smart_account": "mike.near",
+  "owner_signer": "mike.near",
+  "contract_version": "v4.0.2-ops",
+  "config": {
+    "ref_pool_id": 3879,
+    "token_in": "wrap.near",
+    "token_out": "usdt.tether-token.near",
+    "probe_amount_in": "1000000000000000000000000",
+    "pass_min_usdt": "500000",
+    "halt_min_usdt": "5000000000",
+    "ladder_bps": 100,
+    "session_ms": 1800000,
+    "max_fires": 4,
+    "allowance_yocto": "1500000000000000000000000",
+    "ladder_sweep_preview_yocto_wnear": "445078236626887452318451"
+  },
+  "session": {
+    "session_public_key": "ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7",
+    "expires_at_ms": 1776622407303,
+    "allowed_trigger_ids": [
+      "intents-deposit-limit-pass-20260419T17432-trigger",
+      "intents-deposit-limit-halt-20260419T17432-trigger"
+    ],
+    "label": "intents-deposit-limit-20260419T17432"
+  },
+  "templates": {
+    "pass": {
+      "sequence_id": "intents-deposit-limit-pass-20260419T17432",
+      "trigger_id": "intents-deposit-limit-pass-20260419T17432-trigger",
+      "calls": [
+        {
+          "step_id": "read-wnear-balance",
+          "target_id": "wrap.near",
+          "method_name": "ft_balance_of",
+          "args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIn0=",
+          "attached_deposit_yocto": "0",
+          "gas_tgas": 15,
+          "pre_gate": {
+            "gate_id": "wrap.near",
+            "gate_method": "ft_balance_of",
+            "gate_args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIn0=",
+            "min_bytes": "MQ==",
+            "max_bytes": null,
+            "comparison": "U128Json",
+            "gate_gas_tgas": 15
+          },
+          "save_result": {
+            "as_name": "wnear_balance",
+            "kind": "U128Json"
+          }
+        },
+        {
+          "step_id": "deposit-into-intents",
+          "target_id": "wrap.near",
+          "method_name": "ft_transfer_call",
+          "args": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IiR7d25lYXJfYmFsYW5jZX0iLCJtc2ciOiJ7XCJyZWNlaXZlcl9pZFwiOlwibWlrZS5uZWFyXCIsXCJyZWZ1bmRfaWZfZmFpbHNcIjp0cnVlfSJ9",
+          "attached_deposit_yocto": "1",
+          "gas_tgas": 80,
+          "pre_gate": {
+            "gate_id": "v2.ref-finance.near",
+            "gate_method": "get_return",
+            "gate_args": "eyJwb29sX2lkIjozODc5LCJ0b2tlbl9pbiI6IndyYXAubmVhciIsImFtb3VudF9pbiI6IjEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJ0b2tlbl9vdXQiOiJ1c2R0LnRldGhlci10b2tlbi5uZWFyIn0=",
+            "min_bytes": "NTAwMDAw",
+            "max_bytes": null,
+            "comparison": "U128Json",
+            "gate_gas_tgas": 30
+          },
+          "args_template": {
+            "template": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IiR7d25lYXJfYmFsYW5jZX0iLCJtc2ciOiJ7XCJyZWNlaXZlcl9pZFwiOlwibWlrZS5uZWFyXCIsXCJyZWZ1bmRfaWZfZmFpbHNcIjp0cnVlfSJ9",
+            "substitutions": [
+              {
+                "reference": "wnear_balance",
+                "op": {
+                  "PercentU128": {
+                    "bps": 100
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "halt": {
+      "sequence_id": "intents-deposit-limit-halt-20260419T17432",
+      "trigger_id": "intents-deposit-limit-halt-20260419T17432-trigger",
+      "calls": [
+        {
+          "step_id": "read-wnear-balance",
+          "target_id": "wrap.near",
+          "method_name": "ft_balance_of",
+          "args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIn0=",
+          "attached_deposit_yocto": "0",
+          "gas_tgas": 15,
+          "pre_gate": {
+            "gate_id": "wrap.near",
+            "gate_method": "ft_balance_of",
+            "gate_args": "eyJhY2NvdW50X2lkIjoibWlrZS5uZWFyIn0=",
+            "min_bytes": "MQ==",
+            "max_bytes": null,
+            "comparison": "U128Json",
+            "gate_gas_tgas": 15
+          },
+          "save_result": {
+            "as_name": "wnear_balance",
+            "kind": "U128Json"
+          }
+        },
+        {
+          "step_id": "deposit-into-intents",
+          "target_id": "wrap.near",
+          "method_name": "ft_transfer_call",
+          "args": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IiR7d25lYXJfYmFsYW5jZX0iLCJtc2ciOiJ7XCJyZWNlaXZlcl9pZFwiOlwibWlrZS5uZWFyXCIsXCJyZWZ1bmRfaWZfZmFpbHNcIjp0cnVlfSJ9",
+          "attached_deposit_yocto": "1",
+          "gas_tgas": 80,
+          "pre_gate": {
+            "gate_id": "v2.ref-finance.near",
+            "gate_method": "get_return",
+            "gate_args": "eyJwb29sX2lkIjozODc5LCJ0b2tlbl9pbiI6IndyYXAubmVhciIsImFtb3VudF9pbiI6IjEwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJ0b2tlbl9vdXQiOiJ1c2R0LnRldGhlci10b2tlbi5uZWFyIn0=",
+            "min_bytes": "NTAwMDAwMDAwMA==",
+            "max_bytes": null,
+            "comparison": "U128Json",
+            "gate_gas_tgas": 30
+          },
+          "args_template": {
+            "template": "eyJyZWNlaXZlcl9pZCI6ImludGVudHMubmVhciIsImFtb3VudCI6IiR7d25lYXJfYmFsYW5jZX0iLCJtc2ciOiJ7XCJyZWNlaXZlcl9pZFwiOlwibWlrZS5uZWFyXCIsXCJyZWZ1bmRfaWZfZmFpbHNcIjp0cnVlfSJ9",
+            "substitutions": [
+              {
+                "reference": "wnear_balance",
+                "op": {
+                  "PercentU128": {
+                    "bps": 100
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "setup_txs": {
+    "save_template_pass": "8zQpETNuWp15VnmvFYXhzdyroj4iAPLK2i6sYNC69Fvq",
+    "save_template_halt": "5e49WkcGtx1zMryn3qchjUu4NL82iKU7vUqv275Dj5uZ",
+    "create_trigger_pass": "7LT7PMsknCv5AoZXRcJsq3hz7AVmCbkjEbpviqa74Dzd",
+    "create_trigger_halt": "Em75Uq1QyPZnNC94ioXyGXood6CMAQu88sA6MMRtTjic",
+    "enroll": "J3tM59hG87rFZsgpoTj4UPH4r3w2wptWnnYYXsZMGems"
+  },
+  "fire_txs": [
+    {
+      "mode": "pass",
+      "tx_hash": "65K4kDyd8Ab3vWnsdAB81YK5ptYLJ1Xem3ea1sRXZx9L"
+    },
+    {
+      "mode": "halt",
+      "tx_hash": "EEC83UhpqvckEcuMnYqekQgR6jpuLMGtJJctxE23HhX"
+    }
+  ],
+  "revoke_tx": "DnYZB24ShHFz2BicgkmP1BS3GDAX79hSHCABJUoNxknD",
+  "post_revoke_attempt": {
+    "rejected": true,
+    "message": "Signer \"mike.near\" doesn't have access key with the given public_key ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7"
+  },
+  "block_info": {
+    "enroll": {
+      "transaction_block_hash": "9VUDKP6vH3abxCEU99UD1VMQMwg3dDcMLJMHMdgMg2SE",
+      "receipts": [
+        {
+          "receipt_id": "4JuGYujM6m92Sp5qi479WQXdQ95UGQyM2Q5VDbXdGFYU",
+          "block_hash": "9VUDKP6vH3abxCEU99UD1VMQMwg3dDcMLJMHMdgMg2SE"
+        },
+        {
+          "receipt_id": "CR5s3TJKw3vSykVeLSNDoSkFDdVCJuQhK9DVHke4Cx66",
+          "block_hash": "5YcRS9EdJykxnweh4uFDCPYX2C4VxPzJzzKKpDeebHhF"
+        },
+        {
+          "receipt_id": "7DNtJM89dcq4rsCrFYDnuAn8vD6iKqVXL5BnmHkAqJMh",
+          "block_hash": "5YcRS9EdJykxnweh4uFDCPYX2C4VxPzJzzKKpDeebHhF"
+        }
+      ]
+    },
+    "fire_pass": {
+      "transaction_block_hash": "8WWSCDqcBWusDP8SsTLLye5w42zjAm5ZuC85p5oMEY8F",
+      "receipts": [
+        {
+          "receipt_id": "DJhxatqXMGZUHB88fppt69ig2otqeY1UbYq7dsHvXaYm",
+          "block_hash": "8WWSCDqcBWusDP8SsTLLye5w42zjAm5ZuC85p5oMEY8F"
+        },
+        {
+          "receipt_id": "GWYRr7DeZAs4o7cLeadHn5BfMqV8EdNSbuJiNRDa8EAJ",
+          "block_hash": "EeJdKZAJve9VZz5t7dKHhhpgo84ZHRnak3ymA1K7TF7y"
+        },
+        {
+          "receipt_id": "FWAtiEf9LjXVQzKZt48hJ73FyhM5FP1v7EpYur1JA6Ff",
+          "block_hash": "HKWBnPvTwpYvug6A6gw1zjYR3iLiFJDyLk5PyGmbHpLQ"
+        },
+        {
+          "receipt_id": "2zMEWQeNNhSxfrUoucXvGGm7Zyx8VHje4RRhbwr3oQUh",
+          "block_hash": "FVVb7kXEh1QikrNLizUGLusqu3WSfxQsqF6xgzWjp54o"
+        },
+        {
+          "receipt_id": "D8CZnahpETwVTCRrvan6RAsnu49RSgEzJDLiP6QhrujS",
+          "block_hash": "FVVb7kXEh1QikrNLizUGLusqu3WSfxQsqF6xgzWjp54o"
+        },
+        {
+          "receipt_id": "EFLnhfbEkrxkBW8w17F2Cf6wc6iJqrf7Cke9ETjXXa8G",
+          "block_hash": "A97E7X4im9pzoY5nbkBuHbubcyyLkNUqVmJ3dUCKYzyH"
+        },
+        {
+          "receipt_id": "CJmewGJHxfnU2wt6or1Q7RYvE547yhpXEwtmexdbLQPf",
+          "block_hash": "CwyJFijgqapGk18wg1zZ7EE5mh85AV5srBAUwzmFrj92"
+        },
+        {
+          "receipt_id": "CqB3oYxiT7qS4KQBThcxPvyzye26rUjgigHCZfLANnzL",
+          "block_hash": "CwyJFijgqapGk18wg1zZ7EE5mh85AV5srBAUwzmFrj92"
+        },
+        {
+          "receipt_id": "9vxHDH66p1K217otQCCuSwHjRnKJPzPZVyA1jc8aMGa3",
+          "block_hash": "9Fbu9ge1t9HoDGzsfHv4pcwGQWaYimoVLzVgty9x3FtB"
+        },
+        {
+          "receipt_id": "GhvNUGrobD1iYoVy7gva2aykYZYcKsCY1Zju9wzotswM",
+          "block_hash": "A97E7X4im9pzoY5nbkBuHbubcyyLkNUqVmJ3dUCKYzyH"
+        },
+        {
+          "receipt_id": "4HprPT7c6o1YruHuSaT1cLbev6MWrmqWzwSAVftysADy",
+          "block_hash": "HKWBnPvTwpYvug6A6gw1zjYR3iLiFJDyLk5PyGmbHpLQ"
+        },
+        {
+          "receipt_id": "8m29DiaL6LYs8KxUKfh3EVAuin3pPmNUmbuq2N5tANQD",
+          "block_hash": "9Fbu9ge1t9HoDGzsfHv4pcwGQWaYimoVLzVgty9x3FtB"
+        },
+        {
+          "receipt_id": "4hoM7wP4fYVsPCUr4FWyFjcs7tHJZiViM1NQ6JuGBrTQ",
+          "block_hash": "CB5XxWj66YpMAUfVFfhBcX28kmUBWmtAxVmAXYyYyadH"
+        },
+        {
+          "receipt_id": "AWpw39BNoM5nfnPbfB7es3bmNNwvHBVTVXjf2CrA8Ve",
+          "block_hash": "2RhLGf8DrWfTKM48jF7QMne85sNVaEHArbYMCGFNN5UU"
+        },
+        {
+          "receipt_id": "24wgAQYjqMXboRWbhs92QYTioyKfQHwKA6H1CkGq7hmT",
+          "block_hash": "2RhLGf8DrWfTKM48jF7QMne85sNVaEHArbYMCGFNN5UU"
+        },
+        {
+          "receipt_id": "AjwNgggCbZjtsSpqU683EkHHX2232XNukej518XH5Sn1",
+          "block_hash": "FNKtKBAVQ4w7DpZzu9o9Lsn1NLznSwVRdMMGc5craCZh"
+        },
+        {
+          "receipt_id": "BUdFb99euess6AS12q7pqEjvEL4a6twPpAEu4FUyAdDu",
+          "block_hash": "d4y2acnxutueSXSKxRqTsxX9Fr8TUrEENbDpZFm85qg"
+        },
+        {
+          "receipt_id": "FGbQdUrbbqFLU2j37c4iXB4fxWk7k5nmPdhyt8sRitZD",
+          "block_hash": "475B8zWKwQQTQwTs9S9aovwuMUHnD5SiPo3D8aBhBjf8"
+        },
+        {
+          "receipt_id": "9REMJapFevoBgoJG4po4uxDJypmtBkuWeA2gqhnFP2yH",
+          "block_hash": "475B8zWKwQQTQwTs9S9aovwuMUHnD5SiPo3D8aBhBjf8"
+        },
+        {
+          "receipt_id": "2mB6ndAJJn2Q3BoXpgiSju8TarjK2Qs1Uzs9eJ7ozhPq",
+          "block_hash": "2kycyh9e8HBUGjU9YtT9pPxv8NZkYc1qbKuhxo4wDL7n"
+        },
+        {
+          "receipt_id": "AxB9zzYsvwGY57L7tLw8RSP2soK8rohoW79bLdRGG4h5",
+          "block_hash": "d4y2acnxutueSXSKxRqTsxX9Fr8TUrEENbDpZFm85qg"
+        },
+        {
+          "receipt_id": "HdeYt9XRHbkPD4CLXKBQ4JfH24qjkysYiNyR2dtn4Lge",
+          "block_hash": "2kycyh9e8HBUGjU9YtT9pPxv8NZkYc1qbKuhxo4wDL7n"
+        },
+        {
+          "receipt_id": "FkSeaTFkkvRGeVzFLxhEe8mUVChMUNHQKCZrrrYvATQ1",
+          "block_hash": "GY7yRBRy8W68bXtj9rVHT3YRLfzBfDUbPxToFssiFCNB"
+        },
+        {
+          "receipt_id": "HbdbajcXEXDCpAykWW2QJroiQ3QGWDBgUfBR3xi31v13",
+          "block_hash": "FNKtKBAVQ4w7DpZzu9o9Lsn1NLznSwVRdMMGc5craCZh"
+        },
+        {
+          "receipt_id": "6Pf7iHN7fx38XR5J5UPwz9t8jfsqYFd4rmxkusgQDqnK",
+          "block_hash": "CB5XxWj66YpMAUfVFfhBcX28kmUBWmtAxVmAXYyYyadH"
+        }
+      ]
+    },
+    "fire_halt": {
+      "transaction_block_hash": "6nCyyuMA3j9op6vaCJH1gS6yhi3F5HoL8R1oadGhNYMX",
+      "receipts": [
+        {
+          "receipt_id": "3hV5tv2EKGy36j8LAcMVKPjQrnEneyghf6pCdKtyJ8N8",
+          "block_hash": "6nCyyuMA3j9op6vaCJH1gS6yhi3F5HoL8R1oadGhNYMX"
+        },
+        {
+          "receipt_id": "5jBG624VJFvDo5Q19bDo6jWDkBvrBucrVAaVLDztZ158",
+          "block_hash": "9L14p9CFpVXAUPv8eTuLt8Dmv7d6XVJmgrvU171J9YzR"
+        },
+        {
+          "receipt_id": "47MC2DcbJXUYh2VnyA4Ayjid3YQH838YMEnzqGd5KLju",
+          "block_hash": "C2NF8EwxETnb1wwbgrkjfTVSCRR8PQPG4peBuVTvSgmB"
+        },
+        {
+          "receipt_id": "7tHg9JW7gVA9nNZ8Qgmt7Q3kq23AzfSK4sEnP2ngodRX",
+          "block_hash": "Dm3EfjQDKDZCnSHaA5AycQJxFz6xBXuhEWyrE2UgLasR"
+        },
+        {
+          "receipt_id": "FYUB42BjjHoz4VX4otXMqNAYDYeAp4aQmXoCtdE3pyRv",
+          "block_hash": "Dm3EfjQDKDZCnSHaA5AycQJxFz6xBXuhEWyrE2UgLasR"
+        },
+        {
+          "receipt_id": "27XWhtBmzn7FhTYWAjRivXZgeU24vukUB5Fu6diqQi4P",
+          "block_hash": "7NKmoH9eYpou35HRNy779CUSKHWpHsc2hQD2hy2jsJLD"
+        },
+        {
+          "receipt_id": "FPEcijRHTkoocoFTuJL3MTAD3BoTfZyfxYjrzHsE5XSa",
+          "block_hash": "hdUbkPmA1SQURdMCCBSE3TEwLxHUGW84hYgt5uuoS9e"
+        },
+        {
+          "receipt_id": "BiuQQiKCgzY5pt6G4TQ7TdrF1HFnr23iAd6njdvoETf7",
+          "block_hash": "hdUbkPmA1SQURdMCCBSE3TEwLxHUGW84hYgt5uuoS9e"
+        },
+        {
+          "receipt_id": "2mPKNA5vHGUqhzPGDF6UQY8zxbs9CPrGYURpz9axMC1z",
+          "block_hash": "F8eG9KJeke8sAosBYqj15sCxp3sbaTWXbYTpoiYRmVBo"
+        },
+        {
+          "receipt_id": "DCwMnyoT7aX2SZEWR1D54U2hyELobfGejbWXapsntrYC",
+          "block_hash": "7NKmoH9eYpou35HRNy779CUSKHWpHsc2hQD2hy2jsJLD"
+        },
+        {
+          "receipt_id": "DQK1LEzxPBNtzHfMBRaUopjkoiggaM8u1UH13SJNQ74i",
+          "block_hash": "C2NF8EwxETnb1wwbgrkjfTVSCRR8PQPG4peBuVTvSgmB"
+        },
+        {
+          "receipt_id": "7Y7v5sLSXzyXvYsFL71iLqgsQnAg2snjFwFfoMmZpN7L",
+          "block_hash": "F8eG9KJeke8sAosBYqj15sCxp3sbaTWXbYTpoiYRmVBo"
+        },
+        {
+          "receipt_id": "CsVSj9B1sD4v2y9r3igYooqXP8WKVYVfATmc8hQTgRes",
+          "block_hash": "4BAU85R6RHtptPK4YyC1Hn4EvoLDgTjV3n9fhfqDR4xs"
+        },
+        {
+          "receipt_id": "13Ma1QrsougPB3nXLD5DnXXEE6qqaVkUngTk7hcJheLr",
+          "block_hash": "GzWc3npD57ZAs5UsRCtRCtpAiKiprUYDxbTmAzdvqjr3"
+        },
+        {
+          "receipt_id": "GQJqzGQhd51dNbediakXRNd58Pc1oqb4bH4CgrwH8jtq",
+          "block_hash": "GzWc3npD57ZAs5UsRCtRCtpAiKiprUYDxbTmAzdvqjr3"
+        },
+        {
+          "receipt_id": "8f2bEZWedcCNSHi4cXan7nWejjkVm9a1UuqdQkiL6vE9",
+          "block_hash": "2tWVcZzqHZ3TsZuytdwLp6u1uN1ievFWmUBR3BzJE7zp"
+        },
+        {
+          "receipt_id": "FovVeZThBMzWREjnA2JSRiyBAqSBTodn7eCm6y9x28NA",
+          "block_hash": "4BAU85R6RHtptPK4YyC1Hn4EvoLDgTjV3n9fhfqDR4xs"
+        }
+      ]
+    },
+    "revoke": {
+      "transaction_block_hash": "C1rrRu3aK9cwCZr4dT55jrnzM2SueqsS4QXxUFMCm6Jf",
+      "receipts": [
+        {
+          "receipt_id": "2pLKxEk4a5K4A4zxXckQpzfD1Z6dnwpbfwv1GnuDCaZc",
+          "block_hash": "C1rrRu3aK9cwCZr4dT55jrnzM2SueqsS4QXxUFMCm6Jf"
+        },
+        {
+          "receipt_id": "3BwwdD5JfzpbVrYkh8nzpAoeLn1udQcznX4ZZ99k6M48",
+          "block_hash": "GSKqZzZvzn8XyQ4tZ7qf4mnSJ4exVQjv7efEUMzy4tgd"
+        },
+        {
+          "receipt_id": "CiciU9kiVxUS79HpUt4UeLH9MtPvDzqGU1HPridVtAQ",
+          "block_hash": "GSKqZzZvzn8XyQ4tZ7qf4mnSJ4exVQjv7efEUMzy4tgd"
+        }
+      ]
+    }
+  },
+  "structured_events": {
+    "enroll": [
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "session_enrolled",
+        "data": {
+          "session_public_key": "ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7",
+          "granted_at_ms": 1776620615612,
+          "expires_at_ms": 1776622407303,
+          "allowed_trigger_ids": [
+            "intents-deposit-limit-pass-20260419T17432-trigger",
+            "intents-deposit-limit-halt-20260419T17432-trigger"
+          ],
+          "max_fire_count": 4,
+          "allowance_yocto": "1500000000000000000000000",
+          "label": "intents-deposit-limit-20260419T17432",
+          "runtime": {
+            "block_height": 194711851,
+            "block_timestamp_ms": 1776620615612,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 100,
+            "attached_deposit_yocto": "1",
+            "account_balance_yocto": "2625512509965335664715596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 557485,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      }
+    ],
+    "fire_pass": [
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "session_fired",
+        "data": {
+          "session_public_key": "ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7",
+          "trigger_id": "intents-deposit-limit-pass-20260419T17432-trigger",
+          "fire_count_after": 1,
+          "max_fire_count": 4,
+          "label": "intents-deposit-limit-20260419T17432",
+          "runtime": {
+            "block_height": 194711855,
+            "block_timestamp_ms": 1776620617907,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625492231762331434715596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558030,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_registered",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620617907,
+          "resume_callback_gas_tgas": 55,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711855,
+            "block_timestamp_ms": 1776620617907,
+            "epoch_height": 4279,
+            "used_gas_tgas": 58,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625492231762331434715596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558030,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_registered",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620617907,
+          "resume_callback_gas_tgas": 120,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711855,
+            "block_timestamp_ms": 1776620617907,
+            "epoch_height": 4279,
+            "used_gas_tgas": 180,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625492231762331434715596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558030,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "trigger_fired",
+        "data": {
+          "trigger_id": "intents-deposit-limit-pass-20260419T17432-trigger",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "sequence_id": "intents-deposit-limit-pass-20260419T17432",
+          "run_nonce": 1,
+          "executor_id": "mike.near",
+          "started_at_ms": 1776620617907,
+          "call_count": 2,
+          "runs_started": 1,
+          "max_runs": 10,
+          "runs_remaining": 9,
+          "min_balance_yocto": "1",
+          "balance_yocto": "2625492231762331434715596075",
+          "required_balance_yocto": "1",
+          "template_total_deposit_yocto": "1",
+          "trigger_created_at_ms": 1776620611745,
+          "runtime": {
+            "block_height": 194711855,
+            "block_timestamp_ms": 1776620617907,
+            "epoch_height": 4279,
+            "used_gas_tgas": 181,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625492231762331434715596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558030,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "sequence_started",
+        "data": {
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "first_step_id": "read-wnear-balance",
+          "queued_count": 1,
+          "total_steps": 2,
+          "automation_run": null,
+          "origin": "manual",
+          "runtime": {
+            "block_height": 194711855,
+            "block_timestamp_ms": 1776620617907,
+            "epoch_height": 4279,
+            "used_gas_tgas": 183,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625492231762331434715596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558030,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resumed",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620617907,
+          "resume_latency_ms": 635,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711856,
+            "block_timestamp_ms": 1776620618542,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 112,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625492473256486298015596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559921,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "pre_gate_checked",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "outcome": "in_range",
+          "matched": true,
+          "expected_min_bytes_len": 1,
+          "expected_max_bytes_len": null,
+          "actual_bytes_len": 28,
+          "actual_return": "IjQ0NTA3ODIzNjYyNjg4NzQ1MjMxODQ1MTY1Ig==",
+          "comparison": "u128_json",
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711858,
+            "block_timestamp_ms": 1776620619752,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 60,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625497350559966211815596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559921,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "result_saved",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "as_name": "wnear_balance",
+          "kind": "u128_json",
+          "bytes_len": 28,
+          "runtime": {
+            "block_height": 194711860,
+            "block_timestamp_ms": 1776620620992,
+            "epoch_height": 4279,
+            "used_gas_tgas": 1,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625500966720754432315596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559921,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resolved_ok",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "result_bytes_len": 28,
+          "next_step_id": "deposit-into-intents",
+          "registered_at_ms": 1776620617907,
+          "resolve_latency_ms": 3085,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711860,
+            "block_timestamp_ms": 1776620620992,
+            "epoch_height": 4279,
+            "used_gas_tgas": 2,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625500966720754432315596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559921,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resumed",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620617907,
+          "resume_latency_ms": 3747,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711861,
+            "block_timestamp_ms": 1776620621654,
+            "epoch_height": 4279,
+            "used_gas_tgas": 1,
+            "prepaid_gas_tgas": 177,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625501111298906273915596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559501,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "pre_gate_checked",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "outcome": "in_range",
+          "matched": true,
+          "expected_min_bytes_len": 6,
+          "expected_max_bytes_len": null,
+          "actual_bytes_len": 9,
+          "actual_return": "IjE0MDE2Mzki",
+          "comparison": "u128_json",
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711863,
+            "block_timestamp_ms": 1776620622683,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 125,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625507357392433251915596075",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559501,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resolved_ok",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "result_bytes_len": 26,
+          "next_step_id": null,
+          "registered_at_ms": 1776620617907,
+          "resolve_latency_ms": 7134,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711867,
+            "block_timestamp_ms": 1776620625041,
+            "epoch_height": 4279,
+            "used_gas_tgas": 1,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625516816041472312215596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559501,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "sequence_completed",
+        "data": {
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "final_step_id": "deposit-into-intents",
+          "final_result_bytes_len": 26,
+          "runtime": {
+            "block_height": 194711867,
+            "block_timestamp_ms": 1776620625041,
+            "epoch_height": 4279,
+            "used_gas_tgas": 1,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625516816041472312215596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559501,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "run_finished",
+        "data": {
+          "trigger_id": "intents-deposit-limit-pass-20260419T17432-trigger",
+          "namespace": "auto:intents-deposit-limit-pass-20260419T17432-trigger:1",
+          "sequence_id": "intents-deposit-limit-pass-20260419T17432",
+          "run_nonce": 1,
+          "executor_id": "mike.near",
+          "status": "Succeeded",
+          "started_at_ms": 1776620617907,
+          "finished_at_ms": 1776620625041,
+          "duration_ms": 7134,
+          "failed_step_id": null,
+          "runtime": {
+            "block_height": 194711867,
+            "block_timestamp_ms": 1776620625041,
+            "epoch_height": 4279,
+            "used_gas_tgas": 2,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625516816041472312215596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559501,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      }
+    ],
+    "fire_halt": [
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "session_fired",
+        "data": {
+          "session_public_key": "ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7",
+          "trigger_id": "intents-deposit-limit-halt-20260419T17432-trigger",
+          "fire_count_after": 2,
+          "max_fire_count": 4,
+          "label": "intents-deposit-limit-20260419T17432",
+          "runtime": {
+            "block_height": 194711874,
+            "block_timestamp_ms": 1776620629311,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625488430831774347015596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558496,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_registered",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620629311,
+          "resume_callback_gas_tgas": 55,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711874,
+            "block_timestamp_ms": 1776620629311,
+            "epoch_height": 4279,
+            "used_gas_tgas": 58,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625488430831774347015596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558496,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_registered",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620629311,
+          "resume_callback_gas_tgas": 120,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711874,
+            "block_timestamp_ms": 1776620629311,
+            "epoch_height": 4279,
+            "used_gas_tgas": 180,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625488430831774347015596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558496,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "trigger_fired",
+        "data": {
+          "trigger_id": "intents-deposit-limit-halt-20260419T17432-trigger",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "sequence_id": "intents-deposit-limit-halt-20260419T17432",
+          "run_nonce": 1,
+          "executor_id": "mike.near",
+          "started_at_ms": 1776620629311,
+          "call_count": 2,
+          "runs_started": 1,
+          "max_runs": 10,
+          "runs_remaining": 9,
+          "min_balance_yocto": "1",
+          "balance_yocto": "2625488430831774347015596074",
+          "required_balance_yocto": "1",
+          "template_total_deposit_yocto": "1",
+          "trigger_created_at_ms": 1776620613889,
+          "runtime": {
+            "block_height": 194711874,
+            "block_timestamp_ms": 1776620629311,
+            "epoch_height": 4279,
+            "used_gas_tgas": 181,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625488430831774347015596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558496,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "sequence_started",
+        "data": {
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "first_step_id": "read-wnear-balance",
+          "queued_count": 1,
+          "total_steps": 2,
+          "automation_run": null,
+          "origin": "manual",
+          "runtime": {
+            "block_height": 194711874,
+            "block_timestamp_ms": 1776620629311,
+            "epoch_height": 4279,
+            "used_gas_tgas": 183,
+            "prepaid_gas_tgas": 300,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625488430831774347015596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558496,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resumed",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620629311,
+          "resume_latency_ms": 514,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711875,
+            "block_timestamp_ms": 1776620629825,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 112,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625488672422708531515596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 560391,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "pre_gate_checked",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "outcome": "in_range",
+          "matched": true,
+          "expected_min_bytes_len": 1,
+          "expected_max_bytes_len": null,
+          "actual_bytes_len": 28,
+          "actual_return": "IjQ0MDYyNzQ1NDI2MDYxODU3Nzc5NTI2NzE0Ig==",
+          "comparison": "u128_json",
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711877,
+            "block_timestamp_ms": 1776620630917,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 60,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625493549564889576715596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 560391,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "result_saved",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "as_name": "wnear_balance",
+          "kind": "u128_json",
+          "bytes_len": 28,
+          "runtime": {
+            "block_height": 194711879,
+            "block_timestamp_ms": 1776620632067,
+            "epoch_height": 4279,
+            "used_gas_tgas": 1,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625497165725677797215596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 560391,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resolved_ok",
+        "data": {
+          "step_id": "read-wnear-balance",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "result_bytes_len": 28,
+          "next_step_id": "deposit-into-intents",
+          "registered_at_ms": 1776620629311,
+          "resolve_latency_ms": 2756,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_balance_of",
+            "args_bytes_len": 26,
+            "deposit_yocto": "0",
+            "gas_tgas": 15,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_balance_of"
+          },
+          "runtime": {
+            "block_height": 194711879,
+            "block_timestamp_ms": 1776620632067,
+            "epoch_height": 4279,
+            "used_gas_tgas": 2,
+            "prepaid_gas_tgas": 20,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625497165725677797215596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 560391,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "step_resumed",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "registered_at_ms": 1776620629311,
+          "resume_latency_ms": 3263,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711880,
+            "block_timestamp_ms": 1776620632574,
+            "epoch_height": 4279,
+            "used_gas_tgas": 1,
+            "prepaid_gas_tgas": 177,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625497310456090713815596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559971,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "pre_gate_checked",
+        "data": {
+          "step_id": "deposit-into-intents",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "outcome": "below_min",
+          "matched": false,
+          "expected_min_bytes_len": 10,
+          "expected_max_bytes_len": null,
+          "actual_bytes_len": 9,
+          "actual_return": "IjE0MDE2Mzki",
+          "comparison": "u128_json",
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711882,
+            "block_timestamp_ms": 1776620633757,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 125,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625503555866067921515596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559971,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "run_finished",
+        "data": {
+          "trigger_id": "intents-deposit-limit-halt-20260419T17432-trigger",
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "sequence_id": "intents-deposit-limit-halt-20260419T17432",
+          "run_nonce": 1,
+          "executor_id": "mike.near",
+          "status": "DownstreamFailed",
+          "started_at_ms": 1776620629311,
+          "finished_at_ms": 1776620633757,
+          "duration_ms": 4446,
+          "failed_step_id": "deposit-into-intents",
+          "runtime": {
+            "block_height": 194711882,
+            "block_timestamp_ms": 1776620633757,
+            "epoch_height": 4279,
+            "used_gas_tgas": 2,
+            "prepaid_gas_tgas": 125,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625503555866067921515596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559971,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      },
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "sequence_halted",
+        "data": {
+          "namespace": "auto:intents-deposit-limit-halt-20260419T17432-trigger:1",
+          "failed_step_id": "deposit-into-intents",
+          "reason": "pre_gate_failed",
+          "error_kind": "pre_gate_below_min",
+          "error_msg": "pre_gate halted: below_min",
+          "registered_at_ms": 1776620629311,
+          "halt_latency_ms": 4446,
+          "call": {
+            "target_id": "wrap.near",
+            "method": "ft_transfer_call",
+            "args_bytes_len": 123,
+            "deposit_yocto": "1",
+            "gas_tgas": 80,
+            "policy": "direct",
+            "dispatch_summary": "direct wrap.near.ft_transfer_call"
+          },
+          "runtime": {
+            "block_height": 194711882,
+            "block_timestamp_ms": 1776620633757,
+            "epoch_height": 4279,
+            "used_gas_tgas": 2,
+            "prepaid_gas_tgas": 125,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625503555866067921515596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 559971,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      }
+    ],
+    "revoke": [
+      {
+        "standard": "sa-automation",
+        "version": "1.1.0",
+        "event": "session_revoked",
+        "data": {
+          "session_public_key": "ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7",
+          "reason": "explicit",
+          "runtime": {
+            "block_height": 194711890,
+            "block_timestamp_ms": 1776620638176,
+            "epoch_height": 4279,
+            "used_gas_tgas": 0,
+            "prepaid_gas_tgas": 50,
+            "attached_deposit_yocto": "0",
+            "account_balance_yocto": "2625510648834563604615596074",
+            "account_locked_balance_yocto": "0",
+            "storage_usage": 558986,
+            "predecessor_id": "mike.near",
+            "current_account_id": "mike.near",
+            "signer_id": "mike.near"
+          }
+        }
+      }
+    ]
+  },
+  "outcomes": {
+    "fire_pass": "completed",
+    "fire_halt": "halted (pre_gate_failed)"
+  },
+  "balances": {
+    "wnear_before": "44507823662688745231845165",
+    "wnear_after": "44062745426061857779526714",
+    "intents_before": "80000000000000000000000",
+    "intents_after": "525078236626887452318451",
+    "intents_delta": "445078236626887452318451"
+  },
+  "grant_after_fires": {
+    "session_public_key": "ed25519:EiiCwLc1zQM1nA1VgmAajPLTLnJH2DbpoFcdXL7fdDv7",
+    "granted_at_ms": 1776620615612,
+    "expires_at_ms": 1776622407303,
+    "allowed_trigger_ids": [
+      "intents-deposit-limit-pass-20260419T17432-trigger",
+      "intents-deposit-limit-halt-20260419T17432-trigger"
+    ],
+    "max_fire_count": 4,
+    "fire_count": 2,
+    "label": "intents-deposit-limit-20260419T17432",
+    "active": true
+  },
+  "grant_after_revoke": null
+}
