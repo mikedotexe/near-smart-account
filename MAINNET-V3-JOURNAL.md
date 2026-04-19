@@ -49,6 +49,50 @@ https://www.nearblocks.io/txns/<tx_hash>
 | B4b | DCA `create_balance_trigger` (battletest) | `BgziDzgNudpyXVh1j7zeq9Jemr5GnVbs2C1tiKwecJMx` | 194637969 | trigger `dca-intents-trigger-mo5bmbsr` registered |
 | B4c | DCA `execute_trigger` (battletest tick) | `EUZLVZjt6DHg9YyNoYqoXC3ZNuJN8BdMZmx865UZaS3F` | 194637974–194637983 | namespace `auto:dca-intents-trigger-mo5bmbsr:1`; `sequence_completed` + `run_finished`, duration 4.8s |
 
+## 2026-04-18 — Battletest round 2 (open gaps from §10.7)
+
+Three new probes plus one critical discovery about `intents.near`'s
+per-account key registry.
+
+### Critical discovery: `intents.near` maintains its own public-key registry
+
+On-chain full-access keys **are NOT auto-trusted** by `intents.near`. A
+signer's first `execute_intents` call fails with
+`Smart contract panicked: public key '<pk>' doesn't exist for account
+'<signer>'` unless the key has been explicitly registered via the
+direct (non-signed) method `intents.near.add_public_key({public_key})`.
+View methods for inspection: `public_keys_of({account_id})` → `Vec<PublicKey>`,
+`has_public_key` (same arg shape).
+
+This is documented nowhere prominently in `docs.near-intents.org` —
+surfaced only by battletest.
+
+| Tx | Purpose |
+|---|---|
+| `88kKGBS2cX3bfXmmpXhNzaCmB4J6PpXPiaFS3TFNP452` | Register `sa-lab.mike.near` on `wrap.near` storage (0.00125 NEAR) |
+| `3iE2HgH5atdBdRNRiMRs1JpXAsKptuXAuFCM46zWZHri` | Test 7 first attempt — FAILED (sa-lab key unregistered on intents.near) |
+| `6NNUsYQ3YfRoLXXWmj6oVDg1L97CvDTXBJayuzE3w2aR` | Isolation: deposit-only to sa-lab — **SUCCESS** (proved step 2 works for sa-lab; narrowed problem to step 3) |
+| `8aMJww3zx944cz4yTWHKL8tthBHNatxz3aZw3HTuGfAW` | Test 7 retry — still FAILED; got full error: `public key ... doesn't exist for account sa-lab.mike.near` |
+| `28Gugr3nCra1PMgjmyoNSeunjJ7UrtvUsAieaDCTuFYC` | **Fix**: direct call `intents.near.add_public_key({public_key:"ed25519:5CviZNK..."})` from `sa-lab.mike.near` → registers key, emits `dip4 public_key_added` event |
+
+### B6 — Multi-signer round-trip (resolved)
+
+| Tx | Observation |
+|---|---|
+| `5pjc3cQdcvPDoVhmgbgSvRySvnBpx8BvWUeneSVQnbzd` | After key registration: `wrap(sa-lab) +0.01`, `intents(sa-lab) Δ0` ✓ FULL_SUCCESS. Outer tx signed by `mike.near`; inner `ft_withdraw` intent signed by `sa-lab.mike.near`'s key; `intents.near` accepted the relayer pattern. |
+
+### B7 — Deadline expiry (resolved)
+
+| Tx | Observation |
+|---|---|
+| `C9nZ6bR6tQE5RXRmPyYVJA6PgBKFhZr1crREHzhFDPMW` | `--intent-deadline-ms 1000` (1-second deadline). Step 1 and 2 land normally; step 3's `execute_intents` receives an already-expired signed intent and `intents.near` rejects. Halt shape matches poison-step=2 (mid-sequence halt via step 3's primary-call failure, `wrap(mike.near) Δ0, intents(mike.near) +0.01` stranded). |
+
+### B8 — Direct-path failure (resolved)
+
+| Tx | Observation |
+|---|---|
+| `2Ns6XQAmsGvxLPVQH77sEUDyLP8QNu5Zymo27Y4d8naB` | Step 1's `method_name` replaced with `bogus_method_does_not_exist`. Primary call fails with `MethodNotFound`; Direct policy observes the failed resolution surface; step 1's `step_resolved_err` fires; steps 2+3 never dispatch. Both deltas `0`. Confirms Direct halt path works identically to Asserted halt at the kernel layer. |
+
 ### Canonical DCA reference run (user-locked)
 
 A second DCA run immediately after the battletest sweep, locked as the

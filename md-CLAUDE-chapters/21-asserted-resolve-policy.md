@@ -1,5 +1,16 @@
 # Chapter 21 — `Asserted` resolve policy
 
+> **In today's vocabulary.** `Asserted` is the policy that powers the
+> mainnet `sequential-intents` flagship — the kernel fires a postcheck
+> `FunctionCall` after the target resolves and advances only on exact
+> byte-match of the return value. In today's code, this is
+> `StepPolicy::Asserted { assertion_id, assertion_method,
+> assertion_args, expected_return, assertion_gas_tgas }` carried on
+> each `Step`. The testnet probe evidence below is
+> period-accurate — the enum was originally called `ResolutionPolicy`
+> and the facade was `yield_promise`; the postcheck cascade is
+> unchanged.
+
 ## §1 Motivation
 
 Chapter 20's cross-table left two pathologies (noop, decoy) visible only

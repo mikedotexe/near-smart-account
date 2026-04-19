@@ -84,6 +84,69 @@ Pass `--network testnet` with a testnet smart-account and `--signer
 <testnet-account>` to run against `wrap.testnet` + Ref's testnet
 deployment (`ref-finance-101.testnet`).
 
+## [`limit-order.mjs`](./limit-order.mjs) — `PreGate` pre-dispatch gate
+
+A single step whose `pre_gate` names a view call and a `[min_bytes,
+max_bytes]` range. The kernel fires the gate BEFORE dispatching the
+target; in-range → target fires as normal; out-of-range or gate
+panic → the sequence halts cleanly with `pre_gate_checked.outcome`
+tagged accordingly, target never executes. The mechanism of a
+programmable limit-order engine without market exposure.
+
+Flagship uses `pathological-router.x.mike.testnet`'s
+`get_calls_completed` view + `do_honest_work` target to give a
+predictable counter surface for pass / fail probing.
+
+```bash
+./examples/limit-order.mjs \
+  --signer x.mike.testnet \
+  --smart-account sa-pregate.x.mike.testnet \
+  --gate-min 0 --gate-max 1000   # current counter almost certainly in-range
+
+# Force failure (below min):
+./examples/limit-order.mjs \
+  --signer x.mike.testnet \
+  --smart-account sa-pregate.x.mike.testnet \
+  --gate-min 999999999
+```
+
+## [`ladder-swap.mjs`](./ladder-swap.mjs) — value threading
+
+Three-step plan demonstrating `save_result` + `args_template`:
+step 1 primes a counter; step 2 reads it and saves the return; step 3
+fires a target whose args template substitutes a `PercentU128`-derived
+value from step 2's save.
+
+```bash
+./examples/ladder-swap.mjs \
+  --signer x.mike.testnet \
+  --smart-account sa-threading.x.mike.testnet \
+  --ladder-bps 5000   # step 3's label = 50% of step 2's counter snapshot
+```
+
+Outcome verification uses
+`pathological-router.x.mike.testnet.get_last_burst()` — the string
+set by step 3's `do_honest_work` is visible there so the caller can
+confirm the materialized arg landed.
+
+## [`session-dapp.mjs`](./session-dapp.mjs) — session keys
+
+Owner enrolls an ephemeral ed25519 key on the smart account,
+restricted to `execute_trigger`; the script then fires `execute_trigger`
+N times with the ephemeral key (no main-wallet prompts); owner
+revokes; script verifies a post-revoke fire is rejected by the NEAR
+runtime. Prerequisite: a `BalanceTrigger` already configured under
+`--trigger-id`.
+
+```bash
+./examples/session-dapp.mjs \
+  --signer x.mike.testnet \
+  --smart-account sa-session.x.mike.testnet \
+  --trigger-id <existing-trigger-id>
+```
+
+User-facing walkthrough + safety model: [`../SESSION-KEYS.md`](../SESSION-KEYS.md).
+
 ## [`dca.mjs`](./dca.mjs) — scheduled variant
 
 Recurring version of the `sequential-intents.mjs` deposit half. Saves a

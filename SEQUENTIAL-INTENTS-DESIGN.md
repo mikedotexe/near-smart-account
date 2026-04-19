@@ -322,8 +322,53 @@ The automation layer — `save_sequence_template` → `create_balance_trigger`
 emitted a new event not present in the manual path: `run_finished` with
 `{trigger_id, namespace, sequence_id, run_nonce, executor_id, status, duration_ms, failed_step_id}`. This is the correlation identifier indexers should key on for recurring runs.
 
-### 10.7 What battletests did NOT prove
+### 10.7 Round-2 battletests (resolved)
 
-- **`Direct` policy failure path** — all battletests kept step 1 (`near_deposit`, Direct) succeeding. We haven't live-tested what happens if a Direct step's target contract fails. Next probe candidate.
-- **Multi-signer plans** — every signed intent so far was signed by `mike.near`. Haven't exercised `--credit-to <other-account>` where the other account is a *different* signer whose credential is loaded.
-- **Deadline expiry** — every signed intent was executed well within its 5-min deadline. Haven't validated that an *expired* intent halts cleanly via `postcheck_failed`.
+The three gaps called out in an earlier draft of this section were all
+resolved. See `MAINNET-V3-JOURNAL.md` for tx hashes.
+
+- **`Direct` policy failure path** — B8 (`2Ns6XQA…`): step 1's method replaced with a non-existent method on `wrap.near`. Primary call fails with `MethodNotFound`; Direct-policy step emits `step_resolved_err`; steps 2+3 never dispatch. Halt shape identical to Asserted halts at the kernel layer — Direct and Asserted share the `step_resolved_err` → next-step-decay path.
+- **Multi-signer plans** — B6 (`5pjc3cQ…`): outer tx signed by `mike.near`; inner `ft_withdraw` intent signed by `sa-lab.mike.near`'s registered key. `intents.near` accepted the relayer pattern cleanly once the key-registry prerequisite (§10.8) was met.
+- **Deadline expiry** — B7 (`C9nZ6bR…`): `--intent-deadline-ms 1000` forced step 3's signed intent to be expired by execution time. `intents.near` rejected the expired intent at `execute_intents`; step 3's primary call failed; halt shape matched `poison-step=2` (step 3 dangling, `sequence_halted` ~2min later). The failure was NOT observed as `postcheck_failed` — it's a primary-call failure, not a postcheck failure.
+
+### 10.8 Critical finding — `intents.near` per-account public-key registry
+
+`intents.near` maintains an independent registry of authorised public
+keys per signer account. **On-chain full-access keys are NOT
+auto-trusted.** A signer's first `execute_intents` call with an
+unregistered public key panics with:
+
+```
+Smart contract panicked: public key '<pk>' doesn't exist for account '<signer_id>'
+```
+
+Even though `<pk>` is a valid NEAR full-access key on the signer's
+on-chain access-key list.
+
+**Bootstrap path:** call `intents.near.add_public_key({public_key: "ed25519:..."})` directly — *not* via `execute_intents`. This method
+accepts a direct function call signed by the account's own key.
+Emits `dip4 public_key_added` event on success. Requires 1 yocto deposit.
+
+```bash
+near call intents.near add_public_key \
+  '{"public_key":"ed25519:<caller-pk>"}' \
+  --accountId <signer> --depositYocto 1 --gas 30000000000000
+```
+
+**Inspection views** on `intents.near`:
+
+- `public_keys_of({account_id})` → `Vec<PublicKey>`
+- `has_public_key({account_id, public_key})` → `bool`
+
+**Implication for `sequential-intents.mjs`:** add a preflight check
+that calls `public_keys_of(credit_to)` and — if the list is empty or
+missing the signing key — prompts the user (or optionally sends an
+`add_public_key` tx automatically in a pre-flight step) before running
+the flagship. Otherwise the round-trip halts at step 3 with an opaque
+panic that requires tracing the tx to diagnose.
+
+This was discovered by B6 battletest (sa-lab.mike.near's first
+interaction with `intents.near`). `mike.near` presumably had this key
+registered via some earlier dApp interaction (NEAR wallet, 1Click,
+etc.) — which is why all Phase 5/6 runs worked. First-time signers will
+hit this wall without preflight.

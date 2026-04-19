@@ -28,9 +28,12 @@ use near_sdk::serde_json::{self, json};
 use near_sdk::store::IterableMap;
 use near_sdk::{
     env, near, AccountId, BorshStorageKey, Gas, GasWeight, NearToken, PanicOnDefault, Promise,
-    PromiseError, PromiseOrValue, YieldId,
+    PromiseError, PromiseOrValue, PublicKey, YieldId,
 };
-use smart_account_types::{AdapterDispatchInput, StepPolicy};
+use smart_account_types::{
+    evaluate_pre_gate, materialize_args, AdapterDispatchInput, ArgsTemplate, ComparisonKind,
+    MaterializeError, PreGate, SaveResult, StepPolicy,
+};
 
 const STEP_RESOLVE_CALLBACK_GAS_TGAS: u64 = 20;
 const STEP_RESUME_OVERHEAD_TGAS: u64 = 20;
@@ -53,6 +56,14 @@ const ASSERTED_POSTCHECK_RUN_GAS_TGAS: u64 = 15;
 /// Gas reserved for `on_asserted_evaluate_postcheck` (compares check-call
 /// bytes to the caller-specified expected bytes).
 const ASSERTED_POSTCHECK_EVALUATE_GAS_TGAS: u64 = 10;
+/// Gas reserved for `on_pre_gate_checked` (reads gate result, compares to
+/// bounds, dispatches target chained with `on_step_resolved` on match, or
+/// halts sequence on mismatch / gate panic).
+const PRE_GATE_CHECK_CALLBACK_GAS_TGAS: u64 = 25;
+/// Upper bound on a `PreGate`'s own gas budget. Keeps the overall receipt
+/// tree within the PV-83 1 PGas ceiling even for the heaviest
+/// target + gate + callback chain.
+const MAX_PRE_GATE_GAS_TGAS: u64 = 100;
 
 #[near(serializers = [borsh])]
 #[derive(BorshStorageKey)]
@@ -62,6 +73,8 @@ enum StorageKey {
     SequenceTemplates,
     BalanceTriggers,
     AutomationRuns,
+    SequenceContexts,
+    SessionGrants,
 }
 
 #[near(serializers = [json, borsh])]
@@ -74,6 +87,25 @@ pub struct Step {
     pub attached_deposit_yocto: u128,
     pub gas_tgas: u64,
     pub policy: StepPolicy,
+    /// Optional pre-dispatch gate. If present, the kernel fires
+    /// `pre_gate.gate_id.pre_gate.gate_method(pre_gate.gate_args)` before
+    /// dispatching the target. The step advances only if the gate's
+    /// returned bytes sit inside `[pre_gate.min_bytes, pre_gate.max_bytes]`
+    /// under `pre_gate.comparison`. Otherwise the sequence halts cleanly
+    /// with `pre_gate_checked.outcome != "in_range"`.
+    pub pre_gate: Option<PreGate>,
+    /// Optional: if set, save this step's promise-result bytes into
+    /// the sequence context under `save_result.as_name` so later
+    /// steps can reference it via `args_template`. Saved bytes are
+    /// the raw `promise_result_checked` value, quotes and all.
+    pub save_result: Option<SaveResult>,
+    /// Optional: if set, the kernel materializes the target's args at
+    /// dispatch time by running each substitution in `args_template`
+    /// against the sequence context, then uses the produced bytes as
+    /// the FunctionCall's args. When `None`, static `args` is used
+    /// as-is. Kernel materialization failures halt the sequence with
+    /// `args_materialize_failed`.
+    pub args_template: Option<ArgsTemplate>,
 }
 
 #[near(serializers = [json])]
@@ -86,6 +118,12 @@ pub struct StepInput {
     pub gas_tgas: u64,
     #[serde(default)]
     pub policy: StepPolicy,
+    #[serde(default)]
+    pub pre_gate: Option<PreGate>,
+    #[serde(default)]
+    pub save_result: Option<SaveResult>,
+    #[serde(default)]
+    pub args_template: Option<ArgsTemplate>,
 }
 
 #[near(serializers = [json])]
@@ -97,6 +135,9 @@ pub struct StepView {
     pub attached_deposit_yocto: U128,
     pub gas_tgas: u64,
     pub policy: StepPolicy,
+    pub pre_gate: Option<PreGate>,
+    pub save_result: Option<SaveResult>,
+    pub args_template: Option<ArgsTemplate>,
 }
 
 #[near(serializers = [json, borsh])]
@@ -116,6 +157,9 @@ pub struct RegisteredStepView {
     pub attached_deposit_yocto: U128,
     pub gas_tgas: u64,
     pub policy: StepPolicy,
+    pub pre_gate: Option<PreGate>,
+    pub save_result: Option<SaveResult>,
+    pub args_template: Option<ArgsTemplate>,
     pub created_at_ms: u64,
 }
 
@@ -204,6 +248,53 @@ pub struct TriggerExecutionView {
     pub call_count: u32,
 }
 
+/// Per-sequence runtime context. Populated lazily the first time a
+/// step with `save_result` resolves. Consumed at dispatch time by
+/// steps with `args_template`. Cleared on sequence completion or halt.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, Default)]
+pub struct SequenceContext {
+    /// Saved-result name → raw promise-result bytes (quotes and all,
+    /// as the target returned them). Populated on each step's Ok
+    /// resolution when that step carries a `save_result`; consumed
+    /// at dispatch time by later steps whose args_template references
+    /// these names. Cleared on sequence completion or halt.
+    pub saved_results: std::collections::HashMap<String, Vec<u8>>,
+}
+
+/// Metadata for one delegated session key. Lives alongside a NEAR
+/// function-call access key that the smart account itself minted via
+/// `enroll_session`. Policy layered ON TOP of NEAR's native
+/// function-call key model: expiration, fire-count caps,
+/// trigger allowlists, free-form labels for attribution.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
+pub struct SessionGrant {
+    /// Stringified `ed25519:<base58>` — matches
+    /// `env::signer_account_pk().to_string()` when the session key
+    /// submits a delegated call.
+    pub session_public_key: String,
+    pub granted_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub allowed_trigger_ids: Option<Vec<String>>,
+    pub max_fire_count: u32,
+    pub fire_count: u32,
+    pub label: Option<String>,
+}
+
+#[near(serializers = [json])]
+pub struct SessionGrantView {
+    pub session_public_key: String,
+    pub granted_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub allowed_trigger_ids: Option<Vec<String>>,
+    pub max_fire_count: u32,
+    pub fire_count: u32,
+    pub label: Option<String>,
+    /// Convenience: true iff (now <= expires_at_ms) AND (fire_count < max_fire_count).
+    pub active: bool,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Contract {
@@ -214,6 +305,8 @@ pub struct Contract {
     pub sequence_templates: IterableMap<String, SequenceTemplate>,
     pub balance_triggers: IterableMap<String, BalanceTrigger>,
     pub automation_runs: IterableMap<String, AutomationRun>,
+    pub sequence_contexts: IterableMap<String, SequenceContext>,
+    pub session_grants: IterableMap<String, SessionGrant>,
 }
 
 #[near]
@@ -233,7 +326,54 @@ impl Contract {
             sequence_templates: IterableMap::new(StorageKey::SequenceTemplates),
             balance_triggers: IterableMap::new(StorageKey::BalanceTriggers),
             automation_runs: IterableMap::new(StorageKey::AutomationRuns),
+            sequence_contexts: IterableMap::new(StorageKey::SequenceContexts),
+            session_grants: IterableMap::new(StorageKey::SessionGrants),
         }
+    }
+
+    /// Schema-migration entry point. Called via
+    /// `near deploy ... --initFunction migrate` on redeploy over an
+    /// existing populated account.
+    ///
+    /// The happy path: read current-shape `Contract` state. If borsh
+    /// accepts it, return as-is — no schema change.
+    ///
+    /// When a future schema change lands (e.g. adding a new field to
+    /// `Contract`), this function becomes the seam where we read the
+    /// OLD shape (via a sibling `ContractVN` struct), construct the
+    /// NEW shape with defaults for added fields, and return it. The
+    /// old shape struct stays in the codebase for one release, then
+    /// gets pruned.
+    ///
+    /// See `md-CLAUDE-chapters/22-state-break-investigation.md` for the
+    /// full ritual. The short version: adding a field is a borsh break;
+    /// either deploy to a fresh account, or write a matching `ContractVN`
+    /// legacy struct + a migrator here.
+    ///
+    /// For tranche 1 (adding `pre_gate: Option<PreGate>` to `Step`), we
+    /// deploy to a fresh subaccount (`sa-pregate.x.mike.testnet`) and
+    /// this function stays a no-op. Future redeploys that want to
+    /// preserve state across this tranche MUST write a `StepV3` +
+    /// `ContractV3` sibling struct and migrate here.
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        let current: Contract =
+            env::state_read().unwrap_or_else(|| env::panic_str("no prior contract state found"));
+        env::log_str(&format!(
+            "migrate: read state for owner={}, {} registered steps, {} templates",
+            current.owner_id,
+            current.registered_steps.len(),
+            current.sequence_templates.len(),
+        ));
+        current
+    }
+
+    /// Contract version string. Returned by `contract_version` view so
+    /// operators and aggregators can probe "which kernel shape is live
+    /// here?" without parsing state.
+    pub fn contract_version(&self) -> String {
+        "v4.0.0-pregate".to_string()
     }
 
     // --- Manual yielded execution ---
@@ -284,6 +424,9 @@ impl Contract {
                 step_input.attached_deposit_yocto.0,
                 step_input.gas_tgas,
                 step_input.policy,
+                step_input.pre_gate,
+                step_input.save_result,
+                step_input.args_template,
             );
             self.register_step_in_namespace(&namespace, call).detach();
         }
@@ -306,6 +449,9 @@ impl Contract {
         gas_tgas: u64,
         step_id: String,
         policy: Option<StepPolicy>,
+        pre_gate: Option<PreGate>,
+        save_result: Option<SaveResult>,
+        args_template: Option<ArgsTemplate>,
     ) -> Promise {
         let caller = env::predecessor_account_id();
         let namespace = manual_namespace(&caller);
@@ -317,6 +463,9 @@ impl Contract {
             attached_deposit_yocto.0,
             gas_tgas,
             policy.unwrap_or_default(),
+            pre_gate,
+            save_result,
+            args_template,
         );
         self.register_step_in_namespace(&namespace, call)
     }
@@ -368,6 +517,7 @@ impl Contract {
                 let registered_at_ms = yielded.created_at_ms;
                 self.registered_steps.remove(&key);
                 self.sequence_queue.remove(&sequence_namespace);
+                self.clear_sequence_context(&sequence_namespace);
                 self.finish_automation_run(
                     &sequence_namespace,
                     AutomationRunStatus::ResumeFailed,
@@ -394,8 +544,53 @@ impl Contract {
             }
         }
 
+        // If the step declared a pre-dispatch gate, fire the gate call first
+        // and route through `on_pre_gate_checked`. The callback decides
+        // whether to dispatch the target (in-range) or halt the sequence
+        // (out-of-range / gate panicked). Args materialization (if the
+        // step has `args_template`) happens AFTER the gate passes — see
+        // `on_pre_gate_checked` — because we don't want to burn on
+        // templating for a step we're about to halt.
+        if let Some(pre_gate) = &yielded.call.pre_gate {
+            let gate_promise = Promise::new(pre_gate.gate_id.clone()).function_call(
+                pre_gate.gate_method.clone(),
+                pre_gate.gate_args.0.clone(),
+                NearToken::from_yoctonear(0),
+                Gas::from_tgas(pre_gate.gate_gas_tgas),
+            );
+            let check_args = Self::encode_pre_gate_check_args(&sequence_namespace, &step_id);
+            let check_callback = Promise::new(env::current_account_id()).function_call(
+                "on_pre_gate_checked".to_string(),
+                check_args,
+                NearToken::from_yoctonear(0),
+                Gas::from_tgas(
+                    PRE_GATE_CHECK_CALLBACK_GAS_TGAS
+                        + yielded.call.gas_tgas
+                        + STEP_RESOLVE_CALLBACK_GAS_TGAS,
+                ),
+            );
+            return PromiseOrValue::Promise(gate_promise.then(check_callback));
+        }
+
+        // If the step has an args_template, materialize now from the
+        // sequence context's saved results. Failure halts the sequence
+        // with `args_materialize_failed`.
+        let effective_call = match self.materialize_step_call(&sequence_namespace, &yielded.call) {
+            Ok(call) => call,
+            Err(err) => {
+                self.halt_sequence_on_materialize_failure(
+                    &sequence_namespace,
+                    &step_id,
+                    &key,
+                    yielded.created_at_ms,
+                    &err,
+                );
+                return PromiseOrValue::Value(());
+            }
+        };
+
         let finish_args = Self::encode_callback_args(&sequence_namespace, &step_id);
-        let downstream = Self::dispatch_promise_for_call(&sequence_namespace, &yielded.call);
+        let downstream = Self::dispatch_promise_for_call(&sequence_namespace, &effective_call);
         let finish = Promise::new(env::current_account_id()).function_call(
             "on_step_resolved",
             finish_args,
@@ -408,7 +603,7 @@ impl Contract {
     #[private]
     pub fn on_step_resolved(&mut self, sequence_namespace: String, step_id: String) {
         let key = registered_step_key(&sequence_namespace, &step_id);
-        let (dispatch_summary, call_metadata, registered_at_ms) = self
+        let (dispatch_summary, call_metadata, registered_at_ms, save_spec) = self
             .registered_steps
             .get(&key)
             .map(|yielded| {
@@ -416,15 +611,23 @@ impl Contract {
                     Self::call_dispatch_summary(&yielded.call),
                     Self::call_metadata_json(&yielded.call),
                     yielded.created_at_ms,
+                    yielded.call.save_result.clone(),
                 )
             })
-            .unwrap_or_else(|| ("unknown dispatch".to_string(), json!(null), 0u64));
+            .unwrap_or_else(|| ("unknown dispatch".to_string(), json!(null), 0u64, None));
         let result = env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES);
 
         self.registered_steps.remove(&key);
 
         match result {
             Ok(bytes) => {
+                // If this step asked us to save its promise result for
+                // downstream `args_template` substitution, do so BEFORE
+                // progressing to the next step — so step N+1's materialize
+                // at dispatch time sees the fresh saved entry.
+                if let Some(spec) = &save_spec {
+                    self.save_step_result(&sequence_namespace, &step_id, spec, &bytes);
+                }
                 self.progress_sequence_after_successful_resolution(
                     &sequence_namespace,
                     &step_id,
@@ -436,6 +639,7 @@ impl Contract {
             }
             Err(error) => {
                 self.sequence_queue.remove(&sequence_namespace);
+                self.clear_sequence_context(&sequence_namespace);
                 self.finish_automation_run(
                     &sequence_namespace,
                     AutomationRunStatus::DownstreamFailed,
@@ -460,6 +664,210 @@ impl Contract {
                 );
             }
         }
+    }
+
+    /// Private middle-callback for a step with `pre_gate` set.
+    ///
+    /// Called after the pre-dispatch gate's view-call receipt resolves.
+    /// Three branches:
+    ///
+    /// - **Gate panicked** (`PromiseError`): emit `pre_gate_checked`
+    ///   with outcome `"gate_panicked"`, halt the sequence cleanly
+    ///   (remove step + queue, finish automation run, emit
+    ///   `sequence_halted`), return `Value(())`.
+    /// - **Gate returned bytes in range**: emit `pre_gate_checked` with
+    ///   outcome `"in_range"`, dispatch the real target via
+    ///   `dispatch_promise_for_call`, chain `.then(on_step_resolved)`,
+    ///   return the promise chain.
+    /// - **Gate returned bytes out of range (or comparison error)**:
+    ///   emit `pre_gate_checked` with the specific outcome, halt
+    ///   sequence same as the panicked branch.
+    ///
+    /// The target step spec is still in `self.registered_steps` here — we
+    /// pass only `(namespace, step_id)` through the callback args and
+    /// read the full call shape (including the `PreGate` bounds) by key.
+    #[private]
+    pub fn on_pre_gate_checked(
+        &mut self,
+        sequence_namespace: String,
+        step_id: String,
+    ) -> PromiseOrValue<()> {
+        let key = registered_step_key(&sequence_namespace, &step_id);
+        let Some(yielded) = self.registered_steps.get(&key).cloned() else {
+            env::log_str(&format!(
+                "pre_gate for step '{step_id}' in {sequence_namespace} woke up but the step was no longer yielded"
+            ));
+            return PromiseOrValue::Value(());
+        };
+        let Some(pre_gate) = yielded.call.pre_gate.clone() else {
+            // Defensive: this callback should only be reached for steps
+            // with pre_gate set. If somehow called otherwise, halt.
+            env::log_str(&format!(
+                "pre_gate callback for step '{step_id}' in {sequence_namespace} but the step has no pre_gate configured"
+            ));
+            return PromiseOrValue::Value(());
+        };
+        let gate_result = env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES);
+        let call_metadata = Self::call_metadata_json_full(&yielded.call);
+        let comparison_tag = match pre_gate.comparison {
+            ComparisonKind::U128Json => "u128_json",
+            ComparisonKind::I128Json => "i128_json",
+            ComparisonKind::LexBytes => "lex_bytes",
+        };
+
+        match gate_result {
+            Err(error) => {
+                // Gate call failed outright — halt sequence.
+                Self::emit_event(
+                    "pre_gate_checked",
+                    json!({
+                        "step_id": step_id,
+                        "namespace": sequence_namespace,
+                        "outcome": "gate_panicked",
+                        "matched": false,
+                        "expected_min_bytes_len": pre_gate.min_bytes.as_ref().map(|b| b.0.len()),
+                        "expected_max_bytes_len": pre_gate.max_bytes.as_ref().map(|b| b.0.len()),
+                        "actual_bytes_len": 0usize,
+                        "comparison": comparison_tag,
+                        "error_kind": Self::resolve_error_kind(&error),
+                        "error_msg": format!("{error:?}"),
+                        "call": call_metadata,
+                    }),
+                );
+                self.halt_sequence_on_pre_gate_failure(
+                    &sequence_namespace,
+                    &step_id,
+                    &key,
+                    yielded.created_at_ms,
+                    "gate_panicked",
+                );
+                PromiseOrValue::Value(())
+            }
+            Ok(bytes) => {
+                let outcome = evaluate_pre_gate(
+                    &bytes,
+                    pre_gate.min_bytes.as_ref().map(|b| b.0.as_slice()),
+                    pre_gate.max_bytes.as_ref().map(|b| b.0.as_slice()),
+                    pre_gate.comparison,
+                );
+                let actual_return = Base64VecU8::from(bytes.clone());
+                if outcome.matched() {
+                    Self::emit_event(
+                        "pre_gate_checked",
+                        json!({
+                            "step_id": step_id,
+                            "namespace": sequence_namespace,
+                            "outcome": "in_range",
+                            "matched": true,
+                            "expected_min_bytes_len": pre_gate.min_bytes.as_ref().map(|b| b.0.len()),
+                            "expected_max_bytes_len": pre_gate.max_bytes.as_ref().map(|b| b.0.len()),
+                            "actual_bytes_len": bytes.len(),
+                            "actual_return": &actual_return,
+                            "comparison": comparison_tag,
+                            "call": call_metadata,
+                        }),
+                    );
+                    // Materialize args if the step carries an args_template.
+                    // Gate already passed; materialize-failure here still
+                    // halts the sequence with args_materialize_failed.
+                    let effective_call = match self
+                        .materialize_step_call(&sequence_namespace, &yielded.call)
+                    {
+                        Ok(call) => call,
+                        Err(err) => {
+                            self.halt_sequence_on_materialize_failure(
+                                &sequence_namespace,
+                                &step_id,
+                                &key,
+                                yielded.created_at_ms,
+                                &err,
+                            );
+                            return PromiseOrValue::Value(());
+                        }
+                    };
+                    // Dispatch the real target and chain on_step_resolved.
+                    let finish_args =
+                        Self::encode_callback_args(&sequence_namespace, &step_id);
+                    let downstream =
+                        Self::dispatch_promise_for_call(&sequence_namespace, &effective_call);
+                    let finish = Promise::new(env::current_account_id()).function_call(
+                        "on_step_resolved",
+                        finish_args,
+                        NearToken::from_yoctonear(0),
+                        Gas::from_tgas(STEP_RESOLVE_CALLBACK_GAS_TGAS),
+                    );
+                    PromiseOrValue::Promise(downstream.then(finish))
+                } else {
+                    let outcome_tag = outcome.outcome_tag();
+                    Self::emit_event(
+                        "pre_gate_checked",
+                        json!({
+                            "step_id": step_id,
+                            "namespace": sequence_namespace,
+                            "outcome": outcome_tag,
+                            "matched": false,
+                            "expected_min_bytes_len": pre_gate.min_bytes.as_ref().map(|b| b.0.len()),
+                            "expected_max_bytes_len": pre_gate.max_bytes.as_ref().map(|b| b.0.len()),
+                            "actual_bytes_len": bytes.len(),
+                            "actual_return": &actual_return,
+                            "comparison": comparison_tag,
+                            "call": call_metadata,
+                        }),
+                    );
+                    self.halt_sequence_on_pre_gate_failure(
+                        &sequence_namespace,
+                        &step_id,
+                        &key,
+                        yielded.created_at_ms,
+                        outcome_tag,
+                    );
+                    PromiseOrValue::Value(())
+                }
+            }
+        }
+    }
+
+    /// Shared halt path for pre-gate failure branches. Mirrors the shape of
+    /// `on_step_resumed`'s Err branch: remove the yielded step, remove any
+    /// remaining queue, finish the automation run, emit `sequence_halted`.
+    fn halt_sequence_on_pre_gate_failure(
+        &mut self,
+        sequence_namespace: &str,
+        step_id: &str,
+        key: &str,
+        registered_at_ms: u64,
+        reason: &'static str,
+    ) {
+        let call_metadata = self
+            .registered_steps
+            .get(key)
+            .map(|yielded| Self::call_metadata_json(&yielded.call))
+            .unwrap_or(json!(null));
+        self.registered_steps.remove(key);
+        self.sequence_queue.remove(sequence_namespace);
+        self.clear_sequence_context(sequence_namespace);
+        self.finish_automation_run(
+            sequence_namespace,
+            AutomationRunStatus::DownstreamFailed,
+            Some(step_id.to_owned()),
+        );
+        env::log_str(&format!(
+            "register_step '{step_id}' in {sequence_namespace} halted by pre-gate ({reason}); ordered release stopped here"
+        ));
+        Self::emit_event(
+            "sequence_halted",
+            json!({
+                "namespace": sequence_namespace,
+                "failed_step_id": step_id,
+                "reason": "pre_gate_failed",
+                "error_kind": format!("pre_gate_{reason}"),
+                "error_msg": format!("pre_gate halted: {reason}"),
+                "registered_at_ms": registered_at_ms,
+                "halt_latency_ms": env::block_timestamp_ms()
+                    .saturating_sub(registered_at_ms),
+                "call": call_metadata,
+            }),
+        );
     }
 
     /// Private middle-callback for `StepPolicy::Asserted`. Reads the
@@ -751,8 +1159,216 @@ impl Contract {
             .collect()
     }
 
+    // --- Session keys: smart-account-as-programmable-auth-hub ---
+
+    /// Owner-only. Mint a NEAR function-call access key on THIS
+    /// contract restricted to `execute_trigger`, and record the grant
+    /// metadata (expiry, fire-count cap, allowed trigger IDs, label)
+    /// in contract state.
+    ///
+    /// Requires `attached_deposit >= 1` — the standard NEAR idiom for
+    /// "caller's signing key is a full-access key on this account."
+    /// Function-call access keys structurally cannot attach any
+    /// deposit, so this is the runtime's answer to "was this signed
+    /// by a FAK?" (no custom crypto needed).
+    ///
+    /// Returns a `Promise` that completes when the key has been added
+    /// to the account. The grant state is recorded BEFORE the
+    /// add_access_key promise fires, so if the runtime rejects the
+    /// pubkey shape, the tx panics and state rolls back.
+    #[payable]
+    pub fn enroll_session(
+        &mut self,
+        session_public_key: String,
+        expires_at_ms: u64,
+        allowed_trigger_ids: Option<Vec<String>>,
+        max_fire_count: u32,
+        allowance_yocto: U128,
+        label: Option<String>,
+    ) -> Promise {
+        assert!(
+            env::attached_deposit().as_yoctonear() >= 1,
+            "enroll_session requires attaching at least 1 yoctoNEAR (proves full-access-key caller)"
+        );
+        self.assert_owner();
+        let now = env::block_timestamp_ms();
+        assert!(
+            expires_at_ms > now,
+            "expires_at_ms must be strictly in the future"
+        );
+        assert!(max_fire_count > 0, "max_fire_count must be greater than zero");
+        // Parse pubkey up front so invalid input panics BEFORE we record
+        // state or fire the promise.
+        let parsed_pk: PublicKey = session_public_key
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("invalid session_public_key"));
+
+        let grant = SessionGrant {
+            session_public_key: session_public_key.clone(),
+            granted_at_ms: now,
+            expires_at_ms,
+            allowed_trigger_ids: allowed_trigger_ids.clone(),
+            max_fire_count,
+            fire_count: 0,
+            label: label.clone(),
+        };
+        self.session_grants
+            .insert(session_public_key.clone(), grant);
+
+        Self::emit_event(
+            "session_enrolled",
+            json!({
+                "session_public_key": session_public_key,
+                "granted_at_ms": now,
+                "expires_at_ms": expires_at_ms,
+                "allowed_trigger_ids": allowed_trigger_ids,
+                "max_fire_count": max_fire_count,
+                "allowance_yocto": allowance_yocto.0.to_string(),
+                "label": label,
+            }),
+        );
+
+        Promise::new(env::current_account_id()).add_access_key_allowance(
+            parsed_pk,
+            near_sdk::Allowance::limited(NearToken::from_yoctonear(allowance_yocto.0))
+                .unwrap_or_else(|| env::panic_str("allowance_yocto must be > 0")),
+            env::current_account_id(),
+            "execute_trigger".to_string(),
+        )
+    }
+
+    /// Owner-only. Delete the session's access key AND grant state.
+    /// Returns a `Promise` for the `delete_key` Action.
+    pub fn revoke_session(&mut self, session_public_key: String) -> Promise {
+        self.assert_owner();
+        let existed = self.session_grants.remove(&session_public_key).is_some();
+        assert!(existed, "no session grant for that public key");
+        let parsed_pk: PublicKey = session_public_key
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("invalid session_public_key"));
+        Self::emit_event(
+            "session_revoked",
+            json!({
+                "session_public_key": session_public_key,
+                "reason": "explicit",
+            }),
+        );
+        Promise::new(env::current_account_id()).delete_key(parsed_pk)
+    }
+
+    /// Public hygiene action. Anyone can call; prunes grants whose
+    /// expires_at_ms is at or below now, OR whose fire_count has
+    /// reached max_fire_count. For each pruned grant, also deletes
+    /// the underlying access key. Returns the number of pruned grants.
+    ///
+    /// This is intentionally callable by anyone — no security
+    /// implication since it only removes grants that are already
+    /// unusable. Can be scheduled as a `BalanceTrigger` step itself.
+    pub fn revoke_expired_sessions(&mut self) -> u32 {
+        let now = env::block_timestamp_ms();
+        let expired: Vec<String> = self
+            .session_grants
+            .iter()
+            .filter(|(_, g)| g.expires_at_ms <= now || g.fire_count >= g.max_fire_count)
+            .map(|(pk, _)| pk.clone())
+            .collect();
+        let n = expired.len() as u32;
+        for pk in expired {
+            self.session_grants.remove(&pk);
+            if let Ok(parsed) = pk.parse::<PublicKey>() {
+                let _ = Promise::new(env::current_account_id()).delete_key(parsed);
+            }
+            Self::emit_event(
+                "session_revoked",
+                json!({
+                    "session_public_key": pk,
+                    "reason": "expired_or_exhausted",
+                }),
+            );
+        }
+        n
+    }
+
+    pub fn get_session(&self, session_public_key: String) -> Option<SessionGrantView> {
+        self.session_grants
+            .get(&session_public_key)
+            .map(|g| Self::session_grant_view(g, env::block_timestamp_ms()))
+    }
+
+    pub fn list_active_sessions(&self) -> Vec<SessionGrantView> {
+        let now = env::block_timestamp_ms();
+        self.session_grants
+            .iter()
+            .map(|(_, g)| Self::session_grant_view(g, now))
+            .filter(|v| v.active)
+            .collect()
+    }
+
+    pub fn list_all_sessions(&self) -> Vec<SessionGrantView> {
+        let now = env::block_timestamp_ms();
+        self.session_grants
+            .iter()
+            .map(|(_, g)| Self::session_grant_view(g, now))
+            .collect()
+    }
+
+    fn session_grant_view(grant: &SessionGrant, now: u64) -> SessionGrantView {
+        let active = grant.expires_at_ms > now && grant.fire_count < grant.max_fire_count;
+        SessionGrantView {
+            session_public_key: grant.session_public_key.clone(),
+            granted_at_ms: grant.granted_at_ms,
+            expires_at_ms: grant.expires_at_ms,
+            allowed_trigger_ids: grant.allowed_trigger_ids.clone(),
+            max_fire_count: grant.max_fire_count,
+            fire_count: grant.fire_count,
+            label: grant.label.clone(),
+            active,
+        }
+    }
+
     pub fn execute_trigger(&mut self, trigger_id: String) -> TriggerExecutionView {
-        self.assert_executor();
+        // Session-key path: if the signer_pk matches an enrolled
+        // SessionGrant, enforce expiry / fire-cap / trigger allowlist,
+        // bump fire_count, and emit `session_fired` telemetry. This
+        // bypasses assert_executor() since the session grant IS the
+        // authorization — layered on top of NEAR's native function-call
+        // access key (which the runtime has already verified got us
+        // here at all).
+        let signer_pk = env::signer_account_pk().to_string();
+        let mut session_hit = false;
+        if let Some(grant) = self.session_grants.get(&signer_pk).cloned() {
+            assert!(
+                env::block_timestamp_ms() <= grant.expires_at_ms,
+                "session expired"
+            );
+            assert!(
+                grant.fire_count < grant.max_fire_count,
+                "session fire_count cap reached"
+            );
+            if let Some(allowed) = &grant.allowed_trigger_ids {
+                assert!(
+                    allowed.contains(&trigger_id),
+                    "trigger_id not in session's allowed_trigger_ids"
+                );
+            }
+            let mut updated = grant;
+            updated.fire_count += 1;
+            Self::emit_event(
+                "session_fired",
+                json!({
+                    "session_public_key": signer_pk,
+                    "trigger_id": trigger_id,
+                    "fire_count_after": updated.fire_count,
+                    "max_fire_count": updated.max_fire_count,
+                    "label": updated.label,
+                }),
+            );
+            self.session_grants.insert(signer_pk, updated);
+            session_hit = true;
+        }
+        if !session_hit {
+            self.assert_executor();
+        }
 
         let executor_id = env::predecessor_account_id();
         let now = env::block_timestamp_ms();
@@ -895,6 +1511,9 @@ impl Contract {
         attached_deposit_yocto: u128,
         gas_tgas: u64,
         policy: StepPolicy,
+        pre_gate: Option<PreGate>,
+        save_result: Option<SaveResult>,
+        args_template: Option<ArgsTemplate>,
     ) -> Step {
         let call = Step {
             step_id,
@@ -904,6 +1523,9 @@ impl Contract {
             attached_deposit_yocto,
             gas_tgas,
             policy,
+            pre_gate,
+            save_result,
+            args_template,
         };
         Self::validate_step(&call);
         call
@@ -925,6 +1547,9 @@ impl Contract {
                     call.attached_deposit_yocto.0,
                     call.gas_tgas,
                     call.policy,
+                    call.pre_gate,
+                    call.save_result,
+                    call.args_template,
                 );
                 assert!(
                     seen.insert(validated.step_id.clone()),
@@ -971,6 +1596,24 @@ impl Contract {
             call.gas_tgas <= Self::max_target_gas_tgas(&call.policy),
             "gas_tgas is too large for this resolution policy"
         );
+        if let Some(pre_gate) = &call.pre_gate {
+            assert!(
+                !pre_gate.gate_method.is_empty(),
+                "pre_gate.gate_method cannot be empty"
+            );
+            assert!(
+                pre_gate.gate_gas_tgas > 0,
+                "pre_gate.gate_gas_tgas must be greater than zero"
+            );
+            assert!(
+                pre_gate.gate_gas_tgas <= MAX_PRE_GATE_GAS_TGAS,
+                "pre_gate.gate_gas_tgas exceeds the per-gate gas cap"
+            );
+            assert!(
+                pre_gate.min_bytes.is_some() || pre_gate.max_bytes.is_some(),
+                "pre_gate must declare at least one of min_bytes or max_bytes"
+            );
+        }
     }
 
     fn step_view_from_call(call: &Step) -> StepView {
@@ -982,6 +1625,9 @@ impl Contract {
             attached_deposit_yocto: U128(call.attached_deposit_yocto),
             gas_tgas: call.gas_tgas,
             policy: call.policy.clone(),
+            pre_gate: call.pre_gate.clone(),
+            save_result: call.save_result.clone(),
+            args_template: call.args_template.clone(),
         }
     }
 
@@ -994,6 +1640,9 @@ impl Contract {
             attached_deposit_yocto: U128(yielded.call.attached_deposit_yocto),
             gas_tgas: yielded.call.gas_tgas,
             policy: yielded.call.policy.clone(),
+            pre_gate: yielded.call.pre_gate.clone(),
+            save_result: yielded.call.save_result.clone(),
+            args_template: yielded.call.args_template.clone(),
             created_at_ms: yielded.created_at_ms,
         }
     }
@@ -1371,6 +2020,139 @@ impl Contract {
         .unwrap_or_else(|_| env::panic_str("failed to encode asserted evaluate args"))
     }
 
+    fn encode_pre_gate_check_args(sequence_namespace: &str, step_id: &str) -> Vec<u8> {
+        serde_json::to_vec(&json!({
+            "sequence_namespace": sequence_namespace,
+            "step_id": step_id,
+        }))
+        .unwrap_or_else(|_| env::panic_str("failed to encode pre_gate check args"))
+    }
+
+    // ---------------------------------------------------------------
+    // Sequence context — per-run saved results for value threading
+    // ---------------------------------------------------------------
+
+    /// Record a step's promise-result bytes into `sequence_contexts[namespace]`
+    /// under `spec.as_name`, and emit a `result_saved` NEP-297 event.
+    /// Called from `on_step_resolved` Ok path when the step carries a
+    /// `save_result`.
+    fn save_step_result(
+        &mut self,
+        sequence_namespace: &str,
+        step_id: &str,
+        spec: &SaveResult,
+        bytes: &[u8],
+    ) {
+        let mut ctx = self
+            .sequence_contexts
+            .get(sequence_namespace)
+            .cloned()
+            .unwrap_or_default();
+        ctx.saved_results
+            .insert(spec.as_name.clone(), bytes.to_vec());
+        self.sequence_contexts
+            .insert(sequence_namespace.to_owned(), ctx);
+        env::log_str(&format!(
+            "register_step '{step_id}' in {sequence_namespace} saved {} bytes of promise result as '{}'",
+            bytes.len(),
+            spec.as_name,
+        ));
+        let kind_tag = match spec.kind {
+            ComparisonKind::U128Json => "u128_json",
+            ComparisonKind::I128Json => "i128_json",
+            ComparisonKind::LexBytes => "lex_bytes",
+        };
+        Self::emit_event(
+            "result_saved",
+            json!({
+                "step_id": step_id,
+                "namespace": sequence_namespace,
+                "as_name": spec.as_name,
+                "kind": kind_tag,
+                "bytes_len": bytes.len(),
+            }),
+        );
+    }
+
+    /// Remove any per-sequence saved results. Called on sequence
+    /// completion and every halt path so stale bytes don't linger
+    /// across runs under the same namespace (especially relevant for
+    /// `manual:<caller>` namespaces that can be re-used).
+    fn clear_sequence_context(&mut self, sequence_namespace: &str) {
+        self.sequence_contexts.remove(sequence_namespace);
+    }
+
+    /// Materialize a step's args from its `ArgsTemplate` against the
+    /// sequence's current saved-results map. Returns an owned `Step`
+    /// with the produced bytes in its `args` field. If the step has
+    /// no `args_template`, returns a clone of the input unchanged.
+    fn materialize_step_call(
+        &self,
+        sequence_namespace: &str,
+        call: &Step,
+    ) -> Result<Step, MaterializeError> {
+        let Some(template) = &call.args_template else {
+            return Ok(call.clone());
+        };
+        let saved_results = self
+            .sequence_contexts
+            .get(sequence_namespace)
+            .map(|ctx| ctx.saved_results.clone())
+            .unwrap_or_default();
+        let materialized = materialize_args(
+            template.template.0.as_slice(),
+            &template.substitutions,
+            &saved_results,
+        )?;
+        let mut out = call.clone();
+        out.args = materialized;
+        Ok(out)
+    }
+
+    /// Shared halt path for args-materialize failure. Mirrors
+    /// `halt_sequence_on_pre_gate_failure` shape but tags the reason
+    /// as `args_materialize_failed` so aggregators can tell the
+    /// two halt kinds apart.
+    fn halt_sequence_on_materialize_failure(
+        &mut self,
+        sequence_namespace: &str,
+        step_id: &str,
+        key: &str,
+        registered_at_ms: u64,
+        err: &MaterializeError,
+    ) {
+        let call_metadata = self
+            .registered_steps
+            .get(key)
+            .map(|yielded| Self::call_metadata_json(&yielded.call))
+            .unwrap_or(json!(null));
+        self.registered_steps.remove(key);
+        self.sequence_queue.remove(sequence_namespace);
+        self.clear_sequence_context(sequence_namespace);
+        self.finish_automation_run(
+            sequence_namespace,
+            AutomationRunStatus::DownstreamFailed,
+            Some(step_id.to_owned()),
+        );
+        env::log_str(&format!(
+            "register_step '{step_id}' in {sequence_namespace} halted: args materialize failed: {err}"
+        ));
+        Self::emit_event(
+            "sequence_halted",
+            json!({
+                "namespace": sequence_namespace,
+                "failed_step_id": step_id,
+                "reason": "args_materialize_failed",
+                "error_kind": format!("args_materialize_{}", err.kind_tag()),
+                "error_msg": err.to_string(),
+                "registered_at_ms": registered_at_ms,
+                "halt_latency_ms": env::block_timestamp_ms()
+                    .saturating_sub(registered_at_ms),
+                "call": call_metadata,
+            }),
+        );
+    }
+
     fn resume_registered_step(&self, sequence_namespace: &str, step_id: &str) -> Result<(), String> {
         let key = registered_step_key(sequence_namespace, step_id);
         let yielded = self
@@ -1529,6 +2311,7 @@ impl Contract {
             );
             if let Err(message) = self.resume_registered_step(sequence_namespace, &next) {
                 self.sequence_queue.remove(sequence_namespace);
+                self.clear_sequence_context(sequence_namespace);
                 self.finish_automation_run(
                     sequence_namespace,
                     AutomationRunStatus::ResumeFailed,
@@ -1574,6 +2357,7 @@ impl Contract {
                 }),
             );
             self.finish_automation_run(sequence_namespace, AutomationRunStatus::Succeeded, None);
+            self.clear_sequence_context(sequence_namespace);
         }
     }
 
@@ -1776,6 +2560,9 @@ mod tests {
             attached_deposit_yocto: U128(0),
             gas_tgas: 40,
             policy,
+            pre_gate: None,
+            save_result: None,
+            args_template: None,
         }
     }
 
@@ -1788,6 +2575,9 @@ mod tests {
             attached_deposit_yocto: U128(0),
             gas_tgas: 40,
             policy: adapter_policy(),
+            pre_gate: None,
+            save_result: None,
+            args_template: None,
         }
     }
 
@@ -1817,6 +2607,9 @@ mod tests {
             attached_deposit_yocto: U128(0),
             gas_tgas: 40,
             policy: asserted_policy(expected_return),
+            pre_gate: None,
+            save_result: None,
+            args_template: None,
         }
     }
 
@@ -1874,6 +2667,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
 
         assert!(c.has_registered_step(owner(), "alpha".into()));
@@ -1896,6 +2692,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
         let _ = c.register_step(
             echo(),
@@ -1904,6 +2703,9 @@ mod tests {
             U128(0),
             30,
             "beta".into(),
+            None,
+            None,
+            None,
             None,
         );
 
@@ -1930,6 +2732,9 @@ mod tests {
             MAX_STEP_GAS_TGAS,
             "max".into(),
             None,
+            None,
+            None,
+            None,
         );
 
         let yielded = c.registered_steps_for(owner());
@@ -1950,6 +2755,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
         let _ = c.register_step(
             echo(),
@@ -1958,6 +2766,9 @@ mod tests {
             U128(0),
             30,
             "alpha".into(),
+            None,
+            None,
+            None,
             None,
         );
     }
@@ -1974,6 +2785,9 @@ mod tests {
             U128(0),
             MAX_STEP_GAS_TGAS + 1,
             "alpha".into(),
+            None,
+            None,
+            None,
             None,
         );
     }
@@ -2070,6 +2884,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
         let _ = c.register_step(
             echo(),
@@ -2078,6 +2895,9 @@ mod tests {
             U128(0),
             30,
             "beta".into(),
+            None,
+            None,
+            None,
             None,
         );
         c.sequence_queue
@@ -2103,6 +2923,9 @@ mod tests {
             40,
             "alpha".into(),
             Some(adapter_policy()),
+            None,
+            None,
+            None,
         );
 
         ctx(current());
@@ -2171,6 +2994,9 @@ mod tests {
                 30,
                 step_id.into(),
                 None,
+                None,
+            None,
+            None,
             );
         }
 
@@ -2199,6 +3025,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
         let _ = c.register_step(
             echo(),
@@ -2207,6 +3036,9 @@ mod tests {
             U128(0),
             30,
             "beta".into(),
+            None,
+            None,
+            None,
             None,
         );
 
@@ -2238,6 +3070,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
         let _ = c.register_step(
             echo(),
@@ -2246,6 +3081,9 @@ mod tests {
             U128(0),
             30,
             "beta".into(),
+            None,
+            None,
+            None,
             None,
         );
 
@@ -2642,6 +3480,9 @@ mod tests {
             40,
             "alpha".into(),
             Some(asserted_policy(b"1".to_vec())),
+            None,
+            None,
+            None,
         );
 
         ctx(current());
@@ -2764,6 +3605,9 @@ mod tests {
                 expected_return: Base64VecU8::from(b"1".to_vec()),
                 assertion_gas_tgas: 30,
             }),
+            None,
+            None,
+            None,
         );
     }
 
@@ -2786,6 +3630,9 @@ mod tests {
                 expected_return: Base64VecU8::from(b"1".to_vec()),
                 assertion_gas_tgas: 0,
             }),
+            None,
+            None,
+            None,
         );
     }
 
@@ -3049,6 +3896,9 @@ mod tests {
             30,
             "alpha".into(),
             None,
+            None,
+            None,
+            None,
         );
 
         let event = find_structured_event(&near_sdk::test_utils::get_logs(), "step_registered")
@@ -3106,6 +3956,9 @@ mod tests {
             U128(0),
             30,
             "alpha".into(),
+            None,
+            None,
+            None,
             None,
         );
 
@@ -3178,6 +4031,9 @@ mod tests {
             40,
             "alpha".into(),
             Some(asserted_policy(big_expected.clone())),
+            None,
+            None,
+            None,
         );
 
         let birth = find_structured_event(
@@ -3244,5 +4100,846 @@ mod tests {
             }
         }
         None
+    }
+
+    // ---------------------------------------------------------------
+    // PreGate — pre-dispatch gate cascade tests
+    // ---------------------------------------------------------------
+
+    fn pre_gate_balance_above(expected_min: &str) -> PreGate {
+        PreGate {
+            gate_id: pathological_router(),
+            gate_method: "get_calls_completed".into(),
+            gate_args: Base64VecU8::from(br#"{}"#.to_vec()),
+            min_bytes: Some(Base64VecU8::from(
+                format!("\"{expected_min}\"").into_bytes(),
+            )),
+            max_bytes: None,
+            comparison: ComparisonKind::U128Json,
+            gate_gas_tgas: 30,
+        }
+    }
+
+    fn yield_input_with_pre_gate(step_id: &str, n: u32, pre_gate: PreGate) -> StepInput {
+        StepInput {
+            step_id: step_id.into(),
+            target_id: router(),
+            method_name: "route_echo".into(),
+            args: Base64VecU8::from(format!(r#"{{"callee":"{}","n":{}}}"#, echo(), n).into_bytes()),
+            attached_deposit_yocto: U128(0),
+            gas_tgas: 40,
+            policy: StepPolicy::Direct,
+            pre_gate: Some(pre_gate),
+            save_result: None,
+            args_template: None,
+        }
+    }
+
+    #[test]
+    fn register_step_accepts_pre_gate_and_surfaces_in_view() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let gate = pre_gate_balance_above("5");
+        let _ = c.register_step(
+            echo(),
+            "echo".into(),
+            Base64VecU8::from(br#"{"n":7}"#.to_vec()),
+            U128(0),
+            30,
+            "alpha".into(),
+            None,
+            Some(gate.clone()),
+            None,
+            None,
+        );
+        let yielded = c.registered_steps_for(owner());
+        assert_eq!(yielded.len(), 1);
+        let got = yielded[0].pre_gate.as_ref().expect("pre_gate surfaced");
+        assert_eq!(got.gate_method, gate.gate_method);
+        assert_eq!(got.gate_gas_tgas, gate.gate_gas_tgas);
+    }
+
+    #[test]
+    #[should_panic(expected = "pre_gate.gate_method cannot be empty")]
+    fn pre_gate_rejects_empty_gate_method() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let mut gate = pre_gate_balance_above("5");
+        gate.gate_method = "".into();
+        let _ = c.register_step(
+            echo(),
+            "echo".into(),
+            Base64VecU8::from(br#"{"n":7}"#.to_vec()),
+            U128(0),
+            30,
+            "alpha".into(),
+            None,
+            Some(gate),
+            None,
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "pre_gate.gate_gas_tgas must be greater than zero")]
+    fn pre_gate_rejects_zero_gate_gas() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let mut gate = pre_gate_balance_above("5");
+        gate.gate_gas_tgas = 0;
+        let _ = c.register_step(
+            echo(),
+            "echo".into(),
+            Base64VecU8::from(br#"{"n":7}"#.to_vec()),
+            U128(0),
+            30,
+            "alpha".into(),
+            None,
+            Some(gate),
+            None,
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "pre_gate.gate_gas_tgas exceeds the per-gate gas cap")]
+    fn pre_gate_rejects_over_max_gate_gas() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let mut gate = pre_gate_balance_above("5");
+        gate.gate_gas_tgas = MAX_PRE_GATE_GAS_TGAS + 1;
+        let _ = c.register_step(
+            echo(),
+            "echo".into(),
+            Base64VecU8::from(br#"{"n":7}"#.to_vec()),
+            U128(0),
+            30,
+            "alpha".into(),
+            None,
+            Some(gate),
+            None,
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "pre_gate must declare at least one of min_bytes or max_bytes")]
+    fn pre_gate_rejects_fully_unbounded() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let mut gate = pre_gate_balance_above("5");
+        gate.min_bytes = None;
+        gate.max_bytes = None;
+        let _ = c.register_step(
+            echo(),
+            "echo".into(),
+            Base64VecU8::from(br#"{"n":7}"#.to_vec()),
+            U128(0),
+            30,
+            "alpha".into(),
+            None,
+            Some(gate),
+            None,
+            None,
+        );
+    }
+
+    #[test]
+    fn on_pre_gate_checked_in_range_dispatches_target() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input_with_pre_gate(
+            "alpha",
+            1,
+            pre_gate_balance_above("5"),
+        )]);
+
+        // Gate returned a u128 JSON "10", which is ≥ min "5".
+        callback_ctx(PromiseResult::Successful(b"\"10\"".to_vec()));
+        let _ = c.on_pre_gate_checked(manual_namespace(&owner()), "alpha".into());
+
+        // `pre_gate_checked` emitted with outcome "in_range".
+        let event = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "pre_gate_checked",
+        )
+        .expect("pre_gate_checked event not emitted");
+        assert_eq!(event["data"]["outcome"], "in_range");
+        assert_eq!(event["data"]["matched"], true);
+        assert_eq!(event["data"]["comparison"], "u128_json");
+
+        // Target receipt was queued for dispatch (not halted).
+        assert!(c.has_registered_step(owner(), "alpha".into()));
+        let receipts = get_created_receipts();
+        // Expect a route_echo dispatch + on_step_resolved callback chain.
+        assert!(
+            find_function_call(&receipts, &router()).is_some(),
+            "target router receipt must be queued on in_range"
+        );
+    }
+
+    #[test]
+    fn on_pre_gate_checked_below_min_halts_sequence() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input_with_pre_gate(
+            "alpha",
+            1,
+            pre_gate_balance_above("5"),
+        )]);
+
+        // Gate returned "3", below the min "5".
+        callback_ctx(PromiseResult::Successful(b"\"3\"".to_vec()));
+        let _ = c.on_pre_gate_checked(manual_namespace(&owner()), "alpha".into());
+
+        let checked = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "pre_gate_checked",
+        )
+        .expect("pre_gate_checked event not emitted");
+        assert_eq!(checked["data"]["outcome"], "below_min");
+        assert_eq!(checked["data"]["matched"], false);
+
+        let halted = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "sequence_halted",
+        )
+        .expect("sequence_halted event not emitted");
+        assert_eq!(halted["data"]["reason"], "pre_gate_failed");
+        assert_eq!(halted["data"]["error_kind"], "pre_gate_below_min");
+        assert_eq!(halted["data"]["failed_step_id"], "alpha");
+
+        // Step + queue cleaned up on halt.
+        assert!(!c.has_registered_step(owner(), "alpha".into()));
+        assert!(c.sequence_queue.get(&manual_namespace(&owner())).is_none());
+    }
+
+    #[test]
+    fn on_pre_gate_checked_above_max_halts_sequence() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let mut gate = pre_gate_balance_above("0");
+        gate.min_bytes = None;
+        gate.max_bytes = Some(Base64VecU8::from(b"\"100\"".to_vec()));
+        c.execute_steps(vec![yield_input_with_pre_gate("alpha", 1, gate)]);
+
+        // Gate returned "500", above the max "100".
+        callback_ctx(PromiseResult::Successful(b"\"500\"".to_vec()));
+        let _ = c.on_pre_gate_checked(manual_namespace(&owner()), "alpha".into());
+
+        let checked = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "pre_gate_checked",
+        )
+        .expect("pre_gate_checked event not emitted");
+        assert_eq!(checked["data"]["outcome"], "above_max");
+
+        let halted = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "sequence_halted",
+        )
+        .expect("sequence_halted event not emitted");
+        assert_eq!(halted["data"]["error_kind"], "pre_gate_above_max");
+    }
+
+    #[test]
+    fn on_pre_gate_checked_gate_panic_halts_sequence() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input_with_pre_gate(
+            "alpha",
+            1,
+            pre_gate_balance_above("5"),
+        )]);
+
+        // Simulate the gate view panicking (PromiseError::Failed).
+        callback_ctx(PromiseResult::Failed);
+        let _ = c.on_pre_gate_checked(manual_namespace(&owner()), "alpha".into());
+
+        let checked = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "pre_gate_checked",
+        )
+        .expect("pre_gate_checked event not emitted");
+        assert_eq!(checked["data"]["outcome"], "gate_panicked");
+        assert!(checked["data"]["error_kind"].is_string());
+
+        let halted = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "sequence_halted",
+        )
+        .expect("sequence_halted event not emitted");
+        assert_eq!(halted["data"]["error_kind"], "pre_gate_gate_panicked");
+        assert!(!c.has_registered_step(owner(), "alpha".into()));
+    }
+
+    #[test]
+    fn on_pre_gate_checked_comparison_error_halts_sequence() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input_with_pre_gate(
+            "alpha",
+            1,
+            pre_gate_balance_above("5"),
+        )]);
+
+        // Gate returned garbage that won't parse as u128.
+        callback_ctx(PromiseResult::Successful(b"not a number".to_vec()));
+        let _ = c.on_pre_gate_checked(manual_namespace(&owner()), "alpha".into());
+
+        let checked = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "pre_gate_checked",
+        )
+        .expect("pre_gate_checked event not emitted");
+        assert_eq!(checked["data"]["outcome"], "comparison_error");
+        assert_eq!(checked["data"]["matched"], false);
+
+        assert!(!c.has_registered_step(owner(), "alpha".into()));
+    }
+
+    // ---------------------------------------------------------------
+    // Value threading — save_result + args_template tests
+    // ---------------------------------------------------------------
+
+    use smart_account_types::{ArgsTemplate, SaveResult, Substitution, SubstitutionOp};
+
+    fn yield_input_with_save(step_id: &str, n: u32, as_name: &str) -> StepInput {
+        StepInput {
+            step_id: step_id.into(),
+            target_id: router(),
+            method_name: "route_echo".into(),
+            args: Base64VecU8::from(format!(r#"{{"callee":"{}","n":{}}}"#, echo(), n).into_bytes()),
+            attached_deposit_yocto: U128(0),
+            gas_tgas: 40,
+            policy: StepPolicy::Direct,
+            pre_gate: None,
+            save_result: Some(SaveResult {
+                as_name: as_name.into(),
+                kind: ComparisonKind::U128Json,
+            }),
+            args_template: None,
+        }
+    }
+
+    fn yield_input_with_template(step_id: &str, reference: &str) -> StepInput {
+        // Template that references a prior saved result to compute args.
+        let template = br#"{"callee":"echo.near","amount":"${balance}"}"#.to_vec();
+        StepInput {
+            step_id: step_id.into(),
+            target_id: router(),
+            method_name: "route_echo".into(),
+            args: Base64VecU8::from(br#"{"callee":"unused","n":0}"#.to_vec()),
+            attached_deposit_yocto: U128(0),
+            gas_tgas: 40,
+            policy: StepPolicy::Direct,
+            pre_gate: None,
+            save_result: None,
+            args_template: Some(ArgsTemplate {
+                template: Base64VecU8::from(template),
+                substitutions: vec![Substitution {
+                    reference: reference.into(),
+                    op: SubstitutionOp::Raw,
+                }],
+            }),
+        }
+    }
+
+    #[test]
+    fn save_step_result_populates_sequence_context() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let spec = SaveResult {
+            as_name: "balance".into(),
+            kind: ComparisonKind::U128Json,
+        };
+        c.save_step_result("manual:owner", "alpha", &spec, b"\"1000\"");
+        let ctx = c
+            .sequence_contexts
+            .get("manual:owner")
+            .expect("context populated");
+        assert_eq!(
+            ctx.saved_results.get("balance").map(|v| v.as_slice()),
+            Some(b"\"1000\"".as_slice())
+        );
+
+        let saved_event =
+            find_structured_event(&near_sdk::test_utils::get_logs(), "result_saved")
+                .expect("result_saved event");
+        assert_eq!(saved_event["data"]["as_name"], "balance");
+        assert_eq!(saved_event["data"]["kind"], "u128_json");
+        assert_eq!(saved_event["data"]["bytes_len"], 6);
+    }
+
+    #[test]
+    fn clear_sequence_context_removes_namespace_entry() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let spec = SaveResult {
+            as_name: "balance".into(),
+            kind: ComparisonKind::U128Json,
+        };
+        c.save_step_result("manual:owner", "alpha", &spec, b"\"1000\"");
+        assert!(c.sequence_contexts.get("manual:owner").is_some());
+        c.clear_sequence_context("manual:owner");
+        assert!(c.sequence_contexts.get("manual:owner").is_none());
+    }
+
+    #[test]
+    fn materialize_step_call_returns_unchanged_when_no_template() {
+        ctx(owner());
+        let c = Contract::new_with_owner(owner());
+        let input = yield_input("alpha", 1);
+        let call = Self_step_from_input(input);
+        let materialized = c
+            .materialize_step_call("manual:owner", &call)
+            .expect("materialize ok");
+        assert_eq!(materialized.args, call.args);
+    }
+
+    #[test]
+    fn materialize_step_call_substitutes_saved_result() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let spec = SaveResult {
+            as_name: "balance".into(),
+            kind: ComparisonKind::U128Json,
+        };
+        c.save_step_result("manual:owner", "alpha", &spec, b"\"500\"");
+        let input = yield_input_with_template("beta", "balance");
+        let call = Self_step_from_input(input);
+        let materialized = c
+            .materialize_step_call("manual:owner", &call)
+            .expect("materialize ok");
+        assert_eq!(
+            std::str::from_utf8(&materialized.args).unwrap(),
+            r#"{"callee":"echo.near","amount":"500"}"#
+        );
+    }
+
+    #[test]
+    fn materialize_step_call_fails_when_reference_missing() {
+        ctx(owner());
+        let c = Contract::new_with_owner(owner());
+        let input = yield_input_with_template("beta", "balance");
+        let call = Self_step_from_input(input);
+        let err = c
+            .materialize_step_call("manual:owner", &call)
+            .expect_err("missing balance");
+        assert!(matches!(err, MaterializeError::MissingSavedResult(_)));
+    }
+
+    #[test]
+    fn on_step_resolved_with_save_result_emits_event_and_clears_on_completion() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input_with_save("alpha", 1, "balance")]);
+
+        callback_ctx(PromiseResult::Successful(br#""1234""#.to_vec()));
+        c.on_step_resolved(manual_namespace(&owner()), "alpha".into());
+
+        // `result_saved` event fires before sequence_completed.
+        let saved_event =
+            find_structured_event(&near_sdk::test_utils::get_logs(), "result_saved")
+                .expect("result_saved event");
+        assert_eq!(saved_event["data"]["as_name"], "balance");
+        assert_eq!(saved_event["data"]["bytes_len"], 6);
+        assert_eq!(saved_event["data"]["kind"], "u128_json");
+
+        // Single-step sequence completed, so the context has been cleared
+        // by `clear_sequence_context` at completion. This is the correct
+        // lifecycle — saved results don't outlive their sequence.
+        assert!(
+            c.sequence_contexts
+                .get(&manual_namespace(&owner()))
+                .is_none(),
+            "sequence context must be cleared at completion"
+        );
+    }
+
+    #[test]
+    fn save_and_materialize_round_trip_across_helpers() {
+        // Simulates what the kernel does between step N's on_step_resolved
+        // and step N+1's on_step_resumed: save_step_result + materialize.
+        // This runs outside of execute_steps so yield-resume mocking
+        // doesn't interfere.
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.save_step_result(
+            &manual_namespace(&owner()),
+            "alpha",
+            &SaveResult {
+                as_name: "balance".into(),
+                kind: ComparisonKind::U128Json,
+            },
+            b"\"42\"",
+        );
+        let beta_input = yield_input_with_template("beta", "balance");
+        let beta_call = Self_step_from_input(beta_input);
+        let materialized = c
+            .materialize_step_call(&manual_namespace(&owner()), &beta_call)
+            .expect("materialize ok");
+        let args_str = std::str::from_utf8(&materialized.args).unwrap();
+        assert_eq!(
+            args_str,
+            r#"{"callee":"echo.near","amount":"42"}"#,
+            "beta's args should carry balance=42 spliced in"
+        );
+    }
+
+    #[test]
+    fn on_step_resumed_materializes_args_from_saved_results() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        // Seed a saved result directly to simulate a prior step's capture.
+        c.save_step_result(
+            &manual_namespace(&owner()),
+            "seeded",
+            &SaveResult {
+                as_name: "balance".into(),
+                kind: ComparisonKind::U128Json,
+            },
+            b"\"777\"",
+        );
+        c.execute_steps(vec![yield_input_with_template("alpha", "balance")]);
+
+        callback_ctx(PromiseResult::Successful(vec![]));
+        let _ = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
+
+        let receipts = get_created_receipts();
+        let (method, args, _, _) =
+            find_function_call(&receipts, &router()).expect("router receipt queued");
+        assert_eq!(method, "route_echo");
+        let args_str = std::str::from_utf8(&args).unwrap();
+        assert!(
+            args_str.contains(r#""amount":"777""#),
+            "args should carry materialized balance; got {args_str}"
+        );
+    }
+
+    #[test]
+    fn on_step_resumed_halts_on_materialize_failure_with_missing_saved_result() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        // No prior save_step_result — the template reference will miss.
+        c.execute_steps(vec![yield_input_with_template("alpha", "balance")]);
+
+        callback_ctx(PromiseResult::Successful(vec![]));
+        let _ = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
+
+        let halted = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "sequence_halted",
+        )
+        .expect("sequence_halted event");
+        assert_eq!(halted["data"]["reason"], "args_materialize_failed");
+        assert_eq!(
+            halted["data"]["error_kind"],
+            "args_materialize_missing_saved_result"
+        );
+
+        // Step + queue cleaned up.
+        assert!(!c.has_registered_step(owner(), "alpha".into()));
+    }
+
+    // ---------------------------------------------------------------
+    // Session keys — smart-account-as-programmable-auth-hub tests
+    // ---------------------------------------------------------------
+
+    fn session_pk() -> String {
+        "ed25519:6E8sCci9badyRkXb3JoRpBj5p8C6Tw41ELDZoiihKEtp".into()
+    }
+
+    fn session_pk_alt() -> String {
+        "ed25519:FZfMEN5j5UU1BMtZXgkR6kNRGvdJFuBpvVLZxwSyzR7D".into()
+    }
+
+    fn enroll_ctx(predecessor: AccountId, attached: u128) {
+        let mut b = VMContextBuilder::new();
+        b.current_account_id(current())
+            .signer_account_id(predecessor.clone())
+            .predecessor_account_id(predecessor)
+            .attached_deposit(NearToken::from_yoctonear(attached))
+            .account_balance(NearToken::from_near(100));
+        testing_env!(b.build());
+    }
+
+    fn session_call_ctx(session_public_key: &str) {
+        // Simulate a session-key call: signer_pk is the session pk
+        // (NEAR runtime sets signer_account_pk when a tx is submitted
+        // with a function-call access key).
+        let mut b = VMContextBuilder::new();
+        b.current_account_id(current())
+            .signer_account_id(current())  // self-call via FCAK on self
+            .predecessor_account_id(current())
+            .signer_account_pk(session_public_key.parse().unwrap())
+            .account_balance(NearToken::from_near(100));
+        testing_env!(b.build());
+    }
+
+    #[test]
+    fn enroll_session_succeeds_for_owner_with_1_yocto() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            Some(vec!["ladder-swap".into()]),
+            10,
+            U128(250_000_000_000_000_000_000_000), // 0.25 NEAR allowance
+            Some("dapp-agent-v1".into()),
+        );
+        let grant = c.get_session(session_pk()).expect("grant recorded");
+        assert_eq!(grant.max_fire_count, 10);
+        assert_eq!(grant.fire_count, 0);
+        assert_eq!(grant.label.as_deref(), Some("dapp-agent-v1"));
+        assert!(grant.active);
+
+        let enrolled = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "session_enrolled",
+        )
+        .expect("session_enrolled event");
+        assert_eq!(enrolled["data"]["session_public_key"], session_pk());
+        assert_eq!(enrolled["data"]["max_fire_count"], 10);
+    }
+
+    #[test]
+    #[should_panic(expected = "enroll_session requires attaching at least 1 yoctoNEAR")]
+    fn enroll_session_rejects_zero_deposit() {
+        enroll_ctx(owner(), 0);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            None,
+            10,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "owner-only")]
+    fn enroll_session_rejects_non_owner() {
+        enroll_ctx(other_account(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            None,
+            10,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "expires_at_ms must be strictly in the future")]
+    fn enroll_session_rejects_past_expiry() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        // env::block_timestamp_ms() is 0 in test VM; 0 itself is past/now.
+        let _ = c.enroll_session(session_pk(), 0, None, 10, U128(1), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "max_fire_count must be greater than zero")]
+    fn enroll_session_rejects_zero_max_fire_count() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            None,
+            0,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    fn execute_trigger_via_session_key_enforces_grant_and_increments_count() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("t".into(), vec![yield_input("alpha", 1)]);
+        c.create_balance_trigger("trig".into(), "t".into(), U128(0), 5);
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            Some(vec!["trig".into()]),
+            3,
+            U128(1),
+            None,
+        );
+
+        session_call_ctx(&session_pk());
+        let _ = c.execute_trigger("trig".into());
+
+        let grant = c.get_session(session_pk()).unwrap();
+        assert_eq!(grant.fire_count, 1);
+
+        let fired = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "session_fired",
+        )
+        .expect("session_fired event");
+        assert_eq!(fired["data"]["fire_count_after"], 1);
+        assert_eq!(fired["data"]["max_fire_count"], 3);
+        assert_eq!(fired["data"]["trigger_id"], "trig");
+    }
+
+    #[test]
+    #[should_panic(expected = "trigger_id not in session's allowed_trigger_ids")]
+    fn execute_trigger_via_session_key_rejects_unlisted_trigger() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("t".into(), vec![yield_input("alpha", 1)]);
+        c.create_balance_trigger("trig".into(), "t".into(), U128(0), 5);
+        c.create_balance_trigger("other".into(), "t".into(), U128(0), 5);
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            Some(vec!["trig".into()]),
+            3,
+            U128(1),
+            None,
+        );
+
+        session_call_ctx(&session_pk());
+        // "other" isn't in the allowlist.
+        let _ = c.execute_trigger("other".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "session fire_count cap reached")]
+    fn execute_trigger_via_session_key_rejects_after_cap() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        c.save_sequence_template("t".into(), vec![yield_input("alpha", 1)]);
+        c.create_balance_trigger("trig".into(), "t".into(), U128(0), 10);
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            None,
+            1,
+            U128(1),
+            None,
+        );
+
+        session_call_ctx(&session_pk());
+        let _ = c.execute_trigger("trig".into());
+        // Second fire must panic with cap reached.
+        session_call_ctx(&session_pk());
+        let _ = c.execute_trigger("trig".into());
+    }
+
+    #[test]
+    fn revoke_session_removes_grant_and_returns_delete_key_promise() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(session_pk(), now + 3_600_000, None, 3, U128(1), None);
+        assert!(c.get_session(session_pk()).is_some());
+
+        ctx(owner());
+        let _ = c.revoke_session(session_pk());
+        assert!(c.get_session(session_pk()).is_none());
+
+        let revoked = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "session_revoked",
+        )
+        .expect("session_revoked event");
+        assert_eq!(revoked["data"]["reason"], "explicit");
+    }
+
+    #[test]
+    #[should_panic(expected = "no session grant for that public key")]
+    fn revoke_session_rejects_unknown_pk() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let _ = c.revoke_session(session_pk());
+    }
+
+    #[test]
+    fn list_active_sessions_filters_out_expired_and_exhausted() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(session_pk(), now + 3_600_000, None, 3, U128(1), None);
+        let _ = c.enroll_session(session_pk_alt(), now + 3_600_000, None, 1, U128(1), None);
+
+        // Consume the second session's single fire so it's exhausted.
+        c.save_sequence_template("t".into(), vec![yield_input("alpha", 1)]);
+        c.create_balance_trigger("trig".into(), "t".into(), U128(0), 5);
+        session_call_ctx(&session_pk_alt());
+        let _ = c.execute_trigger("trig".into());
+
+        let active = c.list_active_sessions();
+        let pks: Vec<&str> = active
+            .iter()
+            .map(|v| v.session_public_key.as_str())
+            .collect();
+        assert!(pks.contains(&session_pk().as_str()));
+        assert!(!pks.contains(&session_pk_alt().as_str()));
+    }
+
+    fn other_account() -> AccountId {
+        "other.near".parse().unwrap()
+    }
+
+    // Test helper: build a Step from a StepInput (lib.rs internal).
+    #[allow(non_snake_case)]
+    fn Self_step_from_input(input: StepInput) -> Step {
+        Contract::step_from_raw(
+            input.step_id,
+            input.target_id,
+            input.method_name,
+            input.args.0,
+            input.attached_deposit_yocto.0,
+            input.gas_tgas,
+            input.policy,
+            input.pre_gate,
+            input.save_result,
+            input.args_template,
+        )
+    }
+
+    #[test]
+    fn on_step_resumed_with_pre_gate_routes_through_gate_first() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input_with_pre_gate(
+            "alpha",
+            1,
+            pre_gate_balance_above("5"),
+        )]);
+
+        // Simulate the yielded callback firing — emulates a normal resume.
+        callback_ctx(PromiseResult::Successful(vec![]));
+        let _ = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
+
+        // Created receipts should be: gate view call + on_pre_gate_checked callback.
+        let receipts = get_created_receipts();
+        assert!(
+            find_function_call(&receipts, &pathological_router()).is_some(),
+            "gate receipt must be queued when pre_gate is present"
+        );
+        let (check_method, check_args, _, _) =
+            find_function_call(&receipts, &current()).expect("pre_gate check callback receipt");
+        assert_eq!(check_method, "on_pre_gate_checked");
+        let parsed: serde_json::Value = serde_json::from_slice(&check_args).unwrap();
+        assert_eq!(parsed["step_id"], "alpha");
+        assert_eq!(parsed["sequence_namespace"], manual_namespace(&owner()));
+        // Target receipt must NOT have fired yet — we're still gating.
+        assert!(find_function_call(&receipts, &router()).is_none());
     }
 }

@@ -12,10 +12,14 @@ The goal is not "delete complexity." It is to separate:
 - **historical sediment** — valuable proof artifacts that should stay,
   but should stop pretending to be the first thing a new reader needs
 
-## TL;DR (as of 2026-04-18)
+## TL;DR (as of 2026-04-19)
 
-The core mechanism is in good shape. Most of the earlier audit's concrete
-trims have shipped:
+The core mechanism is in good shape, and the sequential-intents reshape
+has landed: `execute_steps` / `register_step` / `run_steps` / `StepPolicy`
+is the external surface; `sequential-intents.mike.near` is the mainnet
+reference rig; flagship gallery and mainnet battletest evidence are
+linked from the README. Most of the earlier audit's concrete trims have
+shipped:
 
 - root cruft (`smart-account.zip`) is gone
 - `AGENTS.md` is a short pointer to `CLAUDE.md`
@@ -38,8 +42,9 @@ operational surface that could share more with the main one.
 **Evidence.** `contracts/smart-account/src/lib.rs` is large and clearly
 contains two distinct surfaces:
 
-- the narrow sequencing kernel (`yield_promise`, `run_sequence`, sequencing
-  callbacks, resolution-policy dispatch)
+- the narrow sequencing kernel (`execute_steps` / `register_step` /
+  `run_steps`, `on_step_resumed`, `on_step_resolved`, `StepPolicy`
+  dispatch)
 - the automation/product layer (templates, triggers, authorized
   executor, automation runs)
 
@@ -76,12 +81,13 @@ already reuse the shared libs; the older `deploy-testnet.sh` and
 These are the parts to protect from a reflex simplification pass:
 
 - **The sequencing kernel.**
-  `yield_promise` / `run_sequence` / `on_promise_resumed` /
-  `on_promise_resolved` is the heart of the repo and earns its
-  complexity.
-- **The three resolution policies.**
+  `execute_steps` / `register_step` / `run_steps` / `on_step_resumed` /
+  `on_step_resolved` is the heart of the repo and earns its complexity.
+- **The three step policies.**
   `Direct`, `Adapter`, and `Asserted` each cover a distinct
-  failure / truth boundary. Not redundant.
+  failure / truth boundary. Not redundant — the
+  `sequential-intents.mike.near` round-trip needs `Asserted` to catch
+  deposit-path refunds that `Direct` would pass through as success.
 - **`investigate-tx.mjs`.**
   The JSON-first investigation wrapper is exactly the kind of
   structure this repo needs.

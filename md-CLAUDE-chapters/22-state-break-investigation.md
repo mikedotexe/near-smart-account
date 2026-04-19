@@ -1,5 +1,16 @@
 # Chapter 22 — State-break investigation
 
+> **In today's vocabulary.** This chapter is the source-of-truth for
+> why this repo treats every field on the kernel's `Contract` struct
+> as a schema commitment, and why the Phase-A rename
+> (`yield_promise` → `execute_steps`, `resolution_policy` →
+> `step_policy`) was done carefully rather than casually. The
+> specific struct names referenced below are pre-Phase-A; the borsh
+> schema-evolution rules are independent of the rename and apply
+> identically to today's `Contract`. Pairs with `TELEMETRY-DESIGN.md`
+> Phase B — moving telemetry fields out of state is a schema-breaking
+> operation that requires the versioned-enum pattern documented here.
+
 Forensic write-up of why `smart-account.x.mike.testnet` returns
 "Cannot deserialize the contract state" and why chapters 20 and 21
 both worked around it by creating fresh subaccounts

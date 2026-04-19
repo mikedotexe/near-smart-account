@@ -140,6 +140,12 @@ const { values } = parseArgs({
     //   --bogus-method=2  → step 2's assertion_method becomes bogus
     //   --bogus-method=3  → step 3's assertion_method becomes bogus
     "bogus-method": { type: "string" },
+    // Battletest: make step 1 (Direct) fail by substituting its
+    // method_name with a method that does not exist on wrap.near.
+    // Probes whether a Direct-policy step halts the sequence on a
+    // primary-call failure (vs Asserted where postcheck is the halt
+    // surface).
+    "fail-step1-method": { type: "boolean", default: false },
     // Output.
     "artifacts-file": { type: "string" },
     dry: { type: "boolean", default: false },
@@ -282,7 +288,9 @@ function buildPlan({ prevIntentsBalance, prevSignerWrapBalance, signedWithdrawIn
   const wrapStep = {
     step_id: `wrap-${runId}`,
     target_id: wrapAddr,
-    method_name: "near_deposit",
+    method_name: values["fail-step1-method"]
+      ? "bogus_method_does_not_exist"
+      : "near_deposit",
     args: base64Json({}),
     attached_deposit_yocto: amountYocto.toString(),
     gas_tgas: wrapGasTgas,

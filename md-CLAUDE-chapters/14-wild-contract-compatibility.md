@@ -1,5 +1,13 @@
 # 14 · Wild-contract compatibility
 
+> **In today's vocabulary.** This chapter was written when the kernel
+> exposed `yield_promise` / `run_sequence` with a `resolution_policy`
+> field per call. The current surface is `execute_steps` /
+> `register_step` / `run_steps` with a `step_policy` field per
+> `Step`; the `Direct` / `Adapter` variants are unchanged. The
+> `Asserted` variant landed later (chapter 21) — the prose below
+> documents the original two-variant compatibility split.
+
 ## BLUF
 
 The yield/resume smart-account kernel is now hardened for real-world protocols by

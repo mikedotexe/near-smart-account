@@ -1,5 +1,16 @@
 # Chapter 20 — Pathological contract probe
 
+> **In today's vocabulary.** This chapter maps out the pathology
+> taxonomy that `Direct` alone cannot catch. It motivates chapter 21
+> (`Asserted`), which closes the Layer-3 blindspot for noop and decoy
+> shapes by letting the kernel itself fire a postcheck inline. The
+> probe contract (`pathological-router`) is still deployed in the
+> shared testnet rig and is the canonical target for "what can
+> `Direct` miss?" investigations. Surface names below (`yield_promise`,
+> `on_promise_resolved`) map to today's `register_step` /
+> `on_step_resolved`; the receipt-classification semantics are
+> identical.
+
 ## §1 Motivation
 
 Chapters 14–15 named the "dishonest async" risk and built one concrete

@@ -64,7 +64,7 @@ infrastructure.
 
 Sources: `contracts/smart-account/src/lib.rs`.
 
-### `AutomationRun` (lines 152–162) — 9 fields
+### `AutomationRun` — 9 fields
 
 | Field | Type | Role |
 |---|---|---|
@@ -72,7 +72,7 @@ Sources: `contracts/smart-account/src/lib.rs`.
 | `sequence_id` | `String` | load-bearing — identifies the template |
 | `sequence_namespace` | `String` | load-bearing — state key, drives lifecycle |
 | `run_nonce` | `u32` | load-bearing — distinguishes runs within a trigger |
-| `status` | `AutomationRunStatus` | load-bearing — `finish_automation_run` reads it around line 1197 |
+| `status` | `AutomationRunStatus` | load-bearing — `finish_automation_run` reads it |
 | `executor_id` | `AccountId` | telemetry-only |
 | `started_at_ms` | `u64` | telemetry-only |
 | `finished_at_ms` | `Option<u64>` | telemetry-only |
@@ -83,7 +83,7 @@ load-bearing set could shrink further — the kernel really only needs to
 answer "is this namespace in flight?" and "what run_nonce did we issue
 for the current run?" — but this is the honest baseline split.
 
-### `BalanceTrigger` (lines 166–178) — 11 fields
+### `BalanceTrigger` — 11 fields
 
 The core, all load-bearing:
 
@@ -93,7 +93,7 @@ The core, all load-bearing:
 | `min_balance_yocto` | `u128` | load-bearing — firing gate |
 | `max_runs` | `u32` | load-bearing — hard limit |
 | `runs_started` | `u32` | load-bearing — counter vs `max_runs` |
-| `in_flight` | `bool` | load-bearing — prevents concurrent runs (read around lines 651, 1208) |
+| `in_flight` | `bool` | load-bearing — prevents concurrent runs (read by `execute_trigger` and `finish_automation_run`) |
 | `created_at_ms` | `u64` | telemetry-but-static — one-time write, not per-run bloat |
 
 The `last_*` mini-snapshot, all telemetry-only:
@@ -108,16 +108,15 @@ The `last_*` mini-snapshot, all telemetry-only:
 
 None of the five `last_*` fields are ever read by contract code for any
 behavior decision. They exist for operator inspection. Write sites:
-`execute_trigger()` around lines 651–658, `finish_automation_run()`
-around lines 1208–1212.
+`execute_trigger()` and `finish_automation_run()`.
 
-### `RegisteredStep` (lines 104–108) — 3 fields
+### `RegisteredStep` — 3 fields
 
 | Field | Type | Role |
 |---|---|---|
 | `yield_id` | `YieldId` | load-bearing — identifies the yielded receipt |
 | `call` | `Step` | load-bearing — the actual dispatch payload |
-| `created_at_ms` | `u64` | telemetry-only |
+| `created_at_ms` | `u64` | telemetry-only (surfaced as `registered_at_ms` in events) |
 
 ### Current log footprint
 
@@ -130,14 +129,13 @@ structured events rather than relying on the prose strings.
 
 The retrieval half of this design is mostly already built:
 
-- `scripts/lib/trace-rpc.mjs:124` reads `outcome.logs` per receipt from
-  `EXPERIMENTAL_tx_status`
-- `scripts/lib/trace-rpc.mjs:173` preserves those logs through
+- `scripts/lib/trace-rpc.mjs` reads `outcome.logs` per receipt from
+  `EXPERIMENTAL_tx_status` and preserves those logs through
   `flattenReceiptTree` so their receipt order survives flattening
-- `scripts/lib/fastnear.mjs:59–60` wires up the testnet archival RPC
-  (`archival-rpc.testnet.fastnear.com`), and line 62 exposes
-  `testnet.neardata.xyz`
-- `scripts/lib/fastnear.mjs:70–73` does the same for mainnet
+- `scripts/lib/fastnear.mjs` wires up the testnet archival RPC
+  (`archival-rpc.testnet.fastnear.com`) and `testnet.neardata.xyz`
+- `scripts/lib/fastnear.mjs` wires up the mainnet archival RPC and
+  `mainnet.neardata.xyz`
 
 Because the contract now emits `EVENT_JSON:{...}` logs, the existing
 investigation pipeline already surfaces them alongside the prose logs.
@@ -169,22 +167,22 @@ runtime envelope that every event carries.
 
 | Event | Emitted at | Event-specific fields |
 |---|---|---|
-| `promise_yielded` | `register_yielded_promise_in_namespace` (~line 1045 in lib.rs) | `step_id`, `namespace`, `yielded_at_ms`, `resume_callback_gas_tgas`, `call` |
-| `sequence_started` | `start_sequence_release_in_namespace` (~line 1114) | `namespace`, `first_step_id`, `queued_count`, `total_steps`, `origin`, `automation_run?` |
-| `step_resumed` | `on_promise_resumed` `Ok` path (~line 309) | `step_id`, `namespace`, `yielded_at_ms`, `resume_latency_ms`, `call` |
-| `sequence_halted` (resume_failed) | `on_promise_resumed` `Err` path (~line 334) | `namespace`, `failed_step_id`, `reason`, `error_kind`, `error_msg`, `yielded_at_ms`, `halt_latency_ms`, `call` |
-| `step_resolved_ok` | `progress_sequence_after_successful_resolution` (~lines 1473, 1511) | `step_id`, `namespace`, `result_bytes_len`, `next_step_id`, `yielded_at_ms`, `resolve_latency_ms`, `call` |
-| `step_resolved_err` | `on_promise_resolved` `Err` path (~line 403) | `step_id`, `namespace`, `error_kind`, `error_msg`, `oversized_bytes?`, `yielded_at_ms`, `resolve_latency_ms`, `call` |
-| `sequence_completed` | last step resolved ok, queue empty (~line 1523) | `namespace`, `final_step_id`, `final_result_bytes_len` |
-| `sequence_halted` (next resume failed) | `progress_sequence_after_successful_resolution` (~line 1495) | `namespace`, `failed_step_id`, `reason`, `error_kind`, `after_step_id`, `error_msg` |
+| `step_registered` | `register_step_in_namespace` | `step_id`, `namespace`, `registered_at_ms`, `resume_callback_gas_tgas`, `call` |
+| `sequence_started` | `start_sequence_release_in_namespace` | `namespace`, `first_step_id`, `queued_count`, `total_steps`, `origin`, `automation_run?` |
+| `step_resumed` | `on_step_resumed` `Ok` path | `step_id`, `namespace`, `registered_at_ms`, `resume_latency_ms`, `call` |
+| `sequence_halted` (resume_failed) | `on_step_resumed` `Err` path | `namespace`, `failed_step_id`, `reason`, `error_kind`, `error_msg`, `registered_at_ms`, `halt_latency_ms`, `call` |
+| `step_resolved_ok` | `progress_sequence_after_successful_resolution` | `step_id`, `namespace`, `result_bytes_len`, `next_step_id`, `registered_at_ms`, `resolve_latency_ms`, `call` |
+| `step_resolved_err` | `on_step_resolved` `Err` path | `step_id`, `namespace`, `error_kind`, `error_msg`, `oversized_bytes?`, `registered_at_ms`, `resolve_latency_ms`, `call` |
+| `sequence_completed` | last step resolved ok, queue empty | `namespace`, `final_step_id`, `final_result_bytes_len` |
+| `sequence_halted` (next resume failed) | `progress_sequence_after_successful_resolution` | `namespace`, `failed_step_id`, `reason`, `error_kind`, `after_step_id`, `error_msg` |
 | `assertion_checked` | `on_asserted_evaluate_postcheck` (match, mismatch, postcheck-fail) | `step_id`, `namespace`, `expected_bytes_len`, `actual_bytes_len`, `expected_return` (base64), `actual_return` (base64), `match`, `outcome`, `call` |
-| `trigger_created` | `create_balance_trigger` (~line 669) | `trigger_id`, `sequence_id`, `min_balance_yocto`, `max_runs`, `created_at_ms`, `template_call_count`, `template_total_deposit_yocto` |
-| `trigger_fired` | `execute_trigger` (~line 762) | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `started_at_ms`, `call_count`, `runs_started`, `max_runs`, `runs_remaining`, `min_balance_yocto`, `balance_yocto`, `required_balance_yocto`, `template_total_deposit_yocto`, `trigger_created_at_ms` |
-| `run_finished` | `finish_automation_run` (~line 1587) | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `status`, `started_at_ms`, `finished_at_ms`, `duration_ms`, `failed_step_id?` |
+| `trigger_created` | `create_balance_trigger` | `trigger_id`, `sequence_id`, `min_balance_yocto`, `max_runs`, `created_at_ms`, `template_call_count`, `template_total_deposit_yocto` |
+| `trigger_fired` | `execute_trigger` | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `started_at_ms`, `call_count`, `runs_started`, `max_runs`, `runs_remaining`, `min_balance_yocto`, `balance_yocto`, `required_balance_yocto`, `template_total_deposit_yocto`, `trigger_created_at_ms` |
+| `run_finished` | `finish_automation_run` | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `status`, `started_at_ms`, `finished_at_ms`, `duration_ms`, `failed_step_id?` |
 
 ### The `call` sub-object (shared by call-centric events)
 
-Events that describe a single yielded call (`promise_yielded`,
+Events that describe a single yielded call (`step_registered`,
 `step_resumed`, `step_resolved_ok`, `step_resolved_err`, `sequence_halted`
 on resume failure, `assertion_checked`) embed a `data.call` object with:
 
@@ -195,10 +193,10 @@ on resume failure, `assertion_checked`) embed a `data.call` object with:
 | `args_bytes_len` | Byte length of the function-call args (not the bytes themselves) |
 | `deposit_yocto` | String (yoctoNEAR is u128 — JSON would lose precision as a number) |
 | `gas_tgas` | The caller-attached gas budget for the target call |
-| `resolution_policy` | `"direct"`, `"adapter"`, or `"asserted"` |
+| `policy` | `"direct"`, `"adapter"`, or `"asserted"` (matches the `StepPolicy` variant) |
 | `dispatch_summary` | The existing one-line prose summary, kept for humans |
-| `adapter_id`, `adapter_method` | Present only when `resolution_policy = "adapter"` |
-| `assertion_id`, `assertion_method`, `assertion_gas_tgas` | Present only when `resolution_policy = "asserted"`. Pointer-only fields; always present |
+| `adapter_id`, `adapter_method` | Present only when `policy = "adapter"` |
+| `assertion_id`, `assertion_method`, `assertion_gas_tgas` | Present only when `policy = "asserted"`. Pointer-only fields; always present |
 | `assertion_args_bytes_len`, `expected_return_bytes_len` | Asserted only; size footprint, always present |
 | `assertion_args`, `expected_return` | Asserted only; **full base64 bytes**. Present **only** on `promise_yielded` (the step's declaration of intent) and `assertion_checked` (the verdict, where the bytes explain the match/mismatch). Omitted from `step_resumed`, `step_resolved_ok`, `step_resolved_err`, and resume-failed `sequence_halted` to avoid duplicating large payloads across every event for the same step |
 
@@ -252,7 +250,7 @@ On top of the runtime envelope and the `call` sub-object (where
 applicable), individual events carry:
 
 - Yield-resume latency — `step_resumed.resume_latency_ms` is the
-  wall-clock delta between `promise_yielded.yielded_at_ms` and
+  wall-clock delta between `step_registered.registered_at_ms` and
   the block the resume callback landed in. Useful for detecting when
   the yield is close to its ~200-block timeout.
 - Resolve latency — `step_resolved_ok.resolve_latency_ms` /

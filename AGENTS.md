@@ -8,21 +8,31 @@ need the current repo theorem, shared rig, compatibility model, or pitfalls.
 Recommended reading path:
 
 1. [START-HERE.md](./START-HERE.md) — shortest reading funnel
-2. [README.md](./README.md) — public overview and repo layout
-3. [PROTOCOL-ONBOARDING.md](./PROTOCOL-ONBOARDING.md) — operator guidance
-4. [md-CLAUDE-chapters/README.md](./md-CLAUDE-chapters/README.md) — chapter map
-5. [CLAUDE.md](./CLAUDE.md) — canonical continuity note
+2. [README.md](./README.md) — public overview, flagship gallery, mainnet
+   validation
+3. [SEQUENTIAL-INTENTS-DESIGN.md](./SEQUENTIAL-INTENTS-DESIGN.md) — design
+   doc + battletest findings
+4. [PROTOCOL-ONBOARDING.md](./PROTOCOL-ONBOARDING.md) — operator guidance
+5. [md-CLAUDE-chapters/README.md](./md-CLAUDE-chapters/README.md) — chapter map
+6. [CLAUDE.md](./CLAUDE.md) — canonical continuity note
 
 Codex-specific reminders:
 
 - Treat `CLAUDE.md` as the single shared continuity source rather than
   duplicating repo-state prose here again.
-- Prose spine is **yield · resume · resolve · decay** — prefer
-  **resolution policy** / **resolution surface**. Code exposes this
-  as `yield_promise` / `run_sequence` / `resolution_policy`. Older
-  archived chapters may still use `stage_call` / `settle_policy` as
-  period-accurate terms.
-- Current docs prefer `step`; historical chapters may still mention `latch`,
-  `conduct`, `gated_call`, or `label`.
-- Use fresh direct-child accounts for churn; long-lived shared rigs can cross
-  NEAR's `DeleteAccountWithLargeState` guard.
+- External surface is `execute_steps` / `register_step` / `run_steps` /
+  `Step` / `StepPolicy`. Callbacks are `on_step_resumed` /
+  `on_step_resolved`.
+- Prose spine for internal mechanics is **yield · resume · resolve ·
+  decay**.
+- Older archived chapters may still use `yield_promise` / `run_sequence`
+  / `resolution_policy` (pre-Phase-A) or `stage_call` / `settle_policy`
+  (earlier still) as period-accurate terms. Historical chapters may
+  also mention `latch`, `conduct`, `gated_call`, or `label` — those
+  belong to the earliest era.
+- Use fresh direct-child accounts for churn; long-lived shared rigs can
+  cross NEAR's `DeleteAccountWithLargeState` guard.
+- `intents.near` maintains its own per-account public-key registry.
+  Bootstrap via `intents.near.add_public_key` before first
+  `execute_intents` call from a new signer. See CLAUDE.md §
+  session-critical pitfalls.
