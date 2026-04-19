@@ -2,8 +2,8 @@
 
 ## BLUF
 
-The staged smart-account kernel is now hardened for real-world protocols by
-making compatibility a **per-call completion policy** (`settle_policy` in
+The yield/resume smart-account kernel is now hardened for real-world protocols by
+making compatibility a **per-call resolution policy** (`resolution_policy` in
 code) instead of a silent assumption.
 
 The core sequencing invariant stays narrow:
@@ -23,11 +23,11 @@ The important conceptual correction is:
 - missing or empty return values are mostly fine
 - **hidden nested async work** is the real hazard in the wild
 - the sequencing proof does not require a meaningful return payload; it
-  requires a truthful callback-visible completion surface
+  requires a truthful callback-visible resolution surface
 
 This chapter captures the local hardening that landed in code:
 
-- `SettlePolicy` on every staged/template call
+- `ResolutionPolicy` on every yielded or template call
 - `wild-router` as the intentionally dishonest async demo protocol
 - `demo-adapter` as the honest shim for that demo protocol
 - `compat-adapter` as the real external-protocol adapter surface
@@ -41,7 +41,7 @@ Until now, the smart-account sequencer already had one strong property:
 - it does **not** care about a downstream contract returning a pretty typed
   payload
 
-`on_stage_call_settled` advances on `Ok(bytes)` and halts on `Err(...)`. That
+`on_promise_resolved` advances on `Ok(bytes)` and halts on `Err(...)`. That
 means these target behaviors are already acceptable in `Direct` mode:
 
 - returns `u32`
@@ -66,7 +66,7 @@ surface would be too optimistic.
 So the wild-compatibility problem is not “we need semantic decoding.”
 It is:
 
-**we need an honest completion surface for protocols whose outer receipt does
+**we need an honest resolution surface for protocols whose outer receipt does
 not actually mean completion.**
 
 The practical compatibility rubric is:
@@ -79,12 +79,12 @@ The practical compatibility rubric is:
   truthful protocol completion for that step
 - for that last case, use `Adapter`
 
-## 2. Per-call completion policy
+## 2. Per-call resolution policy
 
 The shared type now lives in `smart-account-types`:
 
 ```rust
-pub enum SettlePolicy {
+pub enum ResolutionPolicy {
     Direct,
     Adapter { adapter_id: AccountId, adapter_method: String },
     Asserted,
@@ -93,7 +93,7 @@ pub enum SettlePolicy {
 
 This policy is carried per call in both:
 
-- `stage_call(...)`
+- `yield_promise(...)`
 - `save_sequence_template(...)`
 
 That is the right granularity because one sequence can mix:
@@ -108,7 +108,7 @@ without forcing a whole template into one global compatibility mode.
 Current behavior, preserved:
 
 - smart account dispatches the raw target call
-- `on_stage_call_settled` advances on direct receipt success
+- `on_promise_resolved` advances on direct receipt success
 - empty/void success is acceptable
 
 This is good enough for:
@@ -117,11 +117,11 @@ This is good enough for:
 - honest contracts that return their promise chain properly
 - many sync or single-hop NEAR methods
 
-One implementation footnote: because `on_stage_call_settled` uses
+One implementation footnote: because `on_promise_resolved` uses
 `env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES)`, an otherwise
 successful downstream call with an oversized result is treated as failure by
 the sequencer. That preserves ordering, but it narrows the implementation's
-definition of successful settlement.
+definition of successful resolution.
 
 ### `Adapter`
 
@@ -142,10 +142,10 @@ That is intentional. Protocol-specific truth stays in the adapter layer.
 
 ### `Asserted`
 
-Shipped in v1. After the target settles successfully, the kernel fires a
+Shipped in v1. After the target resolves successfully, the kernel fires a
 caller-specified check call and compares its return bytes to caller-specified
 expected bytes. Match → sequence advances. Mismatch → sequence halts
-identically to any other settle failure.
+identically to any other resolve failure.
 
 This is the right answer when the returned promise chain is truthful for
 "the call happened" but the caller ultimately wants a postcondition check
@@ -153,10 +153,10 @@ against target state — counter incremented, balance updated, sentinel flag
 set. Chapter 21 documents the full design, cascade structure, and four
 testnet probes that catch noop and decoy pathologies `Direct` is blind to.
 
-`Adapter` remains the right answer when the completion surface itself
+`Adapter` remains the right answer when the resolution surface itself
 requires non-trivial reconciliation (multi-poll, retry, cross-contract
 aggregation); `Asserted` is the right answer when one view-call on target
-state is enough to distinguish honest from fraudulent completion.
+state is enough to distinguish honest from fraudulent resolution.
 
 ## 3. Kernel changes
 
@@ -169,7 +169,7 @@ Still true:
 - `DownstreamFailed` means the dispatched step failed at the receipt level
 - `Succeeded` means the step chain completed and the next step may advance
 
-What changed is the dispatch site inside `on_stage_call_resume`:
+What changed is the dispatch site inside `on_promise_resumed`:
 
 - `Direct` dispatches the raw `target_id.method_name(args)`
 - `Adapter` dispatches the adapter call, which wraps that raw target call
@@ -206,7 +206,7 @@ does this:
 So the outer receipt lies by omission:
 
 - it tells the caller “start succeeded”
-- but it does **not** mean “the real downstream effect has settled”
+- but it does **not** mean “the real downstream effect has resolved”
 
 This is the exact class of wild behavior that breaks naive sequencing.
 
@@ -252,14 +252,14 @@ has to do work:
 - potentially repoll
 
 So the smart-account kernel now reserves a fixed adapter overhead budget and
-applies a lower max raw-target gas ceiling when `settle_policy = Adapter`.
+applies a lower max raw-target gas ceiling when `resolution_policy = Adapter`.
 
 That is the correct tradeoff:
 
 - the call shape becomes safer
 - the raw target budget becomes a little smaller
 
-The point is not maximal gas throughput. The point is an honest completion
+The point is not maximal gas throughput. The point is an honest resolution
 surface.
 
 ## 7. Local verification shape
@@ -304,11 +304,11 @@ This is the right local workflow because it lets us compare:
 
 ## 9. What this means philosophically
 
-The smart account is becoming more than a staged execution queue.
+The smart account is becoming more than a yield/resume execution queue.
 
 It is turning into a **compatibility-aware receipt controller**:
 
-- it can stage work
+- it can yield work
 - it can sequence work
 - and now it can express which downstream calls are safe to trust directly and
   which ones need an explicit truth-restoring layer

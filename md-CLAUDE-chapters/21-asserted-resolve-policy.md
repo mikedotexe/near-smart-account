@@ -1,16 +1,16 @@
-# Chapter 21 — `Asserted` settle policy
+# Chapter 21 — `Asserted` resolve policy
 
 ## §1 Motivation
 
 Chapter 20's cross-table left two pathologies (noop, decoy) visible only
-at Layer 3 — target state polling. `Direct` settle could not distinguish
+at Layer 3 — target state polling. `Direct` resolve could not distinguish
 them from honest work because both the NEAR receipt class (L1) and the
-smart-account settle log (L2) saw a clean SuccessValue. The chapter 20
+smart-account resolve log (L2) saw a clean SuccessValue. The chapter 20
 summary was blunt: *"the kernel is blind; only an external observer
 polling target state can tell work didn't happen."*
 
 `Asserted` closes this gap by letting the kernel itself do that L3 poll
-inline. After the target settles successfully, the kernel fires a
+inline. After the target resolves successfully, the kernel fires a
 caller-specified postcheck call against a caller-specified contract+method,
 compares the returned bytes to caller-specified expected bytes, and
 advances the sequence only on exact-bytes match. Mismatch halts the
@@ -26,7 +26,7 @@ the cascade shape with four testnet probes against
 
 ### Enum shape
 
-`SettlePolicy` gains a new struct-variant (`types/src/types.rs`):
+`ResolutionPolicy` gains a new struct-variant (`types/src/types.rs`):
 
 ```rust
 Asserted {
@@ -38,10 +38,10 @@ Asserted {
 }
 ```
 
-Wire shape on `stage_call` input:
+Wire shape on `yield_promise` input:
 
 ```json
-"settle_policy": {
+"resolution_policy": {
   "Asserted": {
     "assertion_id": "pathological-router.x.mike.testnet",
     "assertion_method": "get_calls_completed",
@@ -60,32 +60,32 @@ Despite the `get_calls_completed` example, `Asserted` is **not** an
 enforced read-only view mode. The postcheck is a real zero-deposit
 `FunctionCall` receipt. v1's safety boundary is therefore explicit:
 callers must choose a trustworthy postcheck surface whose return bytes are
-meaningful as the completion predicate.
+meaningful as the resolution predicate.
 
 ### Cascade structure
 
 A Direct step has three receipts after release:
 
 ```
-resume → target → on_stage_call_settled
+resume → target → on_promise_resolved
 ```
 
 An Asserted step expands into five receipts in a flat chain:
 
 ```
-resume → target → on_asserted_run_postcheck → check → on_asserted_evaluate_postcheck → on_stage_call_settled
+resume → target → on_asserted_run_postcheck → check → on_asserted_evaluate_postcheck → on_promise_resolved
 ```
 
 The additions are:
 
 - **`on_asserted_run_postcheck`** (private smart-account callback).
   Reads the target's result. If the target failed, panics so the
-  outer `.then(on_stage_call_settled)` observes `PromiseError::Failed`
+  outer `.then(on_promise_resolved)` observes `PromiseError::Failed`
   and halts. If the target succeeded, returns
   `postcheck.method(args).then(on_asserted_evaluate_postcheck)`. near-sdk
   flattens the returned promise into the outer chain.
 - **`on_asserted_evaluate_postcheck`** (private). Reads the postcheck
-  call's bytes. Match → returns `()` (empty settle result → advance).
+  call's bytes. Match → returns `()` (empty resolve result → advance).
   Mismatch → panics with expected/actual preview → halt.
 
 ### Gas accounting
@@ -99,20 +99,20 @@ const ASSERTED_POSTCHECK_EVALUATE_GAS_TGAS: u64 = 10;
 
 Policy overhead (attached to the yielded resume callback) for Asserted
 is `15 + 10 + assertion_gas_tgas`. The caller-visible target budget is
-`MAX_STAGE_CALL_GAS_TGAS − policy_overhead`. With default
+`MAX_YIELD_PROMISE_GAS_TGAS − policy_overhead`. With default
 `assertion_gas_tgas = 30`, total Asserted overhead is 55 TGas (vs 320
 for Adapter, 0 for Direct).
 
-### What `on_stage_call_settled` sees
+### What `on_promise_resolved` sees
 
-Identical to Direct. The settle callback reads
+Identical to Direct. The resolve callback reads
 `promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES)` and branches on
 `Ok` vs `Err` exactly as before. Asserted's "postcheck mismatch"
 signal lands as a PromiseError because the evaluate callback panics;
-settle's log line is `"failed downstream via asserted ... ; ordered
+the resolve log line is `"failed downstream via asserted ... ; ordered
 release stopped here: Failed"`. The underlying cause (mismatch,
 target failed, check call failed, oversized return) lives in the
-panic-receipt logs and the receipt tree, not in the settle summary.
+panic-receipt logs and the receipt tree, not in the resolve summary.
 
 ## §3 Worked examples
 
@@ -128,14 +128,14 @@ incompatible prior state). Caller: `mike.testnet`. Owner:
 - **target**: `do_honest_work("probe-asserted-honest-a")`
 - **postcheck**: `get_calls_completed()` — expected `"3"` (pre=2, +1 from
   honest work)
-- **stage tx**: `6hvm3bmZgV66qYj8MzLPxBgcNb5bAcBRHAjBe4y7zmxm`
+- **yield tx**: `6hvm3bmZgV66qYj8MzLPxBgcNb5bAcBRHAjBe4y7zmxm`
 - **run tx**: `4BXAAnk5de918f7Sqxuvq6tHEUXwHiZHhmWRkBfjHAU1`
 - **artifact**: `collab/artifacts/asserted-honest.json`
 - **classification**: `FULL_SUCCESS`
 - **state_before**: `calls_completed=2, last_burst="probe-control-mo4nonu7"`
 - **state_after**: `calls_completed=3, last_burst="probe-asserted-honest-a"`
 
-Settle-side log sequence (`sa-asserted.x.mike.testnet`):
+Resolve-side log sequence (`sa-asserted.x.mike.testnet`):
 
 ```
 staged and waiting for resume via asserted pathological-router.x.mike.testnet.do_honest_work postchecked by pathological-router.x.mike.testnet.get_calls_completed
@@ -154,7 +154,7 @@ returned the ASCII `"3"` on the wire.
   20's pathology 2 — pure lie)
 - **postcheck**: `get_calls_completed()` — expected `"4"` (pre=3, would be
   3+1 *if* noop had done the work)
-- **stage tx**: `6sgfwb7mQbVYktQiCaPpPiby5SWnkvKVuA2QBu6988bd`
+- **yield tx**: `6sgfwb7mQbVYktQiCaPpPiby5SWnkvKVuA2QBu6988bd`
 - **run tx**: `FRD9ju9NQNNVkxzrao326Vw4NFpyUXBStMUdwqAtZLQC`
 - **artifact**: `collab/artifacts/asserted-noop.json`
 - **classification**: `PARTIAL_FAIL`
@@ -183,7 +183,7 @@ where the same target-side behavior advanced the sequence.
   pathology 3 — decoy-returned chain)
 - **check**: `get_calls_completed()` — expected `"4"` (wrong; decoy
   leaves counter flat)
-- **stage tx**: `8JvwkAx93TuRqMeSPR1WJGnUPL4EuA6ZY1hLhpKt8fVr`
+- **yield tx**: `8JvwkAx93TuRqMeSPR1WJGnUPL4EuA6ZY1hLhpKt8fVr`
 - **run tx**: `FGPdPKPfRoB4ZcC9AWJxbaaD1Ms35WVnL1rPYgjz3ut3`
 - **artifact**: `collab/artifacts/asserted-decoy.json`
 - **classification**: `PARTIAL_FAIL`
@@ -204,7 +204,7 @@ specifically, and the decoy path leaves that field flat.
   pathology 4 — 20482-byte SuccessValue)
 - **check**: `get_calls_completed()` — expected `"4"` (irrelevant; the
   check call never fires)
-- **stage tx**: `F4imubuZPZkVCzucjExpszhAirj74iz5hSYKoqKjcZZf`
+- **yield tx**: `F4imubuZPZkVCzucjExpszhAirj74iz5hSYKoqKjcZZf`
 - **run tx**: `BTEKGsiDkymiJU4D7gb3pDbQUFF2QFmPHubPy3K7oU8y`
 - **artifact**: `collab/artifacts/asserted-oversized.json`
 - **classification**: `PARTIAL_FAIL`
@@ -222,7 +222,7 @@ failed.
 
 ## §4 Cross-table (extends chapter 20 §5)
 
-| Pathology | L1 (receipt) | L2 (Direct settle) | L3 (target state) | Direct advances? | Asserted catches? | Asserted caught at |
+| Pathology | L1 (receipt) | L2 (Direct resolve) | L3 (target state) | Direct advances? | Asserted catches? | Asserted caught at |
 |---|---|---|---|---|---|---|
 | baseline (honest) | `FULL_SUCCESS` | `settled successfully` | counter +1 | yes (correctly) | advances (correctly) | — |
 | gas-burn | `PARTIAL_FAIL` | `Failed` | unchanged | no (halts L1/L2) | halts at target | `run_postcheck` (target failed) |
@@ -237,7 +237,7 @@ failed.
   `Asserted` halts. This is the entire v1 reason-for-existing.
 - **gas-burn + oversize** are already caught by L1/L2 under `Direct`.
   Under `Asserted` they still halt, but the halting receipt is
-  `on_asserted_run_postcheck` instead of `on_stage_call_settled`.
+  `on_asserted_run_postcheck` instead of `on_promise_resolved`.
   No new detection — just a different panic location. The cost is one
   extra receipt (~15 TGas) for what would have halted anyway.
 - **baseline** is the only row where `Asserted` still advances. If any
@@ -256,23 +256,23 @@ noop/decoy gap. Known limits:
   `AssertedDelta { before, delta }` (the latter also solves the
   concurrent-mutation race below).
 - **No kernel pre-snapshotting.** The caller supplies the expected
-  after-value at stage time. If a second actor increments the target
-  counter between the stage and the settle, the absolute value is
+  after-value at yield time. If a second actor increments the target
+  counter between the yield and the resolve, the absolute value is
   wrong and `Asserted` halts a sequence that *should* have advanced.
   v1.1: kernel reads target state at dispatch time, stores the
-  snapshot in the StagedCall record, and evaluates a delta at settle.
+  snapshot in the StagedCall record, and evaluates a delta at resolve.
 - **Single check only.** Decoy-returned-chain motivated a conjunction
   of two checks (counter unchanged AND last_burst != "decoy-returned")
   in the original plan; v1 catches decoy with a single counter check,
   so the conjunction isn't strictly needed, but richer shapes will
   want it. v1.1: `AssertedAll { checks: Vec<CheckCondition> }`.
-- **Panic location vs. settle log.** The settle log collapses all
+- **Panic location vs. resolve log.** The resolve log collapses all
   Asserted failures to `"Failed"`. Distinguishing "target failed" vs.
   "postcheck mismatch" vs. "postcheck call itself failed" requires
-  reading the panic receipts. A future settle-log refinement could
+  reading the panic receipts. A future resolve-log refinement could
   emit a structured `SequenceHaltedAsserted { cause: ... }` event.
 - **Same-receipt atomicity.** Asserted's postcheck fires in a separate
-  receipt after the target settles. A target contract could
+  receipt after the target resolves. A target contract could
   theoretically observe the check-call arriving and mutate state
   back. Pathological, and requires the target to participate; deferred
   as an `Atomic` policy shape if it ever matters.
@@ -296,7 +296,7 @@ noop/decoy gap. Known limits:
   Asserted-specific tests cover dispatch shape, target-fail path,
   check-call receipt construction, evaluate match/mismatch,
   config validation, and end-to-end success/failure through
-  `on_stage_call_settled`. All green on `./scripts/check.sh`.
+  `on_promise_resolved`. All green on `./scripts/check.sh`.
 - Counter trajectory during the probe run:
   `2 → 3 (honest) → 3 (noop halted) → 3 (decoy halted) → 3 (oversize halted)`.
   Inferring "counter is at N" requires either reading before each

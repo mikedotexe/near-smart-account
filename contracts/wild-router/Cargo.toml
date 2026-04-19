@@ -3,7 +3,7 @@ name = "wild-router"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Demo protocol with dishonest async semantics: it starts downstream work but returns before that work actually settles."
+description = "Demo protocol with dishonest async semantics: it starts downstream work but returns before that work actually resolves."
 
 [lib]
 crate-type = ["cdylib", "rlib"]

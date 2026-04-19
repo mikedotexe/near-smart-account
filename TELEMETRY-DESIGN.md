@@ -7,26 +7,31 @@ useful data — the goal is to put the data where it belongs, in a place
 where being data-rich does not cost us storage staking or schema
 fragility.
 
-This doc pairs with [`STATE-BREAK-INVESTIGATION.md`](./STATE-BREAK-INVESTIGATION.md).
+This doc pairs with [chapter 22](./md-CLAUDE-chapters/22-state-break-investigation.md).
 That investigation showed that every field on `Contract` is a schema
 commitment. This one shows how to keep future `Contract` shapes smaller
 by default.
 
 ## Status (2026-04-18)
 
-Phase A is now implemented:
+**Shipped (v1.1.0):**
 
-- `contracts/smart-account/src/lib.rs` emits structured
-  `EVENT_JSON:{...}` telemetry alongside the prose logs
-- `scripts/lib/events.mjs` parses those NEP-297 events
+- NEP-297 `EVENT_JSON:{...}` events across the sequencing + automation
+  lifecycle, emitted from `contracts/smart-account/src/lib.rs`
+  alongside the prose logs
+- `scripts/lib/events.mjs` parses those events
 - `scripts/aggregate-runs.mjs` walks account history and summarizes runs
-- `scripts/investigate-tx.mjs` now surfaces those structured events beside
-  the receipt DAG, state snapshots, and account-activity surfaces, including
-  compact sequence telemetry metrics
+- `scripts/investigate-tx.mjs` surfaces structured events beside the
+  receipt DAG, state snapshots, and account-activity surfaces
+- event envelope includes a `runtime` sub-object with host-observable
+  gas, balance, storage, and block metadata at emission time (§4)
 
-Phase B remains deferred. The telemetry-only state fields still exist in
-contract state, so the storage/schema simplification part of this design note
-is still future work.
+**Not shipped:**
+
+- Phase B — removing the telemetry-only fields from `Contract` state.
+  Blocked on versioned-state migration discipline (chapter 22).
+- Phase C — optional additional enrichment fields on events. Additive,
+  no blockers, deferred for lack of a consumer asking.
 
 ## 0. Motivation
 
@@ -45,7 +50,7 @@ Moving pure-telemetry fields out of state lets us:
 
 - lower storage-staking cost per trigger and per run
 - reduce the number of fields we owe a migration to when we bump schema
-  (the point made in `STATE-BREAK-INVESTIGATION.md` §3–§5)
+  (the point made in chapter 22 §3–§5)
 - emit **richer** telemetry than state could afford — gas burned,
   attached deposit, promise-result size class, block timestamp — all of
   which are trivial in a log and expensive in an `IterableMap`
@@ -106,12 +111,12 @@ behavior decision. They exist for operator inspection. Write sites:
 `execute_trigger()` around lines 651–658, `finish_automation_run()`
 around lines 1208–1212.
 
-### `StagedCall` (lines 102–108) — 3 fields
+### `RegisteredStep` (lines 104–108) — 3 fields
 
 | Field | Type | Role |
 |---|---|---|
 | `yield_id` | `YieldId` | load-bearing — identifies the yielded receipt |
-| `call` | `SequenceCall` | load-bearing — the actual dispatch payload |
+| `call` | `Step` | load-bearing — the actual dispatch payload |
 | `created_at_ms` | `u64` | telemetry-only |
 
 ### Current log footprint
@@ -141,34 +146,18 @@ with `scripts/aggregate-runs.mjs` as the account-wide companion.
 
 ## 2. The NEP-297 event format
 
-NEP-297 is the NEAR-ecosystem convention for structured log events. The
-shape is:
+NEP-297 is the NEAR-ecosystem convention for structured log events:
 
 ```text
 EVENT_JSON:{"standard":"<name>","version":"<semver>","event":"<event_name>","data":<object or array>}
 ```
 
-The `EVENT_JSON:` prefix is all that indexers and consumers look for.
-Anything after the colon is plain JSON with four required top-level keys.
-
-For this repo, the right `standard` name is something clearly non-NEP
-and scoped to this contract. Proposal: `"sa-automation"`. It tells a
-reader the event came from the smart-account contract's automation
-surface, and it will not collide with NEP-141/NEP-171/etc. in any
-downstream aggregator.
-
-Adopting NEP-297 has three concrete benefits for this repo:
-
-1. The existing `outcome.logs` arrays on every receipt outcome already
-   carry individual log lines as strings. Our trace pipeline surfaces
-   them verbatim. A `EVENT_JSON:` prefix turns every such string into a
-   parseable record with one `.startsWith()` check.
-2. neardata and any other NEAR indexer will already treat these as
-   first-class events if we ever want to query them outside our own
-   scripts.
-3. The `version` field gives us a clean way to evolve the event schema
-   without breaking older consumers: bump the minor version when you
-   add fields, bump the major version when you change meaning.
+The `EVENT_JSON:` prefix is the indexer hook; everything after the
+colon is plain JSON with those four required keys. This repo's
+`standard` is `"sa-automation"` — scoped to the smart-account
+automation surface so it won't collide with NEP-141/NEP-171/etc. in
+any aggregator. The `version` field gives us clean schema evolution:
+minor bump for additive fields, major bump for semantic changes.
 
 ## 3. Event catalog (v1.1.0, as shipped)
 
@@ -180,23 +169,23 @@ runtime envelope that every event carries.
 
 | Event | Emitted at | Event-specific fields |
 |---|---|---|
-| `stage_call_registered` | `register_staged_yield_in_namespace` (line ~914 in lib.rs) | `step_id`, `namespace`, `staged_at_ms`, `resume_callback_gas_tgas`, `call` |
-| `sequence_started` | `start_sequence_release_in_namespace` (~line 957) | `namespace`, `first_step_id`, `queued_count`, `total_steps`, `origin`, `automation_run?` |
-| `step_resumed` | `on_stage_call_resume` `Ok` path (~line 305) | `step_id`, `namespace`, `staged_at_ms`, `resume_latency_ms`, `call` |
-| `sequence_halted` (resume_failed) | `on_stage_call_resume` `Err` path (~line 325) | `namespace`, `failed_step_id`, `reason`, `error_kind`, `error_msg`, `staged_at_ms`, `halt_latency_ms`, `call` |
-| `step_settled_ok` | `progress_sequence_after_successful_settlement` (~line 1182, 1207) | `step_id`, `namespace`, `result_bytes_len`, `next_step_id`, `staged_at_ms`, `settle_latency_ms`, `call` |
-| `step_settled_err` | `on_stage_call_settled` `Err` path (~line 380) | `step_id`, `namespace`, `error_kind`, `error_msg`, `oversized_bytes?`, `staged_at_ms`, `settle_latency_ms`, `call` |
-| `sequence_completed` | last step settled ok, queue empty (~line 1213) | `namespace`, `final_step_id`, `final_result_bytes_len` |
-| `sequence_halted` (next resume failed) | `progress_sequence_after_successful_settlement` (~line 1196) | `namespace`, `failed_step_id`, `reason`, `error_kind`, `after_step_id`, `error_msg` |
+| `promise_yielded` | `register_yielded_promise_in_namespace` (~line 1045 in lib.rs) | `step_id`, `namespace`, `yielded_at_ms`, `resume_callback_gas_tgas`, `call` |
+| `sequence_started` | `start_sequence_release_in_namespace` (~line 1114) | `namespace`, `first_step_id`, `queued_count`, `total_steps`, `origin`, `automation_run?` |
+| `step_resumed` | `on_promise_resumed` `Ok` path (~line 309) | `step_id`, `namespace`, `yielded_at_ms`, `resume_latency_ms`, `call` |
+| `sequence_halted` (resume_failed) | `on_promise_resumed` `Err` path (~line 334) | `namespace`, `failed_step_id`, `reason`, `error_kind`, `error_msg`, `yielded_at_ms`, `halt_latency_ms`, `call` |
+| `step_resolved_ok` | `progress_sequence_after_successful_resolution` (~lines 1473, 1511) | `step_id`, `namespace`, `result_bytes_len`, `next_step_id`, `yielded_at_ms`, `resolve_latency_ms`, `call` |
+| `step_resolved_err` | `on_promise_resolved` `Err` path (~line 403) | `step_id`, `namespace`, `error_kind`, `error_msg`, `oversized_bytes?`, `yielded_at_ms`, `resolve_latency_ms`, `call` |
+| `sequence_completed` | last step resolved ok, queue empty (~line 1523) | `namespace`, `final_step_id`, `final_result_bytes_len` |
+| `sequence_halted` (next resume failed) | `progress_sequence_after_successful_resolution` (~line 1495) | `namespace`, `failed_step_id`, `reason`, `error_kind`, `after_step_id`, `error_msg` |
 | `assertion_checked` | `on_asserted_evaluate_postcheck` (match, mismatch, postcheck-fail) | `step_id`, `namespace`, `expected_bytes_len`, `actual_bytes_len`, `expected_return` (base64), `actual_return` (base64), `match`, `outcome`, `call` |
-| `trigger_created` | `create_balance_trigger` (~line 570) | `trigger_id`, `sequence_id`, `min_balance_yocto`, `max_runs`, `created_at_ms`, `template_call_count`, `template_total_deposit_yocto` |
-| `trigger_fired` | `execute_trigger` (~line 648) | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `started_at_ms`, `call_count`, `runs_started`, `max_runs`, `runs_remaining`, `min_balance_yocto`, `balance_yocto`, `required_balance_yocto`, `template_total_deposit_yocto`, `trigger_created_at_ms` |
-| `run_finished` | `finish_automation_run` (~line 1243) | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `status`, `started_at_ms`, `finished_at_ms`, `duration_ms`, `failed_step_id?` |
+| `trigger_created` | `create_balance_trigger` (~line 669) | `trigger_id`, `sequence_id`, `min_balance_yocto`, `max_runs`, `created_at_ms`, `template_call_count`, `template_total_deposit_yocto` |
+| `trigger_fired` | `execute_trigger` (~line 762) | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `started_at_ms`, `call_count`, `runs_started`, `max_runs`, `runs_remaining`, `min_balance_yocto`, `balance_yocto`, `required_balance_yocto`, `template_total_deposit_yocto`, `trigger_created_at_ms` |
+| `run_finished` | `finish_automation_run` (~line 1587) | `trigger_id`, `namespace`, `sequence_id`, `run_nonce`, `executor_id`, `status`, `started_at_ms`, `finished_at_ms`, `duration_ms`, `failed_step_id?` |
 
 ### The `call` sub-object (shared by call-centric events)
 
-Events that describe a single staged call (`stage_call_registered`,
-`step_resumed`, `step_settled_ok`, `step_settled_err`, `sequence_halted`
+Events that describe a single yielded call (`promise_yielded`,
+`step_resumed`, `step_resolved_ok`, `step_resolved_err`, `sequence_halted`
 on resume failure, `assertion_checked`) embed a `data.call` object with:
 
 | Field | Notes |
@@ -206,18 +195,18 @@ on resume failure, `assertion_checked`) embed a `data.call` object with:
 | `args_bytes_len` | Byte length of the function-call args (not the bytes themselves) |
 | `deposit_yocto` | String (yoctoNEAR is u128 — JSON would lose precision as a number) |
 | `gas_tgas` | The caller-attached gas budget for the target call |
-| `settle_policy` | `"direct"`, `"adapter"`, or `"asserted"` |
+| `resolution_policy` | `"direct"`, `"adapter"`, or `"asserted"` |
 | `dispatch_summary` | The existing one-line prose summary, kept for humans |
-| `adapter_id`, `adapter_method` | Present only when `settle_policy = "adapter"` |
-| `assertion_id`, `assertion_method`, `assertion_gas_tgas` | Present only when `settle_policy = "asserted"`. Pointer-only fields; always present |
+| `adapter_id`, `adapter_method` | Present only when `resolution_policy = "adapter"` |
+| `assertion_id`, `assertion_method`, `assertion_gas_tgas` | Present only when `resolution_policy = "asserted"`. Pointer-only fields; always present |
 | `assertion_args_bytes_len`, `expected_return_bytes_len` | Asserted only; size footprint, always present |
-| `assertion_args`, `expected_return` | Asserted only; **full base64 bytes**. Present **only** on `stage_call_registered` (the step's declaration of intent) and `assertion_checked` (the verdict, where the bytes explain the match/mismatch). Omitted from `step_resumed`, `step_settled_ok`, `step_settled_err`, and resume-failed `sequence_halted` to avoid duplicating large payloads across every event for the same step |
+| `assertion_args`, `expected_return` | Asserted only; **full base64 bytes**. Present **only** on `promise_yielded` (the step's declaration of intent) and `assertion_checked` (the verdict, where the bytes explain the match/mismatch). Omitted from `step_resumed`, `step_resolved_ok`, `step_resolved_err`, and resume-failed `sequence_halted` to avoid duplicating large payloads across every event for the same step |
 
 **Rationale for the light/heavy split.** An Asserted step can ship a
 multi-kilobyte `expected_return`. Embedding it in every call-centric
 event for that step would multiply log size 5–6× for no extra signal
 — the bytes are identical across intermediate events. Consumers
-needing the raw bytes cross-reference them from the `stage_call_registered`
+needing the raw bytes cross-reference them from the `promise_yielded`
 event for the same `step_id` + `namespace`; intermediate events still
 carry `assertion_id`/`assertion_method`/`assertion_gas_tgas` +
 byte-length fields for filtering and size reasoning.
@@ -225,7 +214,7 @@ byte-length fields for filtering and size reasoning.
 `error_kind` is a coarse enum used by aggregators to filter without
 parsing the full `error_msg` string: `"downstream_failed"`,
 `"result_oversized"`, `"resume_failed"`. For `result_oversized`,
-`step_settled_err.oversized_bytes` carries the exact byte count from
+`step_resolved_err.oversized_bytes` carries the exact byte count from
 `PromiseError::TooLong(size)`.
 
 ## 4. The runtime envelope — every event carries it
@@ -263,14 +252,14 @@ On top of the runtime envelope and the `call` sub-object (where
 applicable), individual events carry:
 
 - Yield-resume latency — `step_resumed.resume_latency_ms` is the
-  wall-clock delta between `stage_call_registered.staged_at_ms` and
+  wall-clock delta between `promise_yielded.yielded_at_ms` and
   the block the resume callback landed in. Useful for detecting when
   the yield is close to its ~200-block timeout.
-- Settle latency — `step_settled_ok.settle_latency_ms` /
-  `step_settled_err.settle_latency_ms` is the same metric measured
-  across the full stage → resume → downstream → settle path.
-- Result size class — `step_settled_ok.result_bytes_len` and
-  `step_settled_err.oversized_bytes` together cover the full space
+- Resolve latency — `step_resolved_ok.resolve_latency_ms` /
+  `step_resolved_err.resolve_latency_ms` is the same metric measured
+  across the full yield → resume → downstream → resolve path.
+- Result size class — `step_resolved_ok.result_bytes_len` and
+  `step_resolved_err.oversized_bytes` together cover the full space
   of callback-visible return shapes, including the
   `MAX_CALLBACK_RESULT_BYTES` cliff.
 - Automation context on `sequence_started` — when a sequence starts
@@ -287,124 +276,57 @@ applicable), individual events carry:
   `finished_at_ms - started_at_ms`, included explicitly so aggregators
   do not have to compute it.
 
-### Size discipline
+## 5. Retrieval side — what FastNEAR gives us
 
-A typical v1.1.0 event serializes to 700–900 bytes of JSON (runtime
-envelope ~400 bytes + event-specific fields ~300–500 bytes). This is
-well under the per-log-line practical ceiling. Events that can carry
-variable payloads (`assertion_checked.expected_return`,
-`stage_call_registered.call.args_bytes_len`) carry **byte counts**, not
-the bytes themselves, except for `assertion_checked` where the
-expected/actual return bytes are base64 and part of the verdict's
-meaning.
+Every receipt outcome from `EXPERIMENTAL_tx_status` carries
+`outcome.logs`, so the events ride the existing trace pipeline
+(`scripts/lib/trace-rpc.mjs`'s `buildTree` +
+`flattenReceiptTree` preserve them in per-receipt order). The
+structured-event extraction lives in `scripts/lib/events.mjs`, which
+slices the `EVENT_JSON:` prefix off each log, parses the JSON, and
+returns one row per event keyed by receipt id, receipt index, and
+block height. Two consumers ride that helper today:
 
-## 5. Retrieval side — what FastNEAR already gives us
+- `scripts/investigate-tx.mjs` — per-tx structured events printed
+  beside the receipt DAG, state snapshots, and account-activity
+  surfaces
+- `scripts/aggregate-runs.mjs` — per-account aggregation that walks
+  FastNEAR account history page by page and emits a single JSON of
+  every automation event the account has ever emitted
 
-The existing trace pipeline produces everything we need except a
-structured-event filter. Walking the pipeline:
+Neither needs anything more than what FastNEAR already exposes.
 
-1. `scripts/lib/fastnear.mjs:24` — `fetchTxStatus` calls
-   `EXPERIMENTAL_tx_status` with an optional archival fallback.
-2. `scripts/lib/trace-rpc.mjs:86` — `buildTree` turns the RPC result
-   into a receipt tree.
-3. `scripts/lib/trace-rpc.mjs:124` — that tree carries
-   `receipts_outcome[].outcome.logs` at each node.
-4. `scripts/lib/trace-rpc.mjs:153–173` — `flattenReceiptTree` flattens
-   the tree to an array while preserving per-receipt logs in order.
-5. `scripts/lib/trace-rpc.mjs:253` — `materializeFlattenedReceipts`
-   joins each receipt to its block metadata (height, hash, timestamp,
-   receipt ordinal).
-
-The missing piece is a small helper like:
-
-```js
-// scripts/lib/events.mjs (sketch, ~20 lines)
-export function parseStructuredEvents(flattenedReceipts) {
-  const events = [];
-  for (const r of flattenedReceipts) {
-    for (const line of r.logs || []) {
-      if (!line.startsWith("EVENT_JSON:")) continue;
-      try {
-        const body = JSON.parse(line.slice("EVENT_JSON:".length));
-        events.push({
-          receiptId: r.receiptId,
-          receiptIndex: r.receiptIndex,
-          blockHeight: r.blockHeight,
-          blockTimestamp: r.blockTimestamp,
-          ...body,
-        });
-      } catch {
-        // non-JSON logs are fine — ignore
-      }
-    }
-  }
-  return events;
-}
-```
-
-With that helper in place, two consumer shapes are now real:
-
-- a per-tx structured-event view that `investigate-tx.mjs` can
-  optionally print alongside its existing three surfaces
-- a per-account aggregator (`scripts/aggregate-runs.mjs`) that walks
-  `fetchAccountHistory(network, smartAccountId)` page by page, passes
-  each tx through the same parser, and writes a single local JSON of
-  every automation event that ever touched that account
-
-Neither script needs anything more than what FastNEAR already exposes.
-The aggregator is the operator-facing "give me everything this account
-has ever done" tool that state currently pretends to be but is not.
-
-## 6. Rollout in three phases
-
-### Phase A — additive events, no state change (completed)
-
-The safe, pure-win tranche:
-
-- add NEP-297 `EVENT_JSON:` emissions at the sequencing/automation lifecycle
-  points
-- keep the prose `env::log_str` lines alongside the structured events so
-  human-readable traces still work
-- add `scripts/lib/events.mjs` with `parseStructuredEvents`
-- add `scripts/aggregate-runs.mjs` walking `fetchAccountHistory`
-- surface structured events directly in `scripts/investigate-tx.mjs`
-
-This tranche does not change `Contract` state. It does not need a
-migration. It is reversible (delete the new emission lines). It is the
-right place to start because it establishes the retrieval and
-aggregation path independently of any state-shape change.
+## 6. Deferred work
 
 ### Phase B — trim telemetry-only state (schema-breaking)
 
-Once Phase A is in production and we trust the events+aggregator path:
+Once the versioned-state migration discipline is in place:
 
 - remove the five `BalanceTrigger.last_*` fields
 - remove the four telemetry-only `AutomationRun` fields
   (`executor_id`, `started_at_ms`, `finished_at_ms`, `failed_step_id`)
-- consider removing `AutomationRun` entirely — `BalanceTrigger.in_flight`
-  may be sufficient for kernel correctness, and run-level telemetry
-  now lives in logs
+- consider removing `AutomationRun` entirely —
+  `BalanceTrigger.in_flight` may be sufficient for kernel correctness,
+  and run-level telemetry now lives in logs
 
-This tranche **is a schema change** and must be treated as one.
-`STATE-BREAK-INVESTIGATION.md` §5 and §7 describe the pattern: wrap
-`Contract` in a versioned enum (`VersionedContract::{V1, V2}`), ship a
-`#[init(ignore_state)]` migration function, and redeploy with
-`--initFunction migrate`. Do not skip this. Removing a field is no
-different from adding one — borsh reads the bytes strictly in the
-declared order.
+This tranche **is a schema change**. Chapter 22 §5 and §7 describe the
+pattern: wrap `Contract` in a versioned enum
+(`VersionedContract::{V1, V2}`), ship a `#[init(ignore_state)]`
+migration function, and redeploy with `--initFunction migrate`.
+Removing a field is no different from adding one — borsh reads the
+bytes strictly in declared order.
 
-`deploy-testnet.sh`'s delete-and-recreate ritual is fine for Phase B on
-ephemeral subaccounts like `sa-probe` and `sa-asserted`, because they
-can be rebuilt from scratch. It is the wrong ritual for mainnet, and
-the same is true for any shared rig that has real live sequences in
-flight.
+`deploy-testnet.sh`'s delete-and-recreate ritual is fine for Phase B
+on ephemeral subaccounts like `sa-probe` and `sa-asserted` which can
+be rebuilt from scratch. It is the wrong ritual for mainnet or any
+shared rig with live sequences in flight.
 
-### Phase C — richer events, additive
+### Phase C — further event enrichment, additive
 
-Once Phase A's event schema is validated and Phase B has simplified the
-state shape, extend events with the §4 enrichment fields. Bump the
-`version` to `"1.1.0"`. Because the fields are additive, older consumers
-still parse the events correctly; newer consumers get the extra signal.
+Optional additional fields on events (e.g., per-step gas slack
+accounting, per-trigger historical trend pointers). Additive, so older
+consumers still parse correctly. Not blocked on anything — deferred
+simply because no consumer has asked yet.
 
 ## 7. Tradeoffs and risks
 
@@ -437,62 +359,15 @@ still parse the events correctly; newer consumers get the extra signal.
 - **Removing state fields is a schema change.** This one is worth
   repeating because it is the single most important consequence of
   this design: a Phase B cleanup is not a free move. It requires the
-  migration discipline from `STATE-BREAK-INVESTIGATION.md`. Skipping
+  migration discipline from chapter 22. Skipping
   that step is how we got the broken
   `smart-account.x.mike.testnet` account in the first place.
 
-## 8. Recommendation
+## 8. Bottom line
 
-Phase A is done. It delivered the immediate operator value this design note
-was aiming for: structured events are now visible in both `investigate-tx`
-and the account-wide aggregator without waiting on any schema change.
-
-Defer Phase B until the versioned-state enum wrapper is in place.
-That is pre-mainnet-readiness work anyway, so pairing the two makes
-sense: if we are going to redeploy with a migration, we should do a
-worthwhile migration.
-
-Defer Phase C indefinitely; it is pure upside whenever we want more
-signal.
-
-## 9. References and evidence
-
-Inline pointers for anything asserted above:
-
-- `contracts/smart-account/src/lib.rs:102–108` — `StagedCall`
-- `contracts/smart-account/src/lib.rs:141–148` — `AutomationRunStatus`
-- `contracts/smart-account/src/lib.rs:152–162` — `AutomationRun`
-- `contracts/smart-account/src/lib.rs:166–178` — `BalanceTrigger`
-- `contracts/smart-account/src/lib.rs:207–217` — `Contract` state shape
-- `contracts/smart-account/src/lib.rs:651–673` — `execute_trigger`
-  snapshot writes (initial run creation + trigger state update)
-- `contracts/smart-account/src/lib.rs:1197–1212` —
-  `finish_automation_run` writes (run close + trigger final state)
-- `contracts/smart-account/src/lib.rs:295–318, 362–365, 443–445,
-  639–641, 900–902, 945–947, 1144–1161` — 11 existing `env::log_str`
-  emissions
-- `scripts/lib/trace-rpc.mjs:124` — `outcome.logs` per receipt
-- `scripts/lib/trace-rpc.mjs:173` — log preservation through flatten
-- `scripts/lib/fastnear.mjs:59–73` — archival RPC + neardata endpoints
-- `STATE-BREAK-INVESTIGATION.md` §3 — four classes of schema break
-- `STATE-BREAK-INVESTIGATION.md` §5 — avoidance patterns, versioned
-  enum, migration functions
-- `STATE-BREAK-INVESTIGATION.md` §7 — mainnet-readiness implications
-
-## 10. TL;DR
-
-- Of the 9 `AutomationRun` fields, 4 are pure telemetry.
-- Of the 11 `BalanceTrigger` fields, 5 are the `last_*` mini-snapshot
-  and are pure telemetry. All five are never read by contract code.
-- `StagedCall.created_at_ms` is pure telemetry.
-- Structured `EVENT_JSON:` events now exist alongside the prose logs.
-- FastNEAR already surfaces every receipt's logs and already has
-  archival + neardata endpoints wired up in
-  `scripts/lib/fastnear.mjs`.
-- Phase A (add NEP-297 `EVENT_JSON:` emissions + parser helper +
-  aggregator) is complete and remains a pure additive win with no schema
-  change.
-- Phase B (remove the telemetry-only state fields) is a schema change
-  and must use the versioned-enum + migration discipline from
-  `STATE-BREAK-INVESTIGATION.md`.
-- Phase C (richer event payloads) is additive and can land any time.
+Phase A delivered the operator value this design note was aiming for:
+structured events are visible in both `investigate-tx` and the
+account-wide aggregator without waiting on any schema change. Defer
+Phase B until the versioned-state enum wrapper lands — that is
+pre-mainnet-readiness work anyway, and pairing the two makes the
+migration worthwhile. Phase C is pure upside whenever a consumer asks.

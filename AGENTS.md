@@ -17,8 +17,11 @@ Codex-specific reminders:
 
 - Treat `CLAUDE.md` as the single shared continuity source rather than
   duplicating repo-state prose here again.
-- In code, keep `settle_policy`; in prose, prefer **completion policy** /
-  **completion surface**.
+- Prose spine is **yield · resume · resolve · decay** — prefer
+  **resolution policy** / **resolution surface**. Code exposes this
+  as `yield_promise` / `run_sequence` / `resolution_policy`. Older
+  archived chapters may still use `stage_call` / `settle_policy` as
+  period-accurate terms.
 - Current docs prefer `step`; historical chapters may still mention `latch`,
   `conduct`, `gated_call`, or `label`.
 - Use fresh direct-child accounts for churn; long-lived shared rigs can cross

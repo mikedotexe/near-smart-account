@@ -129,9 +129,9 @@ function fixtureReport() {
         window_row_count: 2,
       },
     ],
-    stage_lifecycle: {
-      classification: "released_after_stage",
-      reason: "yielded callbacks were later resumed and executed downstream work",
+    step_lifecycle: {
+      classification: "released_after_register",
+      reason: "registered step callbacks were later resumed and executed downstream work",
       yielded_receipt_count: 1,
       pending_yield_count: 0,
       resumed_yield_count: 1,
@@ -159,12 +159,12 @@ function fixtureReport() {
         triggerId: null,
         runNonce: null,
         stepCount: 2,
-        stepsSettledOk: 2,
+        stepsResolvedOk: 2,
         durationMs: 30,
         resumeLatencyMsAvg: 10,
         resumeLatencyMsMax: 10,
-        settleLatencyMsAvg: 15,
-        settleLatencyMsMax: 20,
+        resolveLatencyMsAvg: 15,
+        resolveLatencyMsMax: 20,
         maxUsedGasTgas: 22,
         latestStorageUsage: 321,
         firstSeenBlockHeight: 101,
@@ -228,7 +228,7 @@ test("renderMarkdownReport includes core investigation sections", () => {
   assert.match(markdown, /## Surface 3: Per-block receipts/);
   assert.match(markdown, /## Account activity/);
   assert.match(markdown, /## Sequence telemetry/);
-  assert.match(markdown, /released_after_stage/);
+  assert.match(markdown, /released_after_register/);
   assert.match(markdown, /## Structured events/);
   assert.match(markdown, /sequence_started/);
   assert.match(markdown, /## Logs/);

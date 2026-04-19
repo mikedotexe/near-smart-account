@@ -15,18 +15,18 @@ Primary sources of truth:
   — deeper rationale behind onboarding and `investigate-tx`
 - [md-CLAUDE-chapters/20-pathological-contract-probe.md](./md-CLAUDE-chapters/20-pathological-contract-probe.md)
   — wild-contract pathology taxonomy + three-layer detection cross-table
-- [md-CLAUDE-chapters/21-asserted-settle-policy.md](./md-CLAUDE-chapters/21-asserted-settle-policy.md)
+- [md-CLAUDE-chapters/21-asserted-resolve-policy.md](./md-CLAUDE-chapters/21-asserted-resolve-policy.md)
   — `Asserted` postcondition policy design + four testnet probes that catch
   noop and decoy pathologies
 
 ## Repo in one paragraph
 
 This repo is a NEAR smart-account POC that uses **NEP-519 yield/resume** to
-stage downstream calls as yielded receipts and then resume them in a chosen
+yield downstream promises as yielded receipts and then resume them in a chosen
 order. The core claim is narrow and deliberate:
 
 > the smart account creates the next real `FunctionCall` receipt only after
-> the previous step's trusted completion surface resolves
+> the previous step's trusted resolution surface resolves
 
 Sequential here means **receipt-release order**, not exclusive chain
 execution. Unrelated receipts can still interleave elsewhere on-chain.
@@ -34,8 +34,8 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
 ## Current public surfaces
 
 - `contracts/smart-account/`
-  Manual sequencing (`stage_call` / `run_sequence`), per-step compatibility
-  (`settle_policy` in code), and balance-trigger automation
+  Manual sequencing (`yield_promise` / `run_sequence`), per-step compatibility
+  (`resolution_policy` in code), and balance-trigger automation
   (`save_sequence_template` / `create_balance_trigger` / `execute_trigger`)
 - `contracts/compat-adapter/`
   Real external-protocol adapter surface; currently wrap-specific
@@ -53,16 +53,17 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
 
 ## Compatibility rule
 
-Keep `settle_policy` in code. In prose, prefer **completion policy** and
-**completion surface**.
+In prose, the spine is **resolution policy** and **resolution surface**;
+the code exposes this as `resolution_policy` on `yield_promise` and
+`save_sequence_template`.
 
 - `Direct`
-  Trust the target receipt's own completion surface
+  Trust the target receipt's own resolution surface
 - `Adapter { adapter_id, adapter_method }`
   Trust a protocol-specific adapter to collapse messy async into one honest
   top-level result
 - `Asserted { assertion_id, assertion_method, assertion_args, expected_return, assertion_gas_tgas }`
-  After the target settles successfully, fire a caller-specified postcheck
+  After the target resolves successfully, fire a caller-specified postcheck
   `FunctionCall` and advance only if the returned bytes exactly match
   `expected_return`. This is not an enforced read-only view, so callers must
   choose a trustworthy postcheck surface. Catches target-state-based
@@ -77,9 +78,9 @@ Practical rule:
   point toward `Asserted`
 - oversized callback results currently count as failure because
   `env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES)` is part of the
-  completion predicate; the error variant is `PromiseError::TooLong(size)`
+  resolution predicate; the error variant is `PromiseError::TooLong(size)`
   (not the generic `PromiseError::Failed`) — distinction is preserved in
-  the settle log, verified live on testnet in chapter 20 §4.4
+  the resolve log, verified live on testnet in chapter 20 §4.4
 
 ## Shared testnet rig
 
@@ -117,6 +118,56 @@ Shared-rig churn rule:
   a shared rig crosses it, either clean state explicitly or move to a fresh
   child account
 
+## Mainnet lab rig
+
+Dedicated sacrificial child of `mike.near` for mainnet probes. Never
+deploy the smart-account contract to `mike.near` itself.
+
+- `sequential-intents.mike.near` — **active v3** smart-account (post-Phase-A
+  `execute_steps` + `StepPolicy` rename); `owner_id = mike.near`; active
+  primary target for `examples/sequential-intents.mjs`,
+  `examples/dca.mjs`, and `examples/wrap-and-deposit.mjs`. Deployed
+  2026-04-18 via `DEPLOY-SEQUENTIAL-INTENTS.md`.
+- `sa-lab.mike.near` — older (pre-rename) smart-account deployed with
+  `owner_id = mike.near`; kept around for historical tx lookup only
+- `echo.sa-lab.mike.near` — trivial leaf for the mainnet echo probe
+- `simple-sequencer.sa-lab.mike.near` — simple-example kernel used by the
+  NEAR Social variant; see `simple-example/SOCIALDB-VARIANT.md`
+
+Validated round-trip on `sequential-intents.mike.near` (reference runs
+for `examples/sequential-intents.mjs`):
+
+- deposit-only: `3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD`
+- round-trip  : `7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ`
+
+Safety rules:
+
+- treat the account as disposable infrastructure; do not move meaningful
+  assets into it
+- keep each probe small enough that a bad surprise is cheap
+- prefer a fresh child over making the primary identity account "also a
+  lab"
+
+Mainnet gas matrix (multi-action `yield_promise` calibration on
+`sa-lab.mike.near`):
+
+- single-step yielded promises stay pending cleanly at `180`, `250`, and
+  `500 TGas` per outer action
+- two-step yielded batches at `180` and `250 TGas` per action yield
+  successfully but their yielded callbacks wake immediately with
+  `PromiseError::Failed` instead of staying pending
+- two-step yielded batches at `300` and `400 TGas` per action stay
+  pending and drain cleanly on `run_sequence`
+
+Useful framing: mainnet `yield_promise` is viable in the current contract
+shape, but **multi-action batches have a higher per-action gas floor
+than single-step probes**. Operator baseline for mainnet multi-step
+probes: start at `300 TGas` per outer `yield_promise` action; treat `180` /
+`250` as deliberate boundary probes rather than reasonable defaults.
+This is not a blanket "mainnet yield cannot remain pending" failure — it
+is a **multi-action gas-envelope boundary** in the current smart-account
+shape.
+
 ## Generated-output policy
 
 - `res/*.wasm` and `simple-example/res/*.wasm` are rebuildable local outputs,
@@ -151,8 +202,11 @@ python3 -m http.server 8000 -d web
 
 ## Terminology
 
-- in code: `settle_policy`
-- in prose: completion policy / completion surface
+- prose spine: **yield · resume · resolve · decay**
+- in prose: resolution policy / resolution surface
+- in code: `yield_promise` / `run_sequence` / `resolution_policy` —
+  code and prose are aligned; the older `stage_call` /
+  `settle_policy` spellings survive only in archived chapters
 - current docs: prefer `step`
 - historical docs may still mention `latch`, `conduct`, `gated_call`, or
   `label`; treat those as period-accurate historical terms

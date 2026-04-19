@@ -82,24 +82,24 @@ test("buildProbeCommands renders follow-up trace investigate and state commands"
     signer: "x.mike.testnet",
     contractId: "smart-account.x.mike.testnet",
     targetId: "pathological-router.x.mike.testnet",
-    stageTxHash: "stagehash",
+    registerTxHash: "registerhash",
     runTxHash: "runhash",
   });
 
   assert.equal(
-    commands.trace_stage,
-    "./scripts/trace-tx.mjs stagehash x.mike.testnet --wait FINAL --network testnet"
+    commands.trace_register,
+    "./scripts/trace-tx.mjs registerhash x.mike.testnet --wait FINAL --network testnet"
   );
   assert.equal(
     commands.trace_run,
     "./scripts/trace-tx.mjs runhash x.mike.testnet --wait FINAL --network testnet"
   );
   assert.match(
-    commands.investigate_stage,
-    /investigate-tx\.mjs stagehash x\.mike\.testnet --wait FINAL --network testnet/
+    commands.investigate_register,
+    /investigate-tx\.mjs registerhash x\.mike\.testnet --wait FINAL --network testnet/
   );
-  assert.match(commands.investigate_stage, /get_calls_completed/);
-  assert.match(commands.investigate_stage, /get_last_burst/);
+  assert.match(commands.investigate_register, /get_calls_completed/);
+  assert.match(commands.investigate_register, /get_last_burst/);
   assert.equal(
     commands.state_calls_completed,
     "./scripts/state.mjs pathological-router.x.mike.testnet --method get_calls_completed --network testnet"
@@ -116,7 +116,7 @@ test("renderHumanReport includes explicit runtime-facing preset and expectation 
     args: { label: "probe-false_success-abc" },
     expectation: "Direct may observe success even when target-side work did not happen.",
     state_before: { available: true, calls_completed: 0, last_burst: null },
-    stage_tx_hash: "7ETbKx4hgby",
+    register_tx_hash: "7ETbKx4hgby",
     run_tx_hash: "FEXVz2sNQk2",
     state_after: { available: true, calls_completed: 0, last_burst: null },
     commands: buildProbeCommands({
@@ -124,7 +124,7 @@ test("renderHumanReport includes explicit runtime-facing preset and expectation 
       signer: "x.mike.testnet",
       contractId: "smart-account.x.mike.testnet",
       targetId: "pathological-router.x.mike.testnet",
-      stageTxHash: "7ETbKx4hgby",
+      registerTxHash: "7ETbKx4hgby",
       runTxHash: "FEXVz2sNQk2",
     }),
   });
@@ -132,5 +132,5 @@ test("renderHumanReport includes explicit runtime-facing preset and expectation 
   assert.match(output, /^preset=false_success/m);
   assert.match(output, /expectation=Direct may observe success even when target-side work did not happen\./);
   assert.match(output, /state_before=calls_completed=0 last_burst=null/);
-  assert.match(output, /trace\(stage\):/);
+  assert.match(output, /trace\(register\):/);
 });

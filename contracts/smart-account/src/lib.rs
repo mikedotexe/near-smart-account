@@ -3,20 +3,20 @@
 //! The public surface is intentionally narrow but now clearly has two layers:
 //!
 //! - Kernel sequencing surface:
-//!   - `stage_call(...)` registers a staged downstream `FunctionCall` and
+//!   - `register_step(...)` registers a yielded downstream `FunctionCall` and
 //!     creates its yielded callback receipt
 //!   - `run_sequence(caller, order)` starts ordered release by resuming the
-//!     first staged step
-//!   - `on_stage_call_resume` dispatches the real downstream call only after
+//!     first yielded step
+//!   - `on_step_resumed` dispatches the real downstream call only after
 //!     that release
-//!   - `on_stage_call_settled` advances the next yielded step only after the
+//!   - `on_step_resolved` advances the next yielded step only after the
 //!     downstream call's trusted completion surface has resolved
-//!   - `settle_policy` (`Direct`, `Adapter`, `Asserted`) defines what that
+//!   - `policy` (`Direct`, `Adapter`, `Asserted`) defines what that
 //!     trusted completion surface is for each step
 //! - Automation/product surface built on top of the kernel:
 //!   - `save_sequence_template(...)` stores a durable ordered call template
 //!   - `create_balance_trigger(...)` stores a balance gate over a template
-//!   - `execute_trigger(...)` materializes a fresh staged namespace and starts
+//!   - `execute_trigger(...)` materializes a fresh yielded namespace and starts
 //!     the sequence once an authorized caller spends their own transaction gas
 //!
 //! The kernel is the narrow theorem this repo is built around. The automation
@@ -30,21 +30,21 @@ use near_sdk::{
     env, near, AccountId, BorshStorageKey, Gas, GasWeight, NearToken, PanicOnDefault, Promise,
     PromiseError, PromiseOrValue, YieldId,
 };
-use smart_account_types::{AdapterDispatchInput, SettlePolicy};
+use smart_account_types::{AdapterDispatchInput, StepPolicy};
 
-const STAGE_SETTLE_CALLBACK_GAS_TGAS: u64 = 20;
-const STAGE_RESUME_OVERHEAD_TGAS: u64 = 20;
+const STEP_RESOLVE_CALLBACK_GAS_TGAS: u64 = 20;
+const STEP_RESUME_OVERHEAD_TGAS: u64 = 20;
 const MAX_CONTRACT_GAS_TGAS: u64 = 1_000;
-/// Keep 20 TGas of slack so the originating `stage_call` can still create the
+/// Keep 20 TGas of slack so the originating `register_step` can still create the
 /// yielded callback at the new PV 83 1 PGas ceiling.
-const STAGE_GAS_SLACK_TGAS: u64 = 20;
-const MAX_STAGE_CALL_GAS_TGAS: u64 = MAX_CONTRACT_GAS_TGAS
-    - STAGE_SETTLE_CALLBACK_GAS_TGAS
-    - STAGE_RESUME_OVERHEAD_TGAS
-    - STAGE_GAS_SLACK_TGAS;
+const STEP_GAS_SLACK_TGAS: u64 = 20;
+const MAX_STEP_GAS_TGAS: u64 = MAX_CONTRACT_GAS_TGAS
+    - STEP_RESOLVE_CALLBACK_GAS_TGAS
+    - STEP_RESUME_OVERHEAD_TGAS
+    - STEP_GAS_SLACK_TGAS;
 const ADAPTER_SEQUENCE_OVERHEAD_TGAS: u64 = 320;
-const MAX_ADAPTER_TARGET_GAS_TGAS: u64 = MAX_STAGE_CALL_GAS_TGAS - ADAPTER_SEQUENCE_OVERHEAD_TGAS;
-/// Callback-visible settlement is intentionally bounded; oversized success
+const MAX_ADAPTER_TARGET_GAS_TGAS: u64 = MAX_STEP_GAS_TGAS - ADAPTER_SEQUENCE_OVERHEAD_TGAS;
+/// Callback-visible resolution is intentionally bounded; oversized success
 /// payloads are treated as sequencer failure rather than partial success.
 const MAX_CALLBACK_RESULT_BYTES: usize = 16 * 1024;
 /// Gas reserved for `on_asserted_run_postcheck` (reads target result and
@@ -57,7 +57,7 @@ const ASSERTED_POSTCHECK_EVALUATE_GAS_TGAS: u64 = 10;
 #[near(serializers = [borsh])]
 #[derive(BorshStorageKey)]
 enum StorageKey {
-    StagedCalls,
+    RegisteredSteps,
     SequenceQueue,
     SequenceTemplates,
     BalanceTriggers,
@@ -66,18 +66,18 @@ enum StorageKey {
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
-pub struct SequenceCall {
+pub struct Step {
     pub step_id: String,
     pub target_id: AccountId,
     pub method_name: String,
     pub args: Vec<u8>,
     pub attached_deposit_yocto: u128,
     pub gas_tgas: u64,
-    pub settle_policy: SettlePolicy,
+    pub policy: StepPolicy,
 }
 
 #[near(serializers = [json])]
-pub struct SequenceCallInput {
+pub struct StepInput {
     pub step_id: String,
     pub target_id: AccountId,
     pub method_name: String,
@@ -85,44 +85,44 @@ pub struct SequenceCallInput {
     pub attached_deposit_yocto: U128,
     pub gas_tgas: u64,
     #[serde(default)]
-    pub settle_policy: SettlePolicy,
+    pub policy: StepPolicy,
 }
 
 #[near(serializers = [json])]
-pub struct SequenceCallView {
+pub struct StepView {
     pub step_id: String,
     pub target_id: AccountId,
     pub method_name: String,
     pub args: Base64VecU8,
     pub attached_deposit_yocto: U128,
     pub gas_tgas: u64,
-    pub settle_policy: SettlePolicy,
+    pub policy: StepPolicy,
 }
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
-pub struct StagedCall {
+pub struct RegisteredStep {
     pub yield_id: YieldId,
-    pub call: SequenceCall,
+    pub call: Step,
     pub created_at_ms: u64,
 }
 
 #[near(serializers = [json])]
-pub struct StagedCallView {
+pub struct RegisteredStepView {
     pub step_id: String,
     pub target_id: AccountId,
     pub method_name: String,
     pub args: Base64VecU8,
     pub attached_deposit_yocto: U128,
     pub gas_tgas: u64,
-    pub settle_policy: SettlePolicy,
+    pub policy: StepPolicy,
     pub created_at_ms: u64,
 }
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
 pub struct SequenceTemplate {
-    pub calls: Vec<SequenceCall>,
+    pub calls: Vec<Step>,
     pub saved_at_ms: u64,
     pub total_attached_deposit_yocto: u128,
 }
@@ -130,7 +130,7 @@ pub struct SequenceTemplate {
 #[near(serializers = [json])]
 pub struct SequenceTemplateView {
     pub sequence_id: String,
-    pub calls: Vec<SequenceCallView>,
+    pub calls: Vec<StepView>,
     pub contains_adapter_calls: bool,
     pub contains_asserted_calls: bool,
     pub contains_non_direct_calls: bool,
@@ -209,7 +209,7 @@ pub struct TriggerExecutionView {
 pub struct Contract {
     pub owner_id: AccountId,
     pub authorized_executor: Option<AccountId>,
-    pub staged_calls: IterableMap<String, StagedCall>,
+    pub registered_steps: IterableMap<String, RegisteredStep>,
     pub sequence_queue: IterableMap<String, Vec<String>>,
     pub sequence_templates: IterableMap<String, SequenceTemplate>,
     pub balance_triggers: IterableMap<String, BalanceTrigger>,
@@ -228,7 +228,7 @@ impl Contract {
         Self {
             owner_id,
             authorized_executor: None,
-            staged_calls: IterableMap::new(StorageKey::StagedCalls),
+            registered_steps: IterableMap::new(StorageKey::RegisteredSteps),
             sequence_queue: IterableMap::new(StorageKey::SequenceQueue),
             sequence_templates: IterableMap::new(StorageKey::SequenceTemplates),
             balance_triggers: IterableMap::new(StorageKey::BalanceTriggers),
@@ -236,7 +236,7 @@ impl Contract {
         }
     }
 
-    // --- Manual staged execution ---
+    // --- Manual yielded execution ---
 
     pub fn get_authorized_executor(&self) -> Option<AccountId> {
         self.authorized_executor.clone()
@@ -247,11 +247,57 @@ impl Contract {
         self.authorized_executor = authorized_executor;
     }
 
-    /// Register a staged downstream call under `manual:{predecessor}`.
+    /// One-shot intent executor: register all steps under the caller's
+    /// manual namespace and start ordered release atomically in a single tx.
     ///
-    /// The returned yielded promise is what makes each action in a multi-action
-    /// transaction show up as its own child callback receipt in the trace.
-    pub fn stage_call(
+    /// This is the recommended entry point for multi-step intents. It is
+    /// equivalent to calling `register_step(...)` once per step and then
+    /// `run_sequence(caller, order)`, but in one transaction and in the
+    /// order the submitted `steps` vector was given.
+    pub fn execute_steps(&mut self, steps: Vec<StepInput>) -> u32 {
+        self.assert_executor();
+        assert!(
+            !steps.is_empty(),
+            "execute_steps requires at least one step"
+        );
+
+        let caller = env::predecessor_account_id();
+        let namespace = manual_namespace(&caller);
+        let order: Vec<String> = steps.iter().map(|s| s.step_id.clone()).collect();
+
+        // Reject duplicate step_ids up front so we don't half-register a
+        // partial plan and then panic mid-run.
+        let mut seen = std::collections::BTreeSet::new();
+        for step_id in &order {
+            assert!(
+                seen.insert(step_id.clone()),
+                "execute_steps: duplicate step_id in submitted plan"
+            );
+        }
+
+        for step_input in steps {
+            let call = Self::step_from_raw(
+                step_input.step_id,
+                step_input.target_id,
+                step_input.method_name,
+                step_input.args.0,
+                step_input.attached_deposit_yocto.0,
+                step_input.gas_tgas,
+                step_input.policy,
+            );
+            self.register_step_in_namespace(&namespace, call).detach();
+        }
+
+        self.start_sequence_release_in_namespace(&namespace, order)
+    }
+
+    /// Register a yielded downstream call under `manual:{predecessor}`.
+    ///
+    /// Advanced usage. Most callers should use `execute_steps` instead, which
+    /// registers all steps and starts release atomically. Use `register_step`
+    /// only when you want to stage steps across multiple transactions before
+    /// calling `run_sequence`.
+    pub fn register_step(
         &mut self,
         target_id: AccountId,
         method_name: String,
@@ -259,24 +305,24 @@ impl Contract {
         attached_deposit_yocto: U128,
         gas_tgas: u64,
         step_id: String,
-        settle_policy: Option<SettlePolicy>,
+        policy: Option<StepPolicy>,
     ) -> Promise {
         let caller = env::predecessor_account_id();
         let namespace = manual_namespace(&caller);
-        let call = Self::sequence_call_from_raw(
+        let call = Self::step_from_raw(
             step_id,
             target_id,
             method_name,
             args.0,
             attached_deposit_yocto.0,
             gas_tgas,
-            settle_policy.unwrap_or_default(),
+            policy.unwrap_or_default(),
         );
-        self.register_staged_yield_in_namespace(&namespace, call)
+        self.register_step_in_namespace(&namespace, call)
     }
 
     /// Resume the first pending step immediately and leave the rest queued so
-    /// `on_stage_call_settled` can advance them one by one after each real
+    /// `on_step_resolved` can advance them one by one after each real
     /// downstream call completes.
     pub fn run_sequence(&mut self, caller_id: AccountId, order: Vec<String>) -> u32 {
         self.assert_executor();
@@ -284,43 +330,43 @@ impl Contract {
     }
 
     #[private]
-    pub fn on_stage_call_resume(
+    pub fn on_step_resumed(
         &mut self,
         sequence_namespace: String,
         step_id: String,
         #[callback_result] resume_signal: Result<(), PromiseError>,
     ) -> PromiseOrValue<()> {
-        let key = staged_call_key(&sequence_namespace, &step_id);
-        let Some(staged) = self.staged_calls.get(&key).cloned() else {
+        let key = registered_step_key(&sequence_namespace, &step_id);
+        let Some(yielded) = self.registered_steps.get(&key).cloned() else {
             env::log_str(&format!(
-                "stage_call '{step_id}' in {sequence_namespace} woke up but was no longer staged"
+                "register_step '{step_id}' in {sequence_namespace} woke up but was no longer yielded"
             ));
             return PromiseOrValue::Value(());
         };
 
         match resume_signal {
             Ok(()) => {
-                let dispatch_summary = Self::call_dispatch_summary(&staged.call);
-                let call_metadata = Self::call_metadata_json(&staged.call);
+                let dispatch_summary = Self::call_dispatch_summary(&yielded.call);
+                let call_metadata = Self::call_metadata_json(&yielded.call);
                 env::log_str(&format!(
-                    "stage_call '{step_id}' in {sequence_namespace} resumed and is dispatching real downstream work via {dispatch_summary}"
+                    "register_step '{step_id}' in {sequence_namespace} resumed and is dispatching real downstream work via {dispatch_summary}"
                 ));
                 Self::emit_event(
                     "step_resumed",
                     json!({
                         "step_id": step_id,
                         "namespace": sequence_namespace,
-                        "staged_at_ms": staged.created_at_ms,
+                        "registered_at_ms": yielded.created_at_ms,
                         "resume_latency_ms": env::block_timestamp_ms()
-                            .saturating_sub(staged.created_at_ms),
+                            .saturating_sub(yielded.created_at_ms),
                         "call": call_metadata,
                     }),
                 );
             }
             Err(error) => {
-                let call_metadata = Self::call_metadata_json(&staged.call);
-                let staged_at_ms = staged.created_at_ms;
-                self.staged_calls.remove(&key);
+                let call_metadata = Self::call_metadata_json(&yielded.call);
+                let registered_at_ms = yielded.created_at_ms;
+                self.registered_steps.remove(&key);
                 self.sequence_queue.remove(&sequence_namespace);
                 self.finish_automation_run(
                     &sequence_namespace,
@@ -328,7 +374,7 @@ impl Contract {
                     Some(step_id.clone()),
                 );
                 env::log_str(&format!(
-                    "stage_call '{step_id}' in {sequence_namespace} could not resume, so its staged yield was dropped and the sequence halted: {error:?}"
+                    "register_step '{step_id}' in {sequence_namespace} could not resume, so its yielded promise was dropped and the sequence halted: {error:?}"
                 ));
                 Self::emit_event(
                     "sequence_halted",
@@ -338,9 +384,9 @@ impl Contract {
                         "reason": "resume_failed",
                         "error_kind": "resume_failed",
                         "error_msg": format!("{error:?}"),
-                        "staged_at_ms": staged_at_ms,
+                        "registered_at_ms": registered_at_ms,
                         "halt_latency_ms": env::block_timestamp_ms()
-                            .saturating_sub(staged_at_ms),
+                            .saturating_sub(registered_at_ms),
                         "call": call_metadata,
                     }),
                 );
@@ -349,43 +395,43 @@ impl Contract {
         }
 
         let finish_args = Self::encode_callback_args(&sequence_namespace, &step_id);
-        let downstream = Self::dispatch_promise_for_call(&sequence_namespace, &staged.call);
+        let downstream = Self::dispatch_promise_for_call(&sequence_namespace, &yielded.call);
         let finish = Promise::new(env::current_account_id()).function_call(
-            "on_stage_call_settled",
+            "on_step_resolved",
             finish_args,
             NearToken::from_yoctonear(0),
-            Gas::from_tgas(STAGE_SETTLE_CALLBACK_GAS_TGAS),
+            Gas::from_tgas(STEP_RESOLVE_CALLBACK_GAS_TGAS),
         );
         PromiseOrValue::Promise(downstream.then(finish))
     }
 
     #[private]
-    pub fn on_stage_call_settled(&mut self, sequence_namespace: String, step_id: String) {
-        let key = staged_call_key(&sequence_namespace, &step_id);
-        let (dispatch_summary, call_metadata, staged_at_ms) = self
-            .staged_calls
+    pub fn on_step_resolved(&mut self, sequence_namespace: String, step_id: String) {
+        let key = registered_step_key(&sequence_namespace, &step_id);
+        let (dispatch_summary, call_metadata, registered_at_ms) = self
+            .registered_steps
             .get(&key)
-            .map(|staged| {
+            .map(|yielded| {
                 (
-                    Self::call_dispatch_summary(&staged.call),
-                    Self::call_metadata_json(&staged.call),
-                    staged.created_at_ms,
+                    Self::call_dispatch_summary(&yielded.call),
+                    Self::call_metadata_json(&yielded.call),
+                    yielded.created_at_ms,
                 )
             })
             .unwrap_or_else(|| ("unknown dispatch".to_string(), json!(null), 0u64));
         let result = env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES);
 
-        self.staged_calls.remove(&key);
+        self.registered_steps.remove(&key);
 
         match result {
             Ok(bytes) => {
-                self.progress_sequence_after_successful_settlement(
+                self.progress_sequence_after_successful_resolution(
                     &sequence_namespace,
                     &step_id,
                     &dispatch_summary,
                     bytes.len(),
                     &call_metadata,
-                    staged_at_ms,
+                    registered_at_ms,
                 );
             }
             Err(error) => {
@@ -396,19 +442,19 @@ impl Contract {
                     Some(step_id.clone()),
                 );
                 env::log_str(&format!(
-                    "stage_call '{step_id}' in {sequence_namespace} failed downstream via {}; ordered release stopped here: {error:?}",
+                    "register_step '{step_id}' in {sequence_namespace} failed downstream via {}; ordered release stopped here: {error:?}",
                     dispatch_summary
                 ));
                 Self::emit_event(
-                    "step_settled_err",
+                    "step_resolved_err",
                     json!({
                         "step_id": step_id,
                         "namespace": sequence_namespace,
-                        "error_kind": Self::settle_error_kind(&error),
+                        "error_kind": Self::resolve_error_kind(&error),
                         "error_msg": format!("{error:?}"),
-                        "oversized_bytes": Self::settle_error_oversized_bytes(&error),
-                        "staged_at_ms": staged_at_ms,
-                        "settle_latency_ms": env::block_timestamp_ms().saturating_sub(staged_at_ms),
+                        "oversized_bytes": Self::resolve_error_oversized_bytes(&error),
+                        "registered_at_ms": registered_at_ms,
+                        "resolve_latency_ms": env::block_timestamp_ms().saturating_sub(registered_at_ms),
                         "call": call_metadata,
                     }),
                 );
@@ -416,10 +462,10 @@ impl Contract {
         }
     }
 
-    /// Private middle-callback for `SettlePolicy::Asserted`. Reads the
+    /// Private middle-callback for `StepPolicy::Asserted`. Reads the
     /// target's result and — if the target succeeded — fires the caller-
     /// specified postcheck call chained to `on_asserted_evaluate_postcheck`.
-    /// If the target failed, panics so the outer `.then(on_stage_call_settled)`
+    /// If the target failed, panics so the outer `.then(on_step_resolved)`
     /// observes `PromiseError::Failed` and halts the sequence.
     #[private]
     pub fn on_asserted_run_postcheck(
@@ -462,11 +508,11 @@ impl Contract {
         }
     }
 
-    /// Private terminal-callback for `SettlePolicy::Asserted`. Compares the
+    /// Private terminal-callback for `StepPolicy::Asserted`. Compares the
     /// postcheck call's bytes to the caller-specified `expected_return`. Match →
-    /// returns `()` (empty bytes) so `on_stage_call_settled` sees
+    /// returns `()` (empty bytes) so `on_step_resolved` sees
     /// `Ok(_)` and advances the sequence. Mismatch → panics so
-    /// `on_stage_call_settled` sees `PromiseError::Failed` and halts.
+    /// `on_step_resolved` sees `PromiseError::Failed` and halts.
     #[private]
     pub fn on_asserted_evaluate_postcheck(
         &self,
@@ -475,14 +521,14 @@ impl Contract {
         expected_return: Base64VecU8,
     ) {
         let check_result = env::promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES);
-        // The target step is still staged at this point (on_stage_call_settled
+        // The target step is still yielded at this point (on_step_resolved
         // hasn't fired yet), so we can include its full metadata — including
         // the assertion payload — because `assertion_checked` is the verdict
         // event where the bytes are load-bearing.
         let call_metadata = self
-            .staged_calls
-            .get(&staged_call_key(&sequence_namespace, &step_id))
-            .map(|staged| Self::call_metadata_json_full(&staged.call))
+            .registered_steps
+            .get(&registered_step_key(&sequence_namespace, &step_id))
+            .map(|yielded| Self::call_metadata_json_full(&yielded.call))
             .unwrap_or(json!(null));
         match check_result {
             Err(error) => {
@@ -497,7 +543,7 @@ impl Contract {
                         "actual_return": Option::<Base64VecU8>::None,
                         "match": false,
                         "outcome": "postcheck_failed",
-                        "error_kind": Self::settle_error_kind(&error),
+                        "error_kind": Self::resolve_error_kind(&error),
                         "error_msg": format!("{error:?}"),
                         "call": call_metadata,
                     }),
@@ -552,14 +598,14 @@ impl Contract {
         }
     }
 
-    pub fn has_staged_call(&self, caller_id: AccountId, step_id: String) -> bool {
-        self.staged_calls
-            .get(&staged_call_key(&manual_namespace(&caller_id), &step_id))
+    pub fn has_registered_step(&self, caller_id: AccountId, step_id: String) -> bool {
+        self.registered_steps
+            .get(&registered_step_key(&manual_namespace(&caller_id), &step_id))
             .is_some()
     }
 
-    pub fn staged_calls_for(&self, caller_id: AccountId) -> Vec<StagedCallView> {
-        self.staged_calls_for_namespace(&manual_namespace(&caller_id))
+    pub fn registered_steps_for(&self, caller_id: AccountId) -> Vec<RegisteredStepView> {
+        self.registered_steps_for_namespace(&manual_namespace(&caller_id))
     }
 
     // --- Durable sequence templates ---
@@ -567,7 +613,7 @@ impl Contract {
     pub fn save_sequence_template(
         &mut self,
         sequence_id: String,
-        calls: Vec<SequenceCallInput>,
+        calls: Vec<StepInput>,
     ) -> SequenceTemplateView {
         self.assert_owner();
         assert!(!sequence_id.is_empty(), "sequence_id cannot be empty");
@@ -751,7 +797,7 @@ impl Contract {
         trigger.runs_started = run_nonce;
 
         for call in &template.calls {
-            self.register_staged_yield_in_namespace(&sequence_namespace, call.clone())
+            self.register_step_in_namespace(&sequence_namespace, call.clone())
                 .detach();
         }
         env::log_str(&format!(
@@ -841,44 +887,44 @@ impl Contract {
         assert!(is_authorized, "caller is not allowed to execute sequences");
     }
 
-    fn sequence_call_from_raw(
+    fn step_from_raw(
         step_id: String,
         target_id: AccountId,
         method_name: String,
         args: Vec<u8>,
         attached_deposit_yocto: u128,
         gas_tgas: u64,
-        settle_policy: SettlePolicy,
-    ) -> SequenceCall {
-        let call = SequenceCall {
+        policy: StepPolicy,
+    ) -> Step {
+        let call = Step {
             step_id,
             target_id,
             method_name,
             args,
             attached_deposit_yocto,
             gas_tgas,
-            settle_policy,
+            policy,
         };
-        Self::validate_sequence_call(&call);
+        Self::validate_step(&call);
         call
     }
 
     fn validate_sequence_template_inputs(
-        calls: Vec<SequenceCallInput>,
-    ) -> (Vec<SequenceCall>, u128) {
+        calls: Vec<StepInput>,
+    ) -> (Vec<Step>, u128) {
         let mut seen = std::collections::BTreeSet::new();
         let mut total_attached_deposit_yocto = 0_u128;
         let validated_calls = calls
             .into_iter()
             .map(|call| {
-                let validated = Self::sequence_call_from_raw(
+                let validated = Self::step_from_raw(
                     call.step_id,
                     call.target_id,
                     call.method_name,
                     call.args.0,
                     call.attached_deposit_yocto.0,
                     call.gas_tgas,
-                    call.settle_policy,
+                    call.policy,
                 );
                 assert!(
                     seen.insert(validated.step_id.clone()),
@@ -893,16 +939,16 @@ impl Contract {
         (validated_calls, total_attached_deposit_yocto)
     }
 
-    fn validate_sequence_call(call: &SequenceCall) {
+    fn validate_step(call: &Step) {
         assert!(!call.step_id.is_empty(), "step_id cannot be empty");
         assert!(!call.method_name.is_empty(), "method_name cannot be empty");
         assert!(call.gas_tgas > 0, "gas_tgas must be greater than zero");
-        match &call.settle_policy {
-            SettlePolicy::Direct => {}
-            SettlePolicy::Adapter { adapter_method, .. } => {
+        match &call.policy {
+            StepPolicy::Direct => {}
+            StepPolicy::Adapter { adapter_method, .. } => {
                 assert!(!adapter_method.is_empty(), "adapter_method cannot be empty");
             }
-            SettlePolicy::Asserted {
+            StepPolicy::Asserted {
                 assertion_method,
                 assertion_gas_tgas,
                 ..
@@ -916,39 +962,39 @@ impl Contract {
                     "assertion_gas_tgas must be greater than zero"
                 );
                 assert!(
-                    *assertion_gas_tgas <= MAX_STAGE_CALL_GAS_TGAS,
+                    *assertion_gas_tgas <= MAX_STEP_GAS_TGAS,
                     "assertion_gas_tgas exceeds per-step gas cap"
                 );
             }
         }
         assert!(
-            call.gas_tgas <= Self::max_target_gas_tgas(&call.settle_policy),
-            "gas_tgas is too large for this settle policy"
+            call.gas_tgas <= Self::max_target_gas_tgas(&call.policy),
+            "gas_tgas is too large for this resolution policy"
         );
     }
 
-    fn sequence_call_view(call: &SequenceCall) -> SequenceCallView {
-        SequenceCallView {
+    fn step_view_from_call(call: &Step) -> StepView {
+        StepView {
             step_id: call.step_id.clone(),
             target_id: call.target_id.clone(),
             method_name: call.method_name.clone(),
             args: Base64VecU8::from(call.args.clone()),
             attached_deposit_yocto: U128(call.attached_deposit_yocto),
             gas_tgas: call.gas_tgas,
-            settle_policy: call.settle_policy.clone(),
+            policy: call.policy.clone(),
         }
     }
 
-    fn staged_call_view(staged: &StagedCall) -> StagedCallView {
-        StagedCallView {
-            step_id: staged.call.step_id.clone(),
-            target_id: staged.call.target_id.clone(),
-            method_name: staged.call.method_name.clone(),
-            args: Base64VecU8::from(staged.call.args.clone()),
-            attached_deposit_yocto: U128(staged.call.attached_deposit_yocto),
-            gas_tgas: staged.call.gas_tgas,
-            settle_policy: staged.call.settle_policy.clone(),
-            created_at_ms: staged.created_at_ms,
+    fn registered_step_view(yielded: &RegisteredStep) -> RegisteredStepView {
+        RegisteredStepView {
+            step_id: yielded.call.step_id.clone(),
+            target_id: yielded.call.target_id.clone(),
+            method_name: yielded.call.method_name.clone(),
+            args: Base64VecU8::from(yielded.call.args.clone()),
+            attached_deposit_yocto: U128(yielded.call.attached_deposit_yocto),
+            gas_tgas: yielded.call.gas_tgas,
+            policy: yielded.call.policy.clone(),
+            created_at_ms: yielded.created_at_ms,
         }
     }
 
@@ -959,24 +1005,24 @@ impl Contract {
         let contains_adapter_calls = template
             .calls
             .iter()
-            .any(|call| matches!(call.settle_policy, SettlePolicy::Adapter { .. }));
+            .any(|call| matches!(call.policy, StepPolicy::Adapter { .. }));
         let contains_asserted_calls = template
             .calls
             .iter()
-            .any(|call| matches!(call.settle_policy, SettlePolicy::Asserted { .. }));
+            .any(|call| matches!(call.policy, StepPolicy::Asserted { .. }));
         SequenceTemplateView {
             sequence_id,
             calls: template
                 .calls
                 .iter()
-                .map(Self::sequence_call_view)
+                .map(Self::step_view_from_call)
                 .collect(),
             contains_adapter_calls,
             contains_asserted_calls,
             contains_non_direct_calls: template
                 .calls
                 .iter()
-                .any(|call| !matches!(call.settle_policy, SettlePolicy::Direct)),
+                .any(|call| !matches!(call.policy, StepPolicy::Direct)),
             saved_at_ms: template.saved_at_ms,
             total_attached_deposit_yocto: U128(template.total_attached_deposit_yocto),
         }
@@ -1001,15 +1047,15 @@ impl Contract {
 
     // --- Sequencing kernel: registration ---
 
-    fn register_staged_yield_in_namespace(
+    fn register_step_in_namespace(
         &mut self,
         sequence_namespace: &str,
-        call: SequenceCall,
+        call: Step,
     ) -> Promise {
-        let key = staged_call_key(sequence_namespace, &call.step_id);
+        let key = registered_step_key(sequence_namespace, &call.step_id);
         assert!(
-            self.staged_calls.get(&key).is_none(),
-            "step_id already staged for this sequence"
+            self.registered_steps.get(&key).is_none(),
+            "step_id already yielded for this sequence"
         );
 
         let step_id = call.step_id.clone();
@@ -1017,42 +1063,42 @@ impl Contract {
         let call_metadata = Self::call_metadata_json_full(&call);
         let resume_callback_gas = Gas::from_tgas(
             call.gas_tgas
-                + Self::adapter_overhead_tgas(&call.settle_policy)
-                + STAGE_SETTLE_CALLBACK_GAS_TGAS
-                + STAGE_RESUME_OVERHEAD_TGAS,
+                + Self::adapter_overhead_tgas(&call.policy)
+                + STEP_RESOLVE_CALLBACK_GAS_TGAS
+                + STEP_RESUME_OVERHEAD_TGAS,
         );
         let callback_args = Self::encode_callback_args(sequence_namespace, &call.step_id);
-        let (yield_promise, yield_id) = Promise::new_yield(
-            "on_stage_call_resume",
+        let (register_step, yield_id) = Promise::new_yield(
+            "on_step_resumed",
             callback_args,
             resume_callback_gas,
             GasWeight::default(),
         );
 
-        let staged_at_ms = env::block_timestamp_ms();
-        self.staged_calls.insert(
+        let registered_at_ms = env::block_timestamp_ms();
+        self.registered_steps.insert(
             key,
-            StagedCall {
+            RegisteredStep {
                 yield_id,
                 call,
-                created_at_ms: staged_at_ms,
+                created_at_ms: registered_at_ms,
             },
         );
         env::log_str(&format!(
-            "stage_call '{step_id}' in {sequence_namespace} staged and waiting for resume via {dispatch_summary}"
+            "register_step '{step_id}' in {sequence_namespace} yielded and waiting for resume via {dispatch_summary}"
         ));
         Self::emit_event(
-            "stage_call_registered",
+            "step_registered",
             json!({
                 "step_id": step_id,
                 "namespace": sequence_namespace,
-                "staged_at_ms": staged_at_ms,
+                "registered_at_ms": registered_at_ms,
                 "resume_callback_gas_tgas": resume_callback_gas.as_tgas(),
                 "call": call_metadata,
             }),
         );
 
-        yield_promise
+        register_step
     }
 
     // --- Sequencing kernel: release ---
@@ -1069,10 +1115,10 @@ impl Contract {
         );
         for step_id in &order {
             assert!(
-                self.staged_calls
-                    .get(&staged_call_key(sequence_namespace, step_id))
+                self.registered_steps
+                    .get(&registered_step_key(sequence_namespace, step_id))
                     .is_some(),
-                "step_id '{step_id}' not staged for this sequence"
+                "step_id '{step_id}' not yielded for this sequence"
             );
         }
 
@@ -1085,7 +1131,7 @@ impl Contract {
                 .insert(sequence_namespace.to_owned(), rest);
         }
 
-        if let Err(message) = self.resume_staged_step(sequence_namespace, &first) {
+        if let Err(message) = self.resume_registered_step(sequence_namespace, &first) {
             env::panic_str(&message);
         }
         let queued = self
@@ -1130,7 +1176,7 @@ impl Contract {
             "sequence_namespace": sequence_namespace,
             "step_id": step_id,
         }))
-        .unwrap_or_else(|_| env::panic_str("failed to encode stage_call callback args"))
+        .unwrap_or_else(|_| env::panic_str("failed to encode register_step callback args"))
     }
 
     // --- Structured event emission (NEP-297, standard = "sa-automation") ---
@@ -1179,30 +1225,30 @@ impl Contract {
         })
     }
 
-    /// Structured description of a staged call without the full assertion
+    /// Structured description of a yielded promise without the full assertion
     /// payload. For Asserted calls this still names the assertion target
     /// (`assertion_id`, `assertion_method`, `assertion_gas_tgas`) and its
     /// byte-size footprint (`assertion_args_bytes_len`,
     /// `expected_return_bytes_len`), but skips the raw bytes — those appear
-    /// only on `stage_call_registered` and `assertion_checked`. This keeps
-    /// intermediate events (step_resumed, step_settled_ok/err,
+    /// only on `step_registered` and `assertion_checked`. This keeps
+    /// intermediate events (step_resumed, step_resolved_ok/err,
     /// sequence_halted) small even when the assertion payload is large.
-    fn call_metadata_json(call: &SequenceCall) -> serde_json::Value {
+    fn call_metadata_json(call: &Step) -> serde_json::Value {
         Self::call_metadata_json_impl(call, false)
     }
 
     /// Same as `call_metadata_json` but also embeds the full assertion
     /// payload (`assertion_args`, `expected_return` as base64). Use this
     /// only at the two events where the payload is load-bearing:
-    /// `stage_call_registered` (the step's "birth" — full spec of intent)
+    /// `step_registered` (the step's "birth" — full spec of intent)
     /// and `assertion_checked` (the verdict — needs the bytes to explain
     /// the match/mismatch outcome).
-    fn call_metadata_json_full(call: &SequenceCall) -> serde_json::Value {
+    fn call_metadata_json_full(call: &Step) -> serde_json::Value {
         Self::call_metadata_json_impl(call, true)
     }
 
     fn call_metadata_json_impl(
-        call: &SequenceCall,
+        call: &Step,
         include_assertion_payload: bool,
     ) -> serde_json::Value {
         let mut v = json!({
@@ -1211,20 +1257,20 @@ impl Contract {
             "args_bytes_len": call.args.len(),
             "deposit_yocto": call.attached_deposit_yocto.to_string(),
             "gas_tgas": call.gas_tgas,
-            "settle_policy": Self::settle_policy_label(&call.settle_policy),
+            "policy": Self::step_policy_label(&call.policy),
             "dispatch_summary": Self::call_dispatch_summary(call),
         });
         if let serde_json::Value::Object(map) = &mut v {
-            match &call.settle_policy {
-                SettlePolicy::Direct => {}
-                SettlePolicy::Adapter {
+            match &call.policy {
+                StepPolicy::Direct => {}
+                StepPolicy::Adapter {
                     adapter_id,
                     adapter_method,
                 } => {
                     map.insert("adapter_id".to_string(), json!(adapter_id));
                     map.insert("adapter_method".to_string(), json!(adapter_method));
                 }
-                SettlePolicy::Asserted {
+                StepPolicy::Asserted {
                     assertion_id,
                     assertion_method,
                     assertion_args,
@@ -1255,15 +1301,15 @@ impl Contract {
         v
     }
 
-    fn settle_policy_label(policy: &SettlePolicy) -> &'static str {
+    fn step_policy_label(policy: &StepPolicy) -> &'static str {
         match policy {
-            SettlePolicy::Direct => "direct",
-            SettlePolicy::Adapter { .. } => "adapter",
-            SettlePolicy::Asserted { .. } => "asserted",
+            StepPolicy::Direct => "direct",
+            StepPolicy::Adapter { .. } => "adapter",
+            StepPolicy::Asserted { .. } => "asserted",
         }
     }
 
-    fn settle_error_kind(error: &PromiseError) -> &'static str {
+    fn resolve_error_kind(error: &PromiseError) -> &'static str {
         match error {
             PromiseError::Failed => "downstream_failed",
             PromiseError::TooLong(_) => "result_oversized",
@@ -1271,14 +1317,14 @@ impl Contract {
         }
     }
 
-    fn settle_error_oversized_bytes(error: &PromiseError) -> Option<usize> {
+    fn resolve_error_oversized_bytes(error: &PromiseError) -> Option<usize> {
         match error {
             PromiseError::TooLong(size) => Some(*size),
             _ => None,
         }
     }
 
-    fn encode_adapter_dispatch_args(call: &SequenceCall) -> Vec<u8> {
+    fn encode_adapter_dispatch_args(call: &Step) -> Vec<u8> {
         serde_json::to_vec(&json!({
             "call": AdapterDispatchInput {
                 target_id: call.target_id.clone(),
@@ -1325,29 +1371,29 @@ impl Contract {
         .unwrap_or_else(|_| env::panic_str("failed to encode asserted evaluate args"))
     }
 
-    fn resume_staged_step(&self, sequence_namespace: &str, step_id: &str) -> Result<(), String> {
-        let key = staged_call_key(sequence_namespace, step_id);
-        let staged = self
-            .staged_calls
+    fn resume_registered_step(&self, sequence_namespace: &str, step_id: &str) -> Result<(), String> {
+        let key = registered_step_key(sequence_namespace, step_id);
+        let yielded = self
+            .registered_steps
             .get(&key)
-            .ok_or_else(|| format!("step_id '{step_id}' not staged for this sequence"))?;
+            .ok_or_else(|| format!("step_id '{step_id}' not yielded for this sequence"))?;
 
         let payload = Self::encode_resume_payload();
-        staged
+        yielded
             .yield_id
             .resume(payload)
-            .map_err(|_| format!("failed to resume staged step '{step_id}'"))
+            .map_err(|_| format!("failed to resume yielded step '{step_id}'"))
     }
 
-    fn dispatch_promise_for_call(sequence_namespace: &str, call: &SequenceCall) -> Promise {
-        match &call.settle_policy {
-            SettlePolicy::Direct => Promise::new(call.target_id.clone()).function_call(
+    fn dispatch_promise_for_call(sequence_namespace: &str, call: &Step) -> Promise {
+        match &call.policy {
+            StepPolicy::Direct => Promise::new(call.target_id.clone()).function_call(
                 call.method_name.clone(),
                 call.args.clone(),
                 NearToken::from_yoctonear(call.attached_deposit_yocto),
                 Gas::from_tgas(call.gas_tgas),
             ),
-            SettlePolicy::Adapter {
+            StepPolicy::Adapter {
                 adapter_id,
                 adapter_method,
             } => Promise::new(adapter_id.clone()).function_call(
@@ -1356,7 +1402,7 @@ impl Contract {
                 NearToken::from_yoctonear(call.attached_deposit_yocto),
                 Gas::from_tgas(call.gas_tgas + ADAPTER_SEQUENCE_OVERHEAD_TGAS),
             ),
-            SettlePolicy::Asserted {
+            StepPolicy::Asserted {
                 assertion_id,
                 assertion_method,
                 assertion_args,
@@ -1393,17 +1439,17 @@ impl Contract {
         }
     }
 
-    fn call_dispatch_summary(call: &SequenceCall) -> String {
-        match &call.settle_policy {
-            SettlePolicy::Direct => format!("direct {}.{}", call.target_id, call.method_name),
-            SettlePolicy::Adapter {
+    fn call_dispatch_summary(call: &Step) -> String {
+        match &call.policy {
+            StepPolicy::Direct => format!("direct {}.{}", call.target_id, call.method_name),
+            StepPolicy::Adapter {
                 adapter_id,
                 adapter_method,
             } => format!(
                 "adapter {}.{} wrapping {}.{}",
                 adapter_id, adapter_method, call.target_id, call.method_name
             ),
-            SettlePolicy::Asserted {
+            StepPolicy::Asserted {
                 assertion_id,
                 assertion_method,
                 ..
@@ -1414,11 +1460,11 @@ impl Contract {
         }
     }
 
-    fn adapter_overhead_tgas(settle_policy: &SettlePolicy) -> u64 {
-        match settle_policy {
-            SettlePolicy::Direct => 0,
-            SettlePolicy::Adapter { .. } => ADAPTER_SEQUENCE_OVERHEAD_TGAS,
-            SettlePolicy::Asserted {
+    fn adapter_overhead_tgas(policy: &StepPolicy) -> u64 {
+        match policy {
+            StepPolicy::Direct => 0,
+            StepPolicy::Adapter { .. } => ADAPTER_SEQUENCE_OVERHEAD_TGAS,
+            StepPolicy::Asserted {
                 assertion_gas_tgas, ..
             } => {
                 ASSERTED_POSTCHECK_RUN_GAS_TGAS
@@ -1428,23 +1474,23 @@ impl Contract {
         }
     }
 
-    fn max_target_gas_tgas(settle_policy: &SettlePolicy) -> u64 {
-        match settle_policy {
-            SettlePolicy::Direct => MAX_STAGE_CALL_GAS_TGAS,
-            SettlePolicy::Adapter { .. } => MAX_ADAPTER_TARGET_GAS_TGAS,
-            SettlePolicy::Asserted { .. } => {
-                MAX_STAGE_CALL_GAS_TGAS.saturating_sub(Self::adapter_overhead_tgas(settle_policy))
+    fn max_target_gas_tgas(policy: &StepPolicy) -> u64 {
+        match policy {
+            StepPolicy::Direct => MAX_STEP_GAS_TGAS,
+            StepPolicy::Adapter { .. } => MAX_ADAPTER_TARGET_GAS_TGAS,
+            StepPolicy::Asserted { .. } => {
+                MAX_STEP_GAS_TGAS.saturating_sub(Self::adapter_overhead_tgas(policy))
             }
         }
     }
 
-    fn staged_calls_for_namespace(&self, sequence_namespace: &str) -> Vec<StagedCallView> {
+    fn registered_steps_for_namespace(&self, sequence_namespace: &str) -> Vec<RegisteredStepView> {
         let prefix = format!("{sequence_namespace}#");
-        self.staged_calls
+        self.registered_steps
             .iter()
-            .filter_map(|(key, staged)| {
+            .filter_map(|(key, yielded)| {
                 if key.starts_with(&prefix) {
-                    Some(Self::staged_call_view(staged))
+                    Some(Self::registered_step_view(yielded))
                 } else {
                     None
                 }
@@ -1452,36 +1498,36 @@ impl Contract {
             .collect()
     }
 
-    // --- Sequencing kernel: progression after settlement ---
+    // --- Sequencing kernel: progression after resolution ---
 
-    fn progress_sequence_after_successful_settlement(
+    fn progress_sequence_after_successful_resolution(
         &mut self,
         sequence_namespace: &str,
-        settled_step_id: &str,
+        resolved_step_id: &str,
         dispatch_summary: &str,
         result_len: usize,
         call_metadata: &serde_json::Value,
-        staged_at_ms: u64,
+        registered_at_ms: u64,
     ) {
-        let settle_latency_ms = env::block_timestamp_ms().saturating_sub(staged_at_ms);
+        let resolve_latency_ms = env::block_timestamp_ms().saturating_sub(registered_at_ms);
 
         if let Some(next) = self.take_next_queued_step(sequence_namespace) {
             env::log_str(&format!(
-                "stage_call '{settled_step_id}' in {sequence_namespace} settled successfully via {dispatch_summary} ({result_len} result bytes); resuming step '{next}' next"
+                "register_step '{resolved_step_id}' in {sequence_namespace} resolved successfully via {dispatch_summary} ({result_len} result bytes); resuming step '{next}' next"
             ));
             Self::emit_event(
-                "step_settled_ok",
+                "step_resolved_ok",
                 json!({
-                    "step_id": settled_step_id,
+                    "step_id": resolved_step_id,
                     "namespace": sequence_namespace,
                     "result_bytes_len": result_len,
                     "next_step_id": next,
-                    "staged_at_ms": staged_at_ms,
-                    "settle_latency_ms": settle_latency_ms,
+                    "registered_at_ms": registered_at_ms,
+                    "resolve_latency_ms": resolve_latency_ms,
                     "call": call_metadata,
                 }),
             );
-            if let Err(message) = self.resume_staged_step(sequence_namespace, &next) {
+            if let Err(message) = self.resume_registered_step(sequence_namespace, &next) {
                 self.sequence_queue.remove(sequence_namespace);
                 self.finish_automation_run(
                     sequence_namespace,
@@ -1489,7 +1535,7 @@ impl Contract {
                     Some(next.clone()),
                 );
                 env::log_str(&format!(
-                    "stage_call '{settled_step_id}' in {sequence_namespace} settled, but the next staged step '{next}' could not be resumed: {message}"
+                    "register_step '{resolved_step_id}' in {sequence_namespace} resolved, but the next yielded step '{next}' could not be resumed: {message}"
                 ));
                 Self::emit_event(
                     "sequence_halted",
@@ -1498,24 +1544,24 @@ impl Contract {
                         "failed_step_id": next,
                         "reason": "resume_failed",
                         "error_kind": "resume_failed",
-                        "after_step_id": settled_step_id,
+                        "after_step_id": resolved_step_id,
                         "error_msg": message,
                     }),
                 );
             }
         } else {
             env::log_str(&format!(
-                "stage_call '{settled_step_id}' in {sequence_namespace} settled successfully via {dispatch_summary} ({result_len} result bytes); sequence completed"
+                "register_step '{resolved_step_id}' in {sequence_namespace} resolved successfully via {dispatch_summary} ({result_len} result bytes); sequence completed"
             ));
             Self::emit_event(
-                "step_settled_ok",
+                "step_resolved_ok",
                 json!({
-                    "step_id": settled_step_id,
+                    "step_id": resolved_step_id,
                     "namespace": sequence_namespace,
                     "result_bytes_len": result_len,
                     "next_step_id": Option::<String>::None,
-                    "staged_at_ms": staged_at_ms,
-                    "settle_latency_ms": settle_latency_ms,
+                    "registered_at_ms": registered_at_ms,
+                    "resolve_latency_ms": resolve_latency_ms,
                     "call": call_metadata,
                 }),
             );
@@ -1523,7 +1569,7 @@ impl Contract {
                 "sequence_completed",
                 json!({
                     "namespace": sequence_namespace,
-                    "final_step_id": settled_step_id,
+                    "final_step_id": resolved_step_id,
                     "final_result_bytes_len": result_len,
                 }),
             );
@@ -1599,14 +1645,14 @@ impl Contract {
             }),
         );
 
-        self.clear_staged_namespace(sequence_namespace);
+        self.clear_registered_namespace(sequence_namespace);
         self.sequence_queue.remove(sequence_namespace);
     }
 
-    fn clear_staged_namespace(&mut self, sequence_namespace: &str) {
+    fn clear_registered_namespace(&mut self, sequence_namespace: &str) {
         let prefix = format!("{sequence_namespace}#");
         let keys: Vec<String> = self
-            .staged_calls
+            .registered_steps
             .iter()
             .filter_map(|(key, _)| {
                 if key.starts_with(&prefix) {
@@ -1617,7 +1663,7 @@ impl Contract {
             })
             .collect();
         for key in keys {
-            self.staged_calls.remove(&key);
+            self.registered_steps.remove(&key);
         }
     }
 
@@ -1636,7 +1682,7 @@ fn automation_namespace(trigger_id: &str, run_nonce: u32) -> String {
     format!("auto:{trigger_id}:{run_nonce}")
 }
 
-fn staged_call_key(sequence_namespace: &str, step_id: &str) -> String {
+fn registered_step_key(sequence_namespace: &str, step_id: &str) -> String {
     format!("{sequence_namespace}#{step_id}")
 }
 
@@ -1713,47 +1759,47 @@ mod tests {
         );
     }
 
-    fn stage_input(step_id: &str, n: u32) -> SequenceCallInput {
-        stage_input_with_policy(step_id, n, SettlePolicy::Direct)
+    fn yield_input(step_id: &str, n: u32) -> StepInput {
+        yield_input_with_policy(step_id, n, StepPolicy::Direct)
     }
 
-    fn stage_input_with_policy(
+    fn yield_input_with_policy(
         step_id: &str,
         n: u32,
-        settle_policy: SettlePolicy,
-    ) -> SequenceCallInput {
-        SequenceCallInput {
+        policy: StepPolicy,
+    ) -> StepInput {
+        StepInput {
             step_id: step_id.into(),
             target_id: router(),
             method_name: "route_echo".into(),
             args: Base64VecU8::from(format!(r#"{{"callee":"{}","n":{}}}"#, echo(), n).into_bytes()),
             attached_deposit_yocto: U128(0),
             gas_tgas: 40,
-            settle_policy,
+            policy,
         }
     }
 
-    fn adapter_stage_input(step_id: &str, n: u32) -> SequenceCallInput {
-        SequenceCallInput {
+    fn adapter_yield_input(step_id: &str, n: u32) -> StepInput {
+        StepInput {
             step_id: step_id.into(),
             target_id: wild_router(),
             method_name: "route_echo_fire_and_forget".into(),
             args: Base64VecU8::from(format!(r#"{{"callee":"{}","n":{}}}"#, echo(), n).into_bytes()),
             attached_deposit_yocto: U128(0),
             gas_tgas: 40,
-            settle_policy: adapter_policy(),
+            policy: adapter_policy(),
         }
     }
 
-    fn adapter_policy() -> SettlePolicy {
-        SettlePolicy::Adapter {
+    fn adapter_policy() -> StepPolicy {
+        StepPolicy::Adapter {
             adapter_id: adapter(),
             adapter_method: "adapt_fire_and_forget_route_echo".into(),
         }
     }
 
-    fn asserted_policy(expected_return: Vec<u8>) -> SettlePolicy {
-        SettlePolicy::Asserted {
+    fn asserted_policy(expected_return: Vec<u8>) -> StepPolicy {
+        StepPolicy::Asserted {
             assertion_id: pathological_router(),
             assertion_method: "get_calls_completed".into(),
             assertion_args: Base64VecU8::from(br#"{}"#.to_vec()),
@@ -1762,15 +1808,15 @@ mod tests {
         }
     }
 
-    fn asserted_stage_input(step_id: &str, expected_return: Vec<u8>) -> SequenceCallInput {
-        SequenceCallInput {
+    fn asserted_yield_input(step_id: &str, expected_return: Vec<u8>) -> StepInput {
+        StepInput {
             step_id: step_id.into(),
             target_id: pathological_router(),
             method_name: "do_honest_work".into(),
             args: Base64VecU8::from(br#"{"label":"probe"}"#.to_vec()),
             attached_deposit_yocto: U128(0),
             gas_tgas: 40,
-            settle_policy: asserted_policy(expected_return),
+            policy: asserted_policy(expected_return),
         }
     }
 
@@ -1811,16 +1857,16 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         let sequence_id = "router-demo".to_string();
         let trigger_id = "balance-demo".to_string();
-        c.save_sequence_template(sequence_id.clone(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template(sequence_id.clone(), vec![yield_input("alpha", 1)]);
         c.create_balance_trigger(trigger_id.clone(), sequence_id.clone(), U128(0), max_runs);
         (c, sequence_id, trigger_id)
     }
 
     #[test]
-    fn stage_call_registers_staged_view() {
+    fn register_step_registers_yielded_view() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":7}"#.to_vec()),
@@ -1830,19 +1876,19 @@ mod tests {
             None,
         );
 
-        assert!(c.has_staged_call(owner(), "alpha".into()));
-        let staged = c.staged_calls_for(owner());
-        assert_eq!(staged.len(), 1);
-        assert_eq!(staged[0].step_id, "alpha");
-        assert_eq!(staged[0].target_id, echo());
-        assert_eq!(staged[0].method_name, "echo");
+        assert!(c.has_registered_step(owner(), "alpha".into()));
+        let yielded = c.registered_steps_for(owner());
+        assert_eq!(yielded.len(), 1);
+        assert_eq!(yielded[0].step_id, "alpha");
+        assert_eq!(yielded[0].target_id, echo());
+        assert_eq!(yielded[0].method_name, "echo");
     }
 
     #[test]
-    fn stage_call_allocates_distinct_yielded_receipt_per_step() {
+    fn register_step_allocates_distinct_yielded_receipt_per_step() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":5}"#.to_vec()),
@@ -1851,7 +1897,7 @@ mod tests {
             "alpha".into(),
             None,
         );
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":6}"#.to_vec()),
@@ -1862,41 +1908,41 @@ mod tests {
         );
 
         let alpha = c
-            .staged_calls
-            .get(&staged_call_key(&manual_namespace(&owner()), "alpha"))
+            .registered_steps
+            .get(&registered_step_key(&manual_namespace(&owner()), "alpha"))
             .unwrap();
         let beta = c
-            .staged_calls
-            .get(&staged_call_key(&manual_namespace(&owner()), "beta"))
+            .registered_steps
+            .get(&registered_step_key(&manual_namespace(&owner()), "beta"))
             .unwrap();
         assert_ne!(alpha.yield_id, beta.yield_id);
     }
 
     #[test]
-    fn stage_call_accepts_pv83_max_call_gas() {
+    fn register_step_accepts_pv83_max_call_gas() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":9}"#.to_vec()),
             U128(0),
-            MAX_STAGE_CALL_GAS_TGAS,
+            MAX_STEP_GAS_TGAS,
             "max".into(),
             None,
         );
 
-        let staged = c.staged_calls_for(owner());
-        assert_eq!(staged.len(), 1);
-        assert_eq!(staged[0].gas_tgas, MAX_STAGE_CALL_GAS_TGAS);
+        let yielded = c.registered_steps_for(owner());
+        assert_eq!(yielded.len(), 1);
+        assert_eq!(yielded[0].gas_tgas, MAX_STEP_GAS_TGAS);
     }
 
     #[test]
-    #[should_panic(expected = "step_id already staged for this sequence")]
-    fn stage_call_rejects_duplicate_step_id() {
+    #[should_panic(expected = "step_id already yielded for this sequence")]
+    fn register_step_rejects_duplicate_step_id() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":1}"#.to_vec()),
@@ -1905,7 +1951,7 @@ mod tests {
             "alpha".into(),
             None,
         );
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":2}"#.to_vec()),
@@ -1918,25 +1964,105 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "gas_tgas is too large")]
-    fn stage_call_rejects_over_max_gas() {
+    fn register_step_rejects_over_max_gas() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":1}"#.to_vec()),
             U128(0),
-            MAX_STAGE_CALL_GAS_TGAS + 1,
+            MAX_STEP_GAS_TGAS + 1,
             "alpha".into(),
             None,
         );
     }
 
     #[test]
-    fn direct_policy_treats_empty_success_bytes_as_successful_settlement() {
+    fn execute_steps_registers_single_step_and_starts_release() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+
+        let count = c.execute_steps(vec![yield_input("alpha", 1)]);
+
+        assert_eq!(count, 1);
+        assert!(c.has_registered_step(owner(), "alpha".into()));
+        assert_eq!(
+            c.registered_steps_for(owner())[0].step_id,
+            "alpha".to_string()
+        );
+    }
+
+    #[test]
+    fn execute_steps_registers_multi_step_plan_in_submission_order() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+
+        let count = c.execute_steps(vec![
+            yield_input("alpha", 1),
+            yield_input("beta", 2),
+            yield_input("gamma", 3),
+        ]);
+
+        assert_eq!(count, 3);
+        let registered = c.registered_steps_for(owner());
+        assert_eq!(registered.len(), 3);
+        let ids: Vec<String> = registered.into_iter().map(|view| view.step_id).collect();
+        assert_eq!(ids, vec!["alpha", "beta", "gamma"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate step_id in submitted plan")]
+    fn execute_steps_rejects_duplicate_step_ids() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![
+            yield_input("alpha", 1),
+            yield_input("alpha", 2),
+        ]);
+    }
+
+    #[test]
+    #[should_panic(expected = "execute_steps requires at least one step")]
+    fn execute_steps_rejects_empty_plan() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![]);
+    }
+
+    #[test]
+    fn execute_steps_accepts_mixed_policy_plan() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+
+        let count = c.execute_steps(vec![
+            yield_input("alpha", 1),
+            asserted_yield_input("beta", b"1".to_vec()),
+        ]);
+
+        assert_eq!(count, 2);
+        let registered = c.registered_steps_for(owner());
+        assert_eq!(registered.len(), 2);
+        assert!(matches!(registered[0].policy, StepPolicy::Direct));
+        assert!(matches!(
+            registered[1].policy,
+            StepPolicy::Asserted { .. }
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "caller is not allowed to execute sequences")]
+    fn execute_steps_requires_authorized_executor() {
+        ctx(stranger());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input("alpha", 1)]);
+    }
+
+    #[test]
+    fn direct_policy_treats_empty_success_bytes_as_successful_resolution() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":7}"#.to_vec()),
@@ -1945,7 +2071,7 @@ mod tests {
             "alpha".into(),
             None,
         );
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":8}"#.to_vec()),
@@ -1958,18 +2084,18 @@ mod tests {
             .insert(manual_namespace(&owner()), vec!["beta".into()]);
 
         callback_ctx(PromiseResult::Successful(vec![]));
-        c.on_stage_call_settled(manual_namespace(&owner()), "alpha".into());
+        c.on_step_resolved(manual_namespace(&owner()), "alpha".into());
 
-        assert!(!c.has_staged_call(owner(), "alpha".into()));
+        assert!(!c.has_registered_step(owner(), "alpha".into()));
         assert!(c.sequence_queue.get(&manual_namespace(&owner())).is_none());
-        assert!(c.has_staged_call(owner(), "beta".into()));
+        assert!(c.has_registered_step(owner(), "beta".into()));
     }
 
     #[test]
     fn adapter_policy_dispatches_to_adapter_contract() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             wild_router(),
             "route_echo_fire_and_forget".into(),
             Base64VecU8::from(format!(r#"{{"callee":"{}","n":9}}"#, echo()).into_bytes()),
@@ -1980,7 +2106,7 @@ mod tests {
         );
 
         ctx(current());
-        let result = c.on_stage_call_resume(manual_namespace(&owner()), "alpha".into(), Ok(()));
+        let result = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
         assert!(matches!(result, PromiseOrValue::Promise(_)));
         drop(result);
 
@@ -2015,7 +2141,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not staged for this sequence")]
+    #[should_panic(expected = "not yielded for this sequence")]
     fn run_sequence_rejects_unknown_step_id() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
@@ -2037,7 +2163,7 @@ mod tests {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
         for (step_id, n) in [("alpha", 1_u32), ("beta", 2), ("gamma", 3)] {
-            let _ = c.stage_call(
+            let _ = c.register_step(
                 echo(),
                 "echo".into(),
                 Base64VecU8::from(format!(r#"{{"n":{n}}}"#).into_bytes()),
@@ -2058,14 +2184,14 @@ mod tests {
                 .unwrap(),
             vec!["beta".to_string(), "gamma".to_string()]
         );
-        assert!(c.has_staged_call(owner(), "alpha".into()));
+        assert!(c.has_registered_step(owner(), "alpha".into()));
     }
 
     #[test]
     fn successful_progression_resumes_next_step_only_after_downstream_completion() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":1}"#.to_vec()),
@@ -2074,7 +2200,7 @@ mod tests {
             "alpha".into(),
             None,
         );
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":2}"#.to_vec()),
@@ -2085,9 +2211,9 @@ mod tests {
         );
 
         c.run_sequence(owner(), vec!["alpha".into(), "beta".into()]);
-        c.staged_calls
-            .remove(&staged_call_key(&manual_namespace(&owner()), "alpha"));
-        c.progress_sequence_after_successful_settlement(
+        c.registered_steps
+            .remove(&registered_step_key(&manual_namespace(&owner()), "alpha"));
+        c.progress_sequence_after_successful_resolution(
             &manual_namespace(&owner()),
             "alpha",
             "direct echo.near.echo",
@@ -2097,14 +2223,14 @@ mod tests {
         );
 
         assert!(c.sequence_queue.get(&manual_namespace(&owner())).is_none());
-        assert!(c.has_staged_call(owner(), "beta".into()));
+        assert!(c.has_registered_step(owner(), "beta".into()));
     }
 
     #[test]
     fn downstream_failure_halts_without_resuming_next_step() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":1}"#.to_vec()),
@@ -2113,7 +2239,7 @@ mod tests {
             "alpha".into(),
             None,
         );
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":2}"#.to_vec()),
@@ -2127,10 +2253,10 @@ mod tests {
             .insert(manual_namespace(&owner()), vec!["beta".into()]);
 
         callback_ctx(PromiseResult::Failed);
-        c.on_stage_call_settled(manual_namespace(&owner()), "alpha".into());
+        c.on_step_resolved(manual_namespace(&owner()), "alpha".into());
 
         assert!(c.sequence_queue.get(&manual_namespace(&owner())).is_none());
-        assert!(c.has_staged_call(owner(), "beta".into()));
+        assert!(c.has_registered_step(owner(), "beta".into()));
     }
 
     #[test]
@@ -2139,7 +2265,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "router-demo".into(),
-            vec![stage_input("alpha", 1), stage_input("beta", 2)],
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
         );
 
         let listed = c.list_sequence_templates();
@@ -2159,14 +2285,14 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "adapter-demo".into(),
-            vec![adapter_stage_input("alpha", 1)],
+            vec![adapter_yield_input("alpha", 1)],
         );
 
         let template = c.get_sequence_template("adapter-demo".into()).unwrap();
         assert!(template.contains_adapter_calls);
         assert!(!template.contains_asserted_calls);
         assert!(template.contains_non_direct_calls);
-        assert_eq!(template.calls[0].settle_policy, adapter_policy());
+        assert_eq!(template.calls[0].policy, adapter_policy());
     }
 
     #[test]
@@ -2175,7 +2301,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "asserted-demo".into(),
-            vec![asserted_stage_input("alpha", b"1".to_vec())],
+            vec![asserted_yield_input("alpha", b"1".to_vec())],
         );
 
         let template = c.get_sequence_template("asserted-demo".into()).unwrap();
@@ -2183,8 +2309,8 @@ mod tests {
         assert!(template.contains_asserted_calls);
         assert!(template.contains_non_direct_calls);
         assert!(matches!(
-            template.calls[0].settle_policy,
-            SettlePolicy::Asserted { .. }
+            template.calls[0].policy,
+            StepPolicy::Asserted { .. }
         ));
     }
 
@@ -2195,9 +2321,9 @@ mod tests {
         c.save_sequence_template(
             "mixed-demo".into(),
             vec![
-                stage_input("alpha", 1),
-                adapter_stage_input("beta", 2),
-                asserted_stage_input("gamma", b"1".to_vec()),
+                yield_input("alpha", 1),
+                adapter_yield_input("beta", 2),
+                asserted_yield_input("gamma", b"1".to_vec()),
             ],
         );
 
@@ -2205,11 +2331,11 @@ mod tests {
         assert!(template.contains_adapter_calls);
         assert!(template.contains_asserted_calls);
         assert!(template.contains_non_direct_calls);
-        assert_eq!(template.calls[0].settle_policy, SettlePolicy::Direct);
-        assert_eq!(template.calls[1].settle_policy, adapter_policy());
+        assert_eq!(template.calls[0].policy, StepPolicy::Direct);
+        assert_eq!(template.calls[1].policy, adapter_policy());
         assert!(matches!(
-            template.calls[2].settle_policy,
-            SettlePolicy::Asserted { .. }
+            template.calls[2].policy,
+            StepPolicy::Asserted { .. }
         ));
     }
 
@@ -2219,7 +2345,7 @@ mod tests {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
         ctx(stranger());
-        c.save_sequence_template("router-demo".into(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template("router-demo".into(), vec![yield_input("alpha", 1)]);
     }
 
     #[test]
@@ -2227,7 +2353,7 @@ mod tests {
     fn delete_sequence_template_rejects_referenced_trigger() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("router-demo".into(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template("router-demo".into(), vec![yield_input("alpha", 1)]);
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
         c.delete_sequence_template("router-demo".into());
     }
@@ -2236,7 +2362,7 @@ mod tests {
     fn balance_trigger_crud_roundtrip() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("router-demo".into(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template("router-demo".into(), vec![yield_input("alpha", 1)]);
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 2);
 
         let listed = c.list_balance_triggers();
@@ -2252,7 +2378,7 @@ mod tests {
     fn create_balance_trigger_requires_owner() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("router-demo".into(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template("router-demo".into(), vec![yield_input("alpha", 1)]);
         ctx(stranger());
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
     }
@@ -2271,7 +2397,7 @@ mod tests {
     fn execute_trigger_rejects_below_threshold() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("router-demo".into(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template("router-demo".into(), vec![yield_input("alpha", 1)]);
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(10), 1);
         ctx_with_balance(owner(), NearToken::from_yoctonear(1));
         c.execute_trigger("balance-demo".into());
@@ -2312,7 +2438,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "router-demo".into(),
-            vec![stage_input("alpha", 1), stage_input("beta", 2)],
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
         );
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 2);
 
@@ -2338,8 +2464,8 @@ mod tests {
         assert_eq!(run.status, AutomationRunStatus::InFlight);
         assert_eq!(run.executor_id, owner());
 
-        let staged = c.staged_calls_for_namespace("auto:balance-demo:1");
-        assert_eq!(staged.len(), 2);
+        let yielded = c.registered_steps_for_namespace("auto:balance-demo:1");
+        assert_eq!(yielded.len(), 2);
         let queued = c
             .sequence_queue
             .get("auto:balance-demo:1")
@@ -2355,9 +2481,9 @@ mod tests {
         c.save_sequence_template(
             "router-demo".into(),
             vec![
-                stage_input("alpha", 1),
-                stage_input("beta", 2),
-                stage_input("gamma", 3),
+                yield_input("alpha", 1),
+                yield_input("beta", 2),
+                yield_input("gamma", 3),
             ],
         );
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
@@ -2366,8 +2492,8 @@ mod tests {
         let started = c.execute_trigger("balance-demo".into());
 
         assert_eq!(started.call_count, 3);
-        let staged = c.staged_calls_for_namespace(&started.sequence_namespace);
-        assert_eq!(staged.len(), 3);
+        let yielded = c.registered_steps_for_namespace(&started.sequence_namespace);
+        assert_eq!(yielded.len(), 3);
         assert_eq!(
             c.sequence_queue
                 .get(&started.sequence_namespace)
@@ -2381,14 +2507,14 @@ mod tests {
     fn adapter_success_marks_terminal_run_succeeded() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("adapter-demo".into(), vec![adapter_stage_input("alpha", 1)]);
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
         c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 1);
 
         ctx(owner());
         let started = c.execute_trigger("balance-demo".into());
 
         callback_ctx(PromiseResult::Successful(vec![1]));
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let trigger = c.balance_triggers.get("balance-demo").cloned().unwrap();
         assert!(!trigger.in_flight);
@@ -2409,14 +2535,14 @@ mod tests {
     fn adapter_failure_halts_sequence_as_downstream_failed() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("adapter-demo".into(), vec![adapter_stage_input("alpha", 1)]);
+        c.save_sequence_template("adapter-demo".into(), vec![adapter_yield_input("alpha", 1)]);
         c.create_balance_trigger("balance-demo".into(), "adapter-demo".into(), U128(0), 1);
 
         ctx(owner());
         let started = c.execute_trigger("balance-demo".into());
 
         callback_ctx(PromiseResult::Failed);
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let trigger = c.balance_triggers.get("balance-demo").cloned().unwrap();
         assert!(!trigger.in_flight);
@@ -2440,7 +2566,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "router-demo".into(),
-            vec![stage_input("alpha", 1), stage_input("beta", 2)],
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
         );
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
 
@@ -2451,7 +2577,7 @@ mod tests {
             7_u8;
             MAX_CALLBACK_RESULT_BYTES + 1
         ]));
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let trigger = c.balance_triggers.get("balance-demo").cloned().unwrap();
         assert!(!trigger.in_flight);
@@ -2468,7 +2594,7 @@ mod tests {
         assert_eq!(run.status, AutomationRunStatus::DownstreamFailed);
         assert_eq!(run.failed_step_id, Some("alpha".into()));
         assert!(c
-            .staged_calls_for_namespace(&started.sequence_namespace)
+            .registered_steps_for_namespace(&started.sequence_namespace)
             .is_empty());
     }
 
@@ -2479,9 +2605,9 @@ mod tests {
         c.save_sequence_template(
             "mixed-demo".into(),
             vec![
-                stage_input("alpha", 1),
-                adapter_stage_input("beta", 2),
-                stage_input("gamma", 3),
+                yield_input("alpha", 1),
+                adapter_yield_input("beta", 2),
+                yield_input("gamma", 3),
             ],
         );
         c.create_balance_trigger("balance-demo".into(), "mixed-demo".into(), U128(0), 1);
@@ -2489,17 +2615,17 @@ mod tests {
         ctx(owner());
         let started = c.execute_trigger("balance-demo".into());
 
-        let staged = c.staged_calls_for_namespace(&started.sequence_namespace);
-        assert_eq!(staged.len(), 3);
+        let yielded = c.registered_steps_for_namespace(&started.sequence_namespace);
+        assert_eq!(yielded.len(), 3);
         assert_eq!(
-            staged
+            yielded
                 .iter()
-                .map(|call| (call.step_id.clone(), call.settle_policy.clone()))
+                .map(|call| (call.step_id.clone(), call.policy.clone()))
                 .collect::<Vec<_>>(),
             vec![
-                ("alpha".to_string(), SettlePolicy::Direct),
+                ("alpha".to_string(), StepPolicy::Direct),
                 ("beta".to_string(), adapter_policy()),
-                ("gamma".to_string(), SettlePolicy::Direct),
+                ("gamma".to_string(), StepPolicy::Direct),
             ]
         );
     }
@@ -2508,7 +2634,7 @@ mod tests {
     fn asserted_dispatch_builds_target_and_postcheck_receipts() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             pathological_router(),
             "do_honest_work".into(),
             Base64VecU8::from(br#"{"label":"probe"}"#.to_vec()),
@@ -2519,7 +2645,7 @@ mod tests {
         );
 
         ctx(current());
-        let result = c.on_stage_call_resume(manual_namespace(&owner()), "alpha".into(), Ok(()));
+        let result = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
         assert!(matches!(result, PromiseOrValue::Promise(_)));
         drop(result);
 
@@ -2624,14 +2750,14 @@ mod tests {
     fn asserted_policy_rejects_empty_assertion_method() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "noop_claim_success".into(),
             Base64VecU8::from(br#"{"label":"probe"}"#.to_vec()),
             U128(0),
             40,
             "alpha".into(),
-            Some(SettlePolicy::Asserted {
+            Some(StepPolicy::Asserted {
                 assertion_id: pathological_router(),
                 assertion_method: "".into(),
                 assertion_args: Base64VecU8::from(br#"{}"#.to_vec()),
@@ -2646,14 +2772,14 @@ mod tests {
     fn asserted_policy_rejects_zero_assertion_gas() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "noop_claim_success".into(),
             Base64VecU8::from(br#"{"label":"probe"}"#.to_vec()),
             U128(0),
             40,
             "alpha".into(),
-            Some(SettlePolicy::Asserted {
+            Some(StepPolicy::Asserted {
                 assertion_id: pathological_router(),
                 assertion_method: "get_calls_completed".into(),
                 assertion_args: Base64VecU8::from(br#"{}"#.to_vec()),
@@ -2669,7 +2795,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "asserted-demo".into(),
-            vec![asserted_stage_input("alpha", b"1".to_vec())],
+            vec![asserted_yield_input("alpha", b"1".to_vec())],
         );
         c.create_balance_trigger("balance-demo".into(), "asserted-demo".into(), U128(0), 1);
 
@@ -2677,7 +2803,7 @@ mod tests {
         let started = c.execute_trigger("balance-demo".into());
 
         ctx(current());
-        let resumed = c.on_stage_call_resume(started.sequence_namespace.clone(), "alpha".into(), Ok(()));
+        let resumed = c.on_step_resumed(started.sequence_namespace.clone(), "alpha".into(), Ok(()));
         assert!(matches!(resumed, PromiseOrValue::Promise(_)));
         drop(resumed);
 
@@ -2701,7 +2827,7 @@ mod tests {
         );
 
         callback_ctx(PromiseResult::Successful(vec![]));
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let trigger = c.balance_triggers.get("balance-demo").cloned().unwrap();
         assert!(!trigger.in_flight);
@@ -2720,12 +2846,12 @@ mod tests {
     }
 
     #[test]
-    fn asserted_settle_failure_reported_as_downstream_failure() {
+    fn asserted_resolve_failure_reported_as_downstream_failure() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "asserted-demo".into(),
-            vec![asserted_stage_input("alpha", b"1".to_vec())],
+            vec![asserted_yield_input("alpha", b"1".to_vec())],
         );
         c.create_balance_trigger("balance-demo".into(), "asserted-demo".into(), U128(0), 1);
 
@@ -2733,7 +2859,7 @@ mod tests {
         let started = c.execute_trigger("balance-demo".into());
 
         callback_ctx(PromiseResult::Failed);
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let run = c
             .automation_runs
@@ -2753,7 +2879,7 @@ mod tests {
         assert_eq!(first.sequence_namespace, "auto:balance-demo:1");
 
         callback_ctx(PromiseResult::Successful(vec![1]));
-        c.on_stage_call_settled(first.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(first.sequence_namespace.clone(), "alpha".into());
 
         let first_run = c
             .automation_runs
@@ -2762,7 +2888,7 @@ mod tests {
             .unwrap();
         assert_eq!(first_run.status, AutomationRunStatus::Succeeded);
         assert!(c
-            .staged_calls_for_namespace(&first.sequence_namespace)
+            .registered_steps_for_namespace(&first.sequence_namespace)
             .is_empty());
 
         ctx(owner());
@@ -2782,8 +2908,8 @@ mod tests {
     fn multiple_triggers_can_coexist() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("seq-a".into(), vec![stage_input("alpha", 1)]);
-        c.save_sequence_template("seq-b".into(), vec![stage_input("beta", 2)]);
+        c.save_sequence_template("seq-a".into(), vec![yield_input("alpha", 1)]);
+        c.save_sequence_template("seq-b".into(), vec![yield_input("beta", 2)]);
         c.create_balance_trigger("trigger-a".into(), "seq-a".into(), U128(0), 1);
         c.create_balance_trigger("trigger-b".into(), "seq-b".into(), U128(0), 1);
         c.set_authorized_executor(Some(executor()));
@@ -2796,14 +2922,14 @@ mod tests {
         assert_eq!(a.sequence_namespace, "auto:trigger-a:1");
         assert_eq!(b.sequence_namespace, "auto:trigger-b:1");
         assert_eq!(
-            c.staged_calls_for_namespace("auto:trigger-a:1")
+            c.registered_steps_for_namespace("auto:trigger-a:1")
                 .iter()
                 .map(|call| call.step_id.clone())
                 .collect::<Vec<_>>(),
             vec!["alpha".to_string()]
         );
         assert_eq!(
-            c.staged_calls_for_namespace("auto:trigger-b:1")
+            c.registered_steps_for_namespace("auto:trigger-b:1")
                 .iter()
                 .map(|call| call.step_id.clone())
                 .collect::<Vec<_>>(),
@@ -2819,7 +2945,7 @@ mod tests {
         let started = c.execute_trigger(trigger_id.clone());
 
         callback_ctx(PromiseResult::Failed);
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let trigger = c.balance_triggers.get(&trigger_id).cloned().unwrap();
         assert!(!trigger.in_flight);
@@ -2845,17 +2971,17 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "router-demo".into(),
-            vec![stage_input("alpha", 1), stage_input("beta", 2)],
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
         );
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
 
         ctx(owner());
         let started = c.execute_trigger("balance-demo".into());
-        c.staged_calls
-            .remove(&staged_call_key(&started.sequence_namespace, "beta"));
+        c.registered_steps
+            .remove(&registered_step_key(&started.sequence_namespace, "beta"));
 
         callback_ctx(PromiseResult::Successful(vec![1]));
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         let trigger = c.balance_triggers.get("balance-demo").cloned().unwrap();
         assert!(!trigger.in_flight);
@@ -2864,7 +2990,7 @@ mod tests {
             Some(AutomationRunStatus::ResumeFailed)
         );
         assert!(c
-            .staged_calls_for_namespace(&started.sequence_namespace)
+            .registered_steps_for_namespace(&started.sequence_namespace)
             .is_empty());
     }
 
@@ -2874,7 +3000,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "router-demo".into(),
-            vec![stage_input("alpha", 1), stage_input("beta", 2)],
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
         );
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 1);
 
@@ -2882,15 +3008,15 @@ mod tests {
         let started = c.execute_trigger("balance-demo".into());
 
         callback_ctx(PromiseResult::Failed);
-        c.on_stage_call_settled(started.sequence_namespace.clone(), "alpha".into());
+        c.on_step_resolved(started.sequence_namespace.clone(), "alpha".into());
 
         assert!(c
-            .staged_calls
-            .get(&staged_call_key(&started.sequence_namespace, "beta"))
+            .registered_steps
+            .get(&registered_step_key(&started.sequence_namespace, "beta"))
             .is_none());
 
         ctx(current());
-        let result = c.on_stage_call_resume(
+        let result = c.on_step_resumed(
             started.sequence_namespace.clone(),
             "beta".into(),
             Err(PromiseError::Failed),
@@ -2912,10 +3038,10 @@ mod tests {
     }
 
     #[test]
-    fn stage_call_emits_structured_event_with_call_metadata() {
+    fn register_step_emits_structured_event_with_call_metadata() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":7}"#.to_vec()),
@@ -2925,19 +3051,19 @@ mod tests {
             None,
         );
 
-        let event = find_structured_event(&near_sdk::test_utils::get_logs(), "stage_call_registered")
-            .expect("stage_call_registered event not emitted");
+        let event = find_structured_event(&near_sdk::test_utils::get_logs(), "step_registered")
+            .expect("step_registered event not emitted");
         assert_eq!(event["standard"], "sa-automation");
         assert_eq!(event["version"], "1.1.0");
         let data = &event["data"];
         assert_eq!(data["step_id"], "alpha");
         assert_eq!(data["namespace"], manual_namespace(&owner()));
-        assert!(data["staged_at_ms"].is_number());
+        assert!(data["registered_at_ms"].is_number());
 
         let call = &data["call"];
         assert_eq!(call["target_id"], echo().as_str());
         assert_eq!(call["method"], "echo");
-        assert_eq!(call["settle_policy"], "direct");
+        assert_eq!(call["policy"], "direct");
         assert_eq!(call["gas_tgas"], 30);
         assert_eq!(call["deposit_yocto"], "0");
         assert_eq!(call["args_bytes_len"], br#"{"n":7}"#.len());
@@ -2953,7 +3079,7 @@ mod tests {
         let mut c = Contract::new_with_owner(owner());
         c.save_sequence_template(
             "router-demo".into(),
-            vec![stage_input("alpha", 1), stage_input("beta", 2)],
+            vec![yield_input("alpha", 1), yield_input("beta", 2)],
         );
         let _ = c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(42), 3);
 
@@ -2973,7 +3099,7 @@ mod tests {
     fn every_event_carries_runtime_envelope() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             echo(),
             "echo".into(),
             Base64VecU8::from(br#"{"n":1}"#.to_vec()),
@@ -2983,8 +3109,8 @@ mod tests {
             None,
         );
 
-        let event = find_structured_event(&near_sdk::test_utils::get_logs(), "stage_call_registered")
-            .expect("stage_call_registered event not emitted");
+        let event = find_structured_event(&near_sdk::test_utils::get_logs(), "step_registered")
+            .expect("step_registered event not emitted");
         let runtime = &event["data"]["runtime"];
         assert!(runtime.is_object(), "runtime envelope missing");
         for field in [
@@ -3015,7 +3141,7 @@ mod tests {
     fn trigger_fired_event_carries_runtime_accounting() {
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        c.save_sequence_template("router-demo".into(), vec![stage_input("alpha", 1)]);
+        c.save_sequence_template("router-demo".into(), vec![yield_input("alpha", 1)]);
         c.create_balance_trigger("balance-demo".into(), "router-demo".into(), U128(0), 2);
 
         ctx(owner());
@@ -3044,7 +3170,7 @@ mod tests {
 
         ctx(owner());
         let mut c = Contract::new_with_owner(owner());
-        let _ = c.stage_call(
+        let _ = c.register_step(
             pathological_router(),
             "do_honest_work".into(),
             Base64VecU8::from(br#"{"label":"probe"}"#.to_vec()),
@@ -3056,11 +3182,11 @@ mod tests {
 
         let birth = find_structured_event(
             &near_sdk::test_utils::get_logs(),
-            "stage_call_registered",
+            "step_registered",
         )
-        .expect("stage_call_registered event not emitted");
+        .expect("step_registered event not emitted");
         let birth_call = &birth["data"]["call"];
-        assert_eq!(birth_call["settle_policy"], "asserted");
+        assert_eq!(birth_call["policy"], "asserted");
         assert_eq!(birth_call["assertion_method"], "get_calls_completed");
         assert!(
             birth_call["expected_return"].is_string(),
@@ -3077,7 +3203,7 @@ mod tests {
         // carry the light call metadata (pointers + byte counts) but NOT the
         // raw assertion bytes.
         ctx(current());
-        let result = c.on_stage_call_resume(manual_namespace(&owner()), "alpha".into(), Ok(()));
+        let result = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
         assert!(matches!(result, PromiseOrValue::Promise(_)));
         drop(result);
 
@@ -3087,7 +3213,7 @@ mod tests {
         )
         .expect("step_resumed event not emitted");
         let resumed_call = &resumed["data"]["call"];
-        assert_eq!(resumed_call["settle_policy"], "asserted");
+        assert_eq!(resumed_call["policy"], "asserted");
         assert_eq!(resumed_call["assertion_method"], "get_calls_completed");
         assert_eq!(resumed_call["assertion_gas_tgas"], 30);
         assert_eq!(

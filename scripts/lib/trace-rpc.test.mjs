@@ -46,7 +46,7 @@ function tx(children, finalStatus = { SuccessValue: "" }) {
   };
 }
 
-test("staged-only yield renders as waiting_for_resume and stays pending", () => {
+test("yield-only yield renders as waiting_for_resume and stays pending", () => {
   const tree = tx([
     receipt({
       id: "yielded-receipt.testnet",
@@ -61,7 +61,7 @@ test("staged-only yield renders as waiting_for_resume and stays pending", () => 
   assert.doesNotMatch(text, /pending_yield/);
 });
 
-test("released and settled yielded tree becomes full success", () => {
+test("released and resolved yielded tree becomes full success", () => {
   const tree = tx([
     receipt({
       id: "yielded-receipt.testnet",

@@ -229,21 +229,26 @@ That is the paradigm shift:
 The result is not Ethereum-style synchronous transaction ordering. It is a new
 kind of user-owned receipt scheduler.
 
-## 7. Recommended next step
+## 7. Where this led
 
-The next meaningful step is to move from inert `latch(label)` callbacks to one
-real smart-account-shaped gated action.
+The "recommended next step" this chapter originally ended on — move
+from inert `latch(label)` callbacks to real smart-account-shaped
+gated actions that honor `#[callback_result]` and prove true
+*downstream effect* order — has since been done. The full lineage is
+archived in
+[`archive-staged-call-lineage.md`](./archive-staged-call-lineage.md),
+which:
 
-Concretely:
+- introduces `stage_call` / `run_sequence` as the rename of the
+  `latch` / `conduct` primitives used here
+- documents the 4-label success cascade (alpha/beta/gamma/delta)
+  with the exact downstream `echo_log` block heights proving the
+  stronger claim "A completed, then B started, then C completed"
+- records the `on_stage_call_resume` / `on_stage_call_settled`
+  refactor that fixes the §5 timeout catastrophe above — the
+  saga-halt and yield-timeout paths are now empirically backed and
+  byte-for-byte distinguishable in logs
 
-- add a `stage_call` / `staged_echo` style method whose resume callback performs
-  an actual downstream `FunctionCall` or `Transfer`
-- make the callback honor `#[callback_result]` so timeout does not silently
-  consume the latch
-- drive the same experiment again, but this time prove not only callback order,
-  but true downstream effect order: "A completed, then B started, then C
-  completed"
-
-That would turn the current proof from "we can order yielded callbacks" into
-"the smart account can order real cross-contract work." That feels like the
-next genuinely novel milestone.
+The timeout pitfall in §5 is therefore a historical weakness, not
+a current one. It is preserved here because the shape of the
+failure was the direct motivation for every downstream improvement.

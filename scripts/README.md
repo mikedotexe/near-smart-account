@@ -8,7 +8,7 @@ investigative, or historical.
 - `investigate-tx.mjs`
   JSON-first three-surfaces investigation wrapper. This is the best single
   report for understanding one transaction, and it now surfaces structured
-  `sa-automation` receipt events, stage-lifecycle classification, and compact
+  `sa-automation` receipt events, step-lifecycle classification, and compact
   sequence telemetry metrics when present.
 - `aggregate-runs.mjs`
   Account-wide structured-event sweep. Use this when you want automation-run
@@ -30,7 +30,7 @@ investigative, or historical.
 
 ## Canonical demos
 
-- `send-staged-echo-demo.mjs`
+- `send-step-echo-demo.mjs`
   Smallest manual sequencing demo over the real smart-account kernel.
 - `send-balance-trigger-wrap-demo.mjs`
   Canonical real-protocol automation demo using `wrap.testnet`.
@@ -39,10 +39,10 @@ investigative, or historical.
 
 ## Useful reproduction helpers
 
-- `send-staged-mixed-demo.mjs`
-  Manual mixed-outcome staging helper.
-- `send-stage-call-multi.mjs`
-  Lower-level multi-step stage/run helper for manual experiments. On mainnet,
+- `send-step-mixed-demo.mjs`
+  Manual mixed-outcome step-registration helper.
+- `send-register-step-multi.mjs`
+  Lower-level multi-step register/run helper for manual experiments. On mainnet,
   the current observed two-step floor is `300 TGas` per outer action; the
   helper prints that guidance explicitly.
 - `send-balance-trigger-router-demo.mjs`

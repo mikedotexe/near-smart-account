@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  STAGE_OUTCOME,
-  classifyStageOutcome,
-  getMainnetStageGasGuidance,
-  renderStageOutcomeSummary,
-} from "./staged-sequence.mjs";
+  STEP_OUTCOME,
+  classifyStepOutcome,
+  getMainnetStepGasGuidance,
+  renderStepOutcomeSummary,
+} from "./step-sequence.mjs";
 
 function receipt(overrides = {}) {
   return {
@@ -44,9 +44,9 @@ function tx(children, finalStatus = { SuccessValue: "" }) {
   };
 }
 
-test("classifyStageOutcome recognizes hard gas failure before staging", () => {
-  const outcome = classifyStageOutcome({
-    stageTrace: {
+test("classifyStepOutcome recognizes hard gas failure before registering", () => {
+  const outcome = classifyStepOutcome({
+    registerTrace: {
       classification: "HARD_FAIL",
       tree: tx([], {
         Failure: {
@@ -61,19 +61,19 @@ test("classifyStageOutcome recognizes hard gas failure before staging", () => {
       }),
       error: null,
     },
-    stagedState: {
+    registeredState: {
       ready: false,
       observed_count: 0,
     },
   });
 
-  assert.equal(outcome.classification, STAGE_OUTCOME.HARD_FAIL_BEFORE_STAGE);
+  assert.equal(outcome.classification, STEP_OUTCOME.HARD_FAIL_BEFORE_REGISTER);
   assert.match(outcome.reason, /Exceeded the prepaid gas/);
 });
 
-test("classifyStageOutcome recognizes pending yielded steps", () => {
-  const outcome = classifyStageOutcome({
-    stageTrace: {
+test("classifyStepOutcome recognizes pending registered steps", () => {
+  const outcome = classifyStepOutcome({
+    registerTrace: {
       classification: "PENDING",
       tree: tx([
         receipt({
@@ -83,47 +83,47 @@ test("classifyStageOutcome recognizes pending yielded steps", () => {
       ]),
       error: null,
     },
-    stagedState: {
+    registeredState: {
       ready: true,
       observed_count: 1,
     },
   });
 
-  assert.equal(outcome.classification, STAGE_OUTCOME.PENDING_UNTIL_RESUME);
+  assert.equal(outcome.classification, STEP_OUTCOME.PENDING_UNTIL_RESUME);
   assert.equal(outcome.pending_yield_count, 1);
 });
 
-test("classifyStageOutcome recognizes immediate resume failure", () => {
-  const outcome = classifyStageOutcome({
-    stageTrace: {
+test("classifyStepOutcome recognizes immediate resume failure", () => {
+  const outcome = classifyStepOutcome({
+    registerTrace: {
       classification: "FULL_SUCCESS",
       tree: tx([
         receipt({
           isPromiseYield: true,
           logs: [
-            "stage_call 'alpha' in manual:mike.testnet could not resume, so its staged yield was dropped and the sequence halted: Failed",
+            "register_step 'alpha' in manual:mike.testnet could not resume, so its yielded promise was dropped and the sequence halted: Failed",
           ],
         }),
       ]),
       error: null,
     },
-    stagedState: {
+    registeredState: {
       ready: false,
       observed_count: 0,
     },
   });
 
-  assert.equal(outcome.classification, STAGE_OUTCOME.IMMEDIATE_RESUME_FAILED);
+  assert.equal(outcome.classification, STEP_OUTCOME.IMMEDIATE_RESUME_FAILED);
   assert.equal(outcome.resume_failed_count, 1);
   assert.equal(outcome.resumed_before_run, true);
 });
 
-test("renderStageOutcomeSummary prints the operator-facing fields", () => {
-  const summary = renderStageOutcomeSummary({
-    classification: STAGE_OUTCOME.PENDING_UNTIL_RESUME,
-    reason: "yielded step stayed pending for explicit run_sequence release",
-    staged_visible: true,
-    observed_staged_count: 1,
+test("renderStepOutcomeSummary prints the operator-facing fields", () => {
+  const summary = renderStepOutcomeSummary({
+    classification: STEP_OUTCOME.PENDING_UNTIL_RESUME,
+    reason: "registered step stayed pending for explicit run_sequence release",
+    registered_visible: true,
+    observed_registered_count: 1,
     yielded_receipt_count: 1,
     pending_yield_count: 1,
     resumed_before_run: false,
@@ -131,13 +131,13 @@ test("renderStageOutcomeSummary prints the operator-facing fields", () => {
     trace_classification: "PENDING",
   });
 
-  assert.match(summary, /stage_outcome=pending_until_resume/);
-  assert.match(summary, /observed_staged_count=1/);
+  assert.match(summary, /step_outcome=pending_until_resume/);
+  assert.match(summary, /observed_registered_count=1/);
   assert.match(summary, /trace_classification=PENDING/);
 });
 
-test("getMainnetStageGasGuidance warns on low multi-step mainnet action gas", () => {
-  const guidance = getMainnetStageGasGuidance({
+test("getMainnetStepGasGuidance warns on low multi-step mainnet action gas", () => {
+  const guidance = getMainnetStepGasGuidance({
     network: "mainnet",
     actionCount: 2,
     actionGasTgas: 250,
@@ -147,9 +147,9 @@ test("getMainnetStageGasGuidance warns on low multi-step mainnet action gas", ()
   assert.match(guidance[1], /below the current observed two-step floor/);
 });
 
-test("getMainnetStageGasGuidance stays quiet off mainnet or for single-step probes", () => {
+test("getMainnetStepGasGuidance stays quiet off mainnet or for single-step probes", () => {
   assert.deepEqual(
-    getMainnetStageGasGuidance({
+    getMainnetStepGasGuidance({
       network: "testnet",
       actionCount: 2,
       actionGasTgas: 250,
@@ -157,7 +157,7 @@ test("getMainnetStageGasGuidance stays quiet off mainnet or for single-step prob
     []
   );
   assert.deepEqual(
-    getMainnetStageGasGuidance({
+    getMainnetStepGasGuidance({
       network: "mainnet",
       actionCount: 1,
       actionGasTgas: 180,

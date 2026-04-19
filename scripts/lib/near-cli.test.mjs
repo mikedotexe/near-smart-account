@@ -17,7 +17,7 @@ test("sendTransactionAsync signs once and returns the transaction hash", async (
       provider: {
         sendTransactionAsync: async (tx) => {
           account.providerCalls.push(tx);
-          return "stage-hash.testnet";
+          return "register-hash.testnet";
         },
       },
     },
@@ -34,7 +34,7 @@ test("sendTransactionAsync signs once and returns the transaction hash", async (
   assert.deepEqual(account.providerCalls, [signedTransaction]);
   assert.deepEqual(result, {
     transaction: {
-      hash: "stage-hash.testnet",
+      hash: "register-hash.testnet",
       receiver_id: "smart-account.testnet",
     },
   });

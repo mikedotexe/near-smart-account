@@ -4,9 +4,9 @@
 //
 // The default execution path performs both transactions:
 //
-// 1. submit one multi-action `stage_call` batch against `simple-sequencer`
+// 1. submit one multi-action `register_step` batch against `simple-sequencer`
 // 2. call `run_sequence(...)` in a deliberately different order
-// 3. poll `simple-recorder.get_entries()` until the downstream sequence settles
+// 3. poll `simple-recorder.get_entries()` until the downstream sequence resolves
 // 4. write a forensic artifact under `collab/artifacts/`
 
 import fs from "node:fs";
@@ -29,9 +29,9 @@ import {
 } from "../../scripts/lib/near-cli.mjs";
 import { traceTx } from "../../scripts/lib/trace-rpc.mjs";
 import {
-  diagnoseStageTransaction,
-  renderStageOutcomeSummary,
-} from "../../scripts/lib/staged-sequence.mjs";
+  diagnoseRegisterTransaction,
+  renderStepOutcomeSummary,
+} from "../../scripts/lib/step-sequence.mjs";
 import { buildDemoExecutionPlan } from "./demo-plan.mjs";
 
 const MAX_TX_GAS_TGAS = 1_000;
@@ -52,9 +52,9 @@ const { values, positionals } = parseArgs({
     "sequence-order": { type: "string" },
     "artifacts-file": { type: "string" },
     "poll-ms": { type: "string", default: "2000" },
-    "stage-timeout-ms": { type: "string", default: "30000" },
-    "settle-timeout-ms": { type: "string", default: "90000" },
-    "stage-only": { type: "boolean", default: false },
+    "step-register-timeout-ms": { type: "string", default: "30000" },
+    "resolve-timeout-ms": { type: "string", default: "90000" },
+    "register-only": { type: "boolean", default: false },
     dry: { type: "boolean", default: false },
     json: { type: "boolean", default: false },
   },
@@ -70,8 +70,8 @@ const actionGasTgas = Number(values["action-gas"]);
 const callGasTgas = Number(values["call-gas"]);
 const runGasTgas = Number(values["run-gas"]);
 const pollMs = Number(values["poll-ms"]);
-const stageTimeoutMs = Number(values["stage-timeout-ms"]);
-const settleTimeoutMs = Number(values["settle-timeout-ms"]);
+const stepRegisterTimeoutMs = Number(values["step-register-timeout-ms"]);
+const resolveTimeoutMs = Number(values["resolve-timeout-ms"]);
 if (!Number.isFinite(actionGasTgas) || actionGasTgas <= 0) {
   throw new Error("--action-gas must be a positive number");
 }
@@ -84,11 +84,11 @@ if (!Number.isFinite(runGasTgas) || runGasTgas <= 0) {
 if (!Number.isFinite(pollMs) || pollMs <= 0) {
   throw new Error("--poll-ms must be a positive number");
 }
-if (!Number.isFinite(stageTimeoutMs) || stageTimeoutMs <= 0) {
-  throw new Error("--stage-timeout-ms must be a positive number");
+if (!Number.isFinite(stepRegisterTimeoutMs) || stepRegisterTimeoutMs <= 0) {
+  throw new Error("--step-register-timeout-ms must be a positive number");
 }
-if (!Number.isFinite(settleTimeoutMs) || settleTimeoutMs <= 0) {
-  throw new Error("--settle-timeout-ms must be a positive number");
+if (!Number.isFinite(resolveTimeoutMs) || resolveTimeoutMs <= 0) {
+  throw new Error("--resolve-timeout-ms must be a positive number");
 }
 
 const totalActionGasTgas = actionGasTgas * specs.length;
@@ -118,7 +118,7 @@ const artifactsFile =
   values["artifacts-file"] ||
   defaultArtifactsFile({ prefix: values.prefix, signer: values.signer, runId });
 const executionPlan = buildDemoExecutionPlan({
-  stageOnly: values["stage-only"],
+  registerOnly: values["register-only"],
 });
 const commands = commandSet({
   network: values.network,
@@ -126,7 +126,7 @@ const commands = commandSet({
   contractId,
   targetId,
   runSequenceArgs,
-  stageTxHash: "<stage_tx_hash>",
+  registerTxHash: "<register_tx_hash>",
   runSequenceTxHash: "<run_sequence_tx_hash>",
 });
 
@@ -145,11 +145,11 @@ if (values.dry) {
         total_action_gas_tgas: totalActionGasTgas,
         downstream_call_gas_tgas: callGasTgas,
         run_gas_tgas: runGasTgas,
-        stage_only: executionPlan.stageOnly,
+        register_only: executionPlan.registerOnly,
         downstream_call_deposit_yocto: values["call-deposit-yocto"],
         sequence_order: sequenceOrder,
-        stage_timeout_ms: stageTimeoutMs,
-        settle_timeout_ms: settleTimeoutMs,
+        step_register_timeout_ms: stepRegisterTimeoutMs,
+        resolve_timeout_ms: resolveTimeoutMs,
         poll_ms: pollMs,
         artifacts_file: artifactsFile,
         fastnear_endpoints: endpointNotes({
@@ -174,7 +174,7 @@ const account = accounts[values.signer];
 const recorderBefore = await readRecorderState(values.network, targetId);
 const actions = specs.map((spec) =>
   nearApi.transactions.functionCall(
-    "stage_call",
+    "register_step",
     Buffer.from(
       JSON.stringify({
         target_id: targetId,
@@ -192,35 +192,35 @@ const actions = specs.map((spec) =>
   )
 );
 
-const stageResult = await sendTransactionAsync(account, contractId, actions);
-const stageArtifact = await buildTxArtifact(
+const registerResult = await sendTransactionAsync(account, contractId, actions);
+const registerArtifact = await buildTxArtifact(
   values.network,
-  stageResult,
+  registerResult,
   values.signer,
-  "stage_batch"
+  "register_batch"
 );
-const stageDiagnosis = await diagnoseStageTransaction({
+const registerDiagnosis = await diagnoseRegisterTransaction({
   network: values.network,
-  txHash: stageArtifact.tx_hash,
+  txHash: registerArtifact.tx_hash,
   signer: values.signer,
   contractId,
   expectedCount: specs.length,
   pollMs,
-  timeoutMs: stageTimeoutMs,
+  timeoutMs: stepRegisterTimeoutMs,
 });
-const stageTrace = await safeTrace(values.network, stageArtifact.tx_hash, values.signer);
+const registerTrace = await safeTrace(values.network, registerArtifact.tx_hash, values.signer);
 
-if (executionPlan.stageOnly) {
-  const stageOnlyCommands = commandSet({
+if (executionPlan.registerOnly) {
+  const registerOnlyCommands = commandSet({
     network: values.network,
     signer: values.signer,
     contractId,
     targetId,
     runSequenceArgs,
-    stageTxHash: stageArtifact.tx_hash,
+    registerTxHash: registerArtifact.tx_hash,
     runSequenceTxHash: "<run_sequence_tx_hash>",
   });
-  const stageOnlyOutput = {
+  const registerOnlyOutput = {
     generated_at: new Date().toISOString(),
     run_id: runId,
     network: values.network,
@@ -232,31 +232,31 @@ if (executionPlan.stageOnly) {
     method: values.method,
     action_gas_tgas: actionGasTgas,
     downstream_call_gas_tgas: callGasTgas,
-    stage_timeout_ms: stageTimeoutMs,
+    step_register_timeout_ms: stepRegisterTimeoutMs,
     submitted_actions: specs,
     sequence_order_requested: sequenceOrder,
-    stage_only: true,
-    stage_primary_forensics: {
-      tx_hash: stageArtifact.tx_hash,
+    register_only: true,
+    register_primary_forensics: {
+      tx_hash: registerArtifact.tx_hash,
       signer: values.signer,
     },
     txs: [
       {
-        ...stageArtifact,
+        ...registerArtifact,
         decoded_success_value: null,
       },
     ],
     recorder_state_before: recorderBefore,
-    staged_calls_before_release: stageDiagnosis.staged_state,
-    stage_outcome: stageDiagnosis.stage_outcome,
+    registered_steps_before_release: registerDiagnosis.registered_state,
+    step_outcome: registerDiagnosis.step_outcome,
     traces: {
-      stage_batch: stageTrace,
+      register_batch: registerTrace,
     },
-    commands: stageOnlyCommands,
+    commands: registerOnlyCommands,
   };
 
   if (values.json) {
-    console.log(JSON.stringify(stageOnlyOutput, null, 2));
+    console.log(JSON.stringify(registerOnlyOutput, null, 2));
     process.exit(0);
   }
 
@@ -264,29 +264,29 @@ if (executionPlan.stageOnly) {
     `network=${values.network} signer=${values.signer} contract=${contractId} recorder=${targetId}`
   );
   console.log(
-    `stage_batch: tx_hash=${stageArtifact.tx_hash} block_height=${stageArtifact.block_height ?? "?"} signer=${values.signer}`
+    `register_batch: tx_hash=${registerArtifact.tx_hash} block_height=${registerArtifact.block_height ?? "?"} signer=${values.signer}`
   );
-  console.log(renderStageOutcomeSummary(stageDiagnosis.stage_outcome));
+  console.log(renderStepOutcomeSummary(registerDiagnosis.step_outcome));
   for (const spec of specs) {
     console.log(
       `  ${spec.step_id} -> ${targetId}.${values.method}({"step_id":"${spec.step_id}","value":${spec.value}})`
     );
   }
-  console.log(`trace(stage_batch): ${stageOnlyCommands.trace_stage}`);
-  console.log(`state(recorder): ${stageOnlyCommands.state_recorder}`);
-  console.log(`investigate(stage_batch): ${stageOnlyCommands.investigate_stage}`);
-  if (stageDiagnosis.stage_outcome.classification === "pending_until_resume") {
-    console.log(`run_sequence: ${stageOnlyCommands.run_sequence}`);
+  console.log(`trace(register_batch): ${registerOnlyCommands.trace_register}`);
+  console.log(`state(recorder): ${registerOnlyCommands.state_recorder}`);
+  console.log(`investigate(register_batch): ${registerOnlyCommands.investigate_register}`);
+  if (registerDiagnosis.step_outcome.classification === "pending_until_resume") {
+    console.log(`run_sequence: ${registerOnlyCommands.run_sequence}`);
   } else {
-    console.log("run_sequence: skipped until stage_outcome becomes pending_until_resume");
+    console.log("run_sequence: skipped until step_outcome becomes pending_until_resume");
   }
-  console.log(`short=stage:${shortHash(stageArtifact.tx_hash)}`);
+  console.log(`short=register:${shortHash(registerArtifact.tx_hash)}`);
   process.exit(0);
 }
 
-if (stageDiagnosis.stage_outcome.classification !== "pending_until_resume") {
+if (registerDiagnosis.step_outcome.classification !== "pending_until_resume") {
   throw new Error(
-    `stage batch ${stageArtifact.tx_hash} did not remain pending: ${stageDiagnosis.stage_outcome.classification}`
+    `register batch ${registerArtifact.tx_hash} did not remain pending: ${registerDiagnosis.step_outcome.classification}`
   );
 }
 
@@ -304,7 +304,7 @@ const recorderAfter = await waitForRecorderEntries({
   initialCount: recorderBefore.entries.length,
   expectedNewEntries: specs.length,
   pollMs,
-  settleTimeoutMs,
+  resolveTimeoutMs,
 });
 const runSequenceArtifact = await buildTxArtifact(
   values.network,
@@ -318,7 +318,7 @@ const finalCommands = commandSet({
   contractId,
   targetId,
   runSequenceArgs,
-  stageTxHash: stageArtifact.tx_hash,
+  registerTxHash: registerArtifact.tx_hash,
   runSequenceTxHash: runSequenceArtifact.tx_hash,
 });
 const runSequenceTrace = await safeTrace(
@@ -339,18 +339,18 @@ const artifacts = {
   action_gas_tgas: actionGasTgas,
   downstream_call_gas_tgas: callGasTgas,
   run_gas_tgas: runGasTgas,
-  stage_timeout_ms: stageTimeoutMs,
+  step_register_timeout_ms: stepRegisterTimeoutMs,
   downstream_call_deposit_yocto: values["call-deposit-yocto"],
   submitted_actions: specs,
   sequence_order_requested: sequenceOrder,
   run_sequence_args: runSequenceArgs,
-  stage_primary_forensics: {
-    tx_hash: stageArtifact.tx_hash,
+  register_primary_forensics: {
+    tx_hash: registerArtifact.tx_hash,
     signer: values.signer,
   },
   txs: [
     {
-      ...stageArtifact,
+      ...registerArtifact,
       decoded_success_value: null,
     },
     {
@@ -360,11 +360,11 @@ const artifacts = {
     },
   ],
   recorder_state_before: recorderBefore,
-  staged_calls_before_release: stageDiagnosis.staged_state,
-  stage_outcome: stageDiagnosis.stage_outcome,
+  registered_steps_before_release: registerDiagnosis.registered_state,
+  step_outcome: registerDiagnosis.step_outcome,
   recorder_state_after: recorderAfter,
   traces: {
-    stage_batch: stageTrace,
+    register_batch: registerTrace,
     run_sequence: runSequenceTrace,
   },
   fastnear_endpoints: endpointNotes({
@@ -390,14 +390,14 @@ console.log(
   `network=${values.network} signer=${values.signer} contract=${contractId} recorder=${targetId}`
 );
 console.log(
-  `stage_batch: tx_hash=${stageArtifact.tx_hash} block_height=${stageArtifact.block_height ?? "?"} signer=${values.signer}`
+  `register_batch: tx_hash=${registerArtifact.tx_hash} block_height=${registerArtifact.block_height ?? "?"} signer=${values.signer}`
 );
-console.log(renderStageOutcomeSummary(stageDiagnosis.stage_outcome));
+console.log(renderStepOutcomeSummary(registerDiagnosis.step_outcome));
 console.log(
   `run_sequence: tx_hash=${runSequenceArtifact.tx_hash} block_height=${runSequenceArtifact.block_height ?? "?"} signer=${values.signer}`
 );
 console.log(
-  `recorder: settled=${recorderAfter.settled} new_entries=${recorderAfter.new_entries.length}/${specs.length} block_height=${recorderAfter.block_height ?? "?"}`
+  `recorder: resolved=${recorderAfter.resolved} new_entries=${recorderAfter.new_entries.length}/${specs.length} block_height=${recorderAfter.block_height ?? "?"}`
 );
 console.log(`artifacts=${artifactsFile}`);
 for (const spec of specs) {
@@ -405,13 +405,13 @@ for (const spec of specs) {
     `  ${spec.step_id} -> ${targetId}.${values.method}({"step_id":"${spec.step_id}","value":${spec.value}})`
   );
 }
-console.log(`trace(stage_batch): ${finalCommands.trace_stage}`);
+console.log(`trace(register_batch): ${finalCommands.trace_register}`);
 console.log(`trace(run_sequence): ${finalCommands.trace_run_sequence}`);
 console.log(`state(recorder): ${finalCommands.state_recorder}`);
-console.log(`investigate(stage_batch): ${finalCommands.investigate_stage}`);
+console.log(`investigate(register_batch): ${finalCommands.investigate_register}`);
 console.log(`receipt_to_tx: ${finalCommands.receipt_to_tx}`);
 console.log(
-  `short=stage:${shortHash(stageArtifact.tx_hash)} run:${shortHash(runSequenceArtifact.tx_hash)}`
+  `short=register:${shortHash(registerArtifact.tx_hash)} run:${shortHash(runSequenceArtifact.tx_hash)}`
 );
 
 function parseSpec(raw) {
@@ -468,7 +468,7 @@ function commandSet({
   contractId,
   targetId,
   runSequenceArgs,
-  stageTxHash,
+  registerTxHash,
   runSequenceTxHash,
 }) {
   const recorderView = JSON.stringify({
@@ -479,11 +479,11 @@ function commandSet({
     run_sequence: `NEAR_ENV=${network} near call ${contractId} run_sequence '${JSON.stringify(
       runSequenceArgs
     )}' --accountId ${signer}`,
-    trace_stage: `./scripts/trace-tx.mjs ${stageTxHash} ${signer} --wait FINAL`,
+    trace_register: `./scripts/trace-tx.mjs ${registerTxHash} ${signer} --wait FINAL`,
     trace_run_sequence: `./scripts/trace-tx.mjs ${runSequenceTxHash} ${signer} --wait FINAL`,
     state_recorder: `./scripts/state.mjs ${targetId} --method get_entries`,
-    investigate_stage:
-      `./scripts/investigate-tx.mjs ${stageTxHash} ${signer} --wait FINAL ` +
+    investigate_register:
+      `./scripts/investigate-tx.mjs ${registerTxHash} ${signer} --wait FINAL ` +
       `--accounts ${contractId},${targetId} --view '${recorderView}'`,
     receipt_to_tx: "./scripts/receipt-to-tx.mjs <receipt_id>",
   };
@@ -506,9 +506,9 @@ async function waitForRecorderEntries({
   initialCount,
   expectedNewEntries,
   pollMs,
-  settleTimeoutMs,
+  resolveTimeoutMs,
 }) {
-  const deadline = Date.now() + settleTimeoutMs;
+  const deadline = Date.now() + resolveTimeoutMs;
   let last = await readRecorderState(network, targetId);
   while (last.entries.length < initialCount + expectedNewEntries && Date.now() < deadline) {
     await sleep(pollMs);
@@ -517,13 +517,13 @@ async function waitForRecorderEntries({
 
   const finalEntries = last.entries;
   return {
-    settled: finalEntries.length >= initialCount + expectedNewEntries,
+    resolved: finalEntries.length >= initialCount + expectedNewEntries,
     expected_new_entries: expectedNewEntries,
     initial_entry_count: initialCount,
     observed_entry_count: finalEntries.length,
     observed_new_entries: Math.max(0, finalEntries.length - initialCount),
     poll_ms: pollMs,
-    timeout_ms: settleTimeoutMs,
+    timeout_ms: resolveTimeoutMs,
     block_height: last.block_height,
     block_hash: last.block_hash,
     logs: last.logs,
@@ -566,7 +566,7 @@ function endpointNotes({
       helper: "traceTx(...) via scripts/lib/trace-rpc.mjs",
       how_we_use_it: {
         params: {
-          tx_hash: "<stage_or_run_sequence_tx_hash>",
+          tx_hash: "<register_or_run_sequence_tx_hash>",
           sender_account_id: "<signer>",
           wait_until: "FINAL",
         },
@@ -574,7 +574,7 @@ function endpointNotes({
           "The helper queries the hot RPC first and retries on the archival RPC when the hot node returns UNKNOWN_TRANSACTION.",
       },
       why_we_use_it:
-        "Classify the stage and run_sequence traces and preserve the receipt-DAG anchor we will inspect later for callback ordering.",
+        "Classify the register and run_sequence traces and preserve the receipt-DAG anchor we will inspect later for callback ordering.",
     },
     {
       kind: "live_capture",
@@ -586,17 +586,17 @@ function endpointNotes({
         params: {
           request_type: "call_function",
           account_id: contractId,
-          method_name: "staged_calls_for",
+          method_name: "registered_steps_for",
           args_base64: Buffer.from(
             JSON.stringify({ caller_id: signer })
           ).toString("base64"),
           finality: "final",
         },
         behavior:
-          "After async stage submission, we poll simple-sequencer.staged_calls_for(caller_id) until the expected yielded steps materialize before sending run_sequence.",
+          "After async register submission, we poll simple-sequencer.registered_steps_for(caller_id) until the expected registered steps materialize before sending run_sequence.",
       },
       why_we_use_it:
-        "Avoid commit-style submission semantics and prove that the yielded handles are actually live before we try to resume them.",
+        "Avoid commit-style submission semantics and prove that the registered steps are actually live before we try to resume them.",
     },
     {
       kind: "live_capture",
@@ -606,7 +606,7 @@ function endpointNotes({
       helper: "buildTxArtifact(...) via scripts/lib/near-cli.mjs",
       how_we_use_it: {
         body: {
-          tx_hashes: ["<stage_tx_hash>", "<run_sequence_tx_hash>"],
+          tx_hashes: ["<register_tx_hash>", "<run_sequence_tx_hash>"],
         },
         behavior:
           "We call the endpoint once per transaction to enrich the run artifact with block_height, block_hash, receiver_id, and execution status.",
@@ -645,7 +645,7 @@ function endpointNotes({
           receipt_id: "<receipt_id>",
         },
         behavior:
-          "Use it interactively after trace inspection to pivot any interesting yielded or downstream receipt back to its originating transaction.",
+          "Use it interactively after trace inspection to pivot any interesting registered or downstream receipt back to its originating transaction.",
       },
       why_we_use_it:
         "Receipt ids show up all over the DAG; this is the fastest way to reconnect any one of them to the originating tx for deeper forensic work.",
@@ -715,7 +715,7 @@ function endpointNotes({
       how_we_use_it: {
         args: runSequenceArgs,
         behavior:
-          "The artifact preserves the exact run_sequence payload used to release the yielded callbacks so later analysis never depends on memory.",
+          "The artifact preserves the exact run_sequence payload used to release the registered steps so later analysis never depends on memory.",
       },
       why_we_use_it:
         "The chosen release order is part of the evidence; saving the payload alongside the tx/block metadata makes the run decision-complete for later forensics.",

@@ -17,7 +17,8 @@ RUSTFLAGS="$RF" cargo check \
   --target wasm32-unknown-unknown
 node --test \
   scripts/lib/near-cli.test.mjs \
-  scripts/lib/staged-sequence.test.mjs \
+  scripts/lib/step-sequence.test.mjs \
+  scripts/lib/nep413-sign.test.mjs \
   scripts/lib/trace-rpc.test.mjs \
   scripts/lib/events.test.mjs \
   scripts/aggregate-runs.test.mjs \

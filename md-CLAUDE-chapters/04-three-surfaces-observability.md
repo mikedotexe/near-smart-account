@@ -166,6 +166,11 @@ It also opens the door to **block-by-block assertions** in future tests
   hash→index reverse map), and the two short `0x017600…` per-index entries.
   Use typed `call_function` views whenever the contract exposes them; reserve
   raw `view_state` for when the typed view does not exist yet.
+  [Chapter 22](./22-state-break-investigation.md) extends this picture
+  into the pre-mainnet implication: because every field of `Contract` is
+  a positional borsh commitment, adding or removing a field without a
+  versioned-state migration is how `smart-account.x.mike.testnet` got
+  its "Cannot deserialize the contract state" break.
 - **`--block` is what unlocks time-series.** Without it, `query` runs against
   `finality=final`, i.e. the tip. Always pin when reconstructing a cascade.
 - **Regular RPC retention is ~3 epochs (~21 h).** Historical queries older
@@ -181,7 +186,9 @@ It also opens the door to **block-by-block assertions** in future tests
   `smart-account.x.mike.testnet` was still running the earlier stub (no
   staged-call path yet); `state.mjs ... --method staged_calls_for`
   returned `MethodResolveError(MethodNotFound)`. Redeploy before driving a
-  staged-call experiment — chapter 03 §5 is the exact recipe.
+  staged-call experiment — see
+  [`archive-staged-call-lineage.md`](./archive-staged-call-lineage.md) §7
+  for the exact recipe.
 
 ## 5. Recipes
 

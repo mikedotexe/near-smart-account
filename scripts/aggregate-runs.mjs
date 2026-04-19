@@ -56,16 +56,16 @@ function blockSpan(run) {
 function describeEvent(event) {
   const data = event.data || {};
   switch (event.event) {
-    case "stage_call_registered":
-      return `${data.step_id ?? "?"} -> ${data.target_id ?? data.call?.target_id ?? "?"}.${data.method ?? data.call?.method_name ?? "?"} policy=${data.settle_policy ?? data.call?.settle_policy ?? "?"}`;
+    case "step_registered":
+      return `${data.step_id ?? "?"} -> ${data.target_id ?? data.call?.target_id ?? "?"}.${data.method ?? data.call?.method_name ?? "?"} policy=${data.policy ?? data.call?.policy ?? "?"}`;
     case "sequence_started":
       return `first=${data.first_step_id ?? "?"} total=${data.total_steps ?? "?"}`;
     case "step_resumed":
       return `${data.step_id ?? "?"} resume_latency_ms=${data.resume_latency_ms ?? "-"} target=${data.call?.target_id ?? "?"}.${data.call?.method_name ?? "?"}`;
-    case "step_settled_ok":
-      return `${data.step_id ?? "?"} settle_latency_ms=${data.settle_latency_ms ?? "-"} next=${data.next_step_id ?? "none"} result_bytes=${data.result_bytes_len ?? "-"}`;
-    case "step_settled_err":
-      return `${data.step_id ?? "?"} error=${data.error_kind ?? "unknown"} settle_latency_ms=${data.settle_latency_ms ?? "-"} oversized=${data.oversized_bytes ?? "-"}`;
+    case "step_resolved_ok":
+      return `${data.step_id ?? "?"} resolve_latency_ms=${data.resolve_latency_ms ?? "-"} next=${data.next_step_id ?? "none"} result_bytes=${data.result_bytes_len ?? "-"}`;
+    case "step_resolved_err":
+      return `${data.step_id ?? "?"} error=${data.error_kind ?? "unknown"} resolve_latency_ms=${data.resolve_latency_ms ?? "-"} oversized=${data.oversized_bytes ?? "-"}`;
     case "sequence_completed":
       return `final=${data.final_step_id ?? "?"} result_bytes=${data.final_result_bytes_len ?? "-"}`;
     case "sequence_halted":
@@ -153,12 +153,12 @@ export function renderMarkdownReport(report) {
     lines.push("");
   } else {
     lines.push(
-      "| Namespace | Origin | Status | Trigger | Steps ok/total | Duration ms | Resume ms avg/max | Settle ms avg/max | Max gas (TGas) | Error |"
+      "| Namespace | Origin | Status | Trigger | Steps ok/total | Duration ms | Resume ms avg/max | Resolve ms avg/max | Max gas (TGas) | Error |"
     );
     lines.push("|---|---|---|---|---|---|---|---|---|---|");
     for (const run of report.runs) {
       lines.push(
-        `| \`${run.namespace}\` | \`${run.origin ?? "-"}\` | \`${run.status}\` | \`${run.triggerId ?? "-"}\` | \`${run.stepsSettledOk}/${run.stepCount}\` | ${formatMetric(run.durationMs, 0)} | ${formatMetric(run.resumeLatencyMsAvg)}/${formatMetric(run.resumeLatencyMsMax, 0)} | ${formatMetric(run.settleLatencyMsAvg)}/${formatMetric(run.settleLatencyMsMax, 0)} | ${formatMetric(run.maxUsedGasTgas)} | \`${run.errorKind ?? "-"}\` |`
+        `| \`${run.namespace}\` | \`${run.origin ?? "-"}\` | \`${run.status}\` | \`${run.triggerId ?? "-"}\` | \`${run.stepsResolvedOk}/${run.stepCount}\` | ${formatMetric(run.durationMs, 0)} | ${formatMetric(run.resumeLatencyMsAvg)}/${formatMetric(run.resumeLatencyMsMax, 0)} | ${formatMetric(run.resolveLatencyMsAvg)}/${formatMetric(run.resolveLatencyMsMax, 0)} | ${formatMetric(run.maxUsedGasTgas)} | \`${run.errorKind ?? "-"}\` |`
       );
     }
     lines.push("");
@@ -189,10 +189,10 @@ export function renderMarkdownReport(report) {
       lines.push(`- blocks: \`${blockSpan(run)}\``);
       lines.push(`- trigger / sequence / run nonce: \`${run.triggerId ?? "-"}\` / \`${run.sequenceId ?? "-"}\` / \`${run.runNonce ?? "-"}\``);
       lines.push(`- executor / signer: \`${run.executorId ?? "-"}\` / \`${run.signerId ?? "-"}\``);
-      lines.push(`- steps settled ok / total: \`${run.stepsSettledOk}/${run.stepCount}\``);
+      lines.push(`- steps resolved ok / total: \`${run.stepsResolvedOk}/${run.stepCount}\``);
       lines.push(`- duration ms: ${formatMetric(run.durationMs, 0)}`);
       lines.push(`- resume latency ms avg/max: ${formatMetric(run.resumeLatencyMsAvg)} / ${formatMetric(run.resumeLatencyMsMax, 0)}`);
-      lines.push(`- settle latency ms avg/max: ${formatMetric(run.settleLatencyMsAvg)} / ${formatMetric(run.settleLatencyMsMax, 0)}`);
+      lines.push(`- resolve latency ms avg/max: ${formatMetric(run.resolveLatencyMsAvg)} / ${formatMetric(run.resolveLatencyMsMax, 0)}`);
       lines.push(`- max observed used gas (TGas): ${formatMetric(run.maxUsedGasTgas)}`);
       lines.push(`- latest storage usage: ${formatMetric(run.latestStorageUsage, 0)}`);
       lines.push(`- assertions ok/fail: \`${run.assertionSuccessCount ?? 0}/${run.assertionFailureCount ?? 0}\``);

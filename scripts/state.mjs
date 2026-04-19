@@ -7,7 +7,7 @@
 //          view method (JSON-decoded `result` bytes)
 //
 // Typed calls are the clean path when the contract exposes a view for the
-// collection we want (e.g. smart-account's `staged_calls_for`). Raw
+// collection we want (e.g. smart-account's `registered_steps_for`). Raw
 // view_state is the power tool when no such view exists yet, or when we need
 // to see every entry across every caller at once.
 //

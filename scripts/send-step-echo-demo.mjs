@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 //
-// scripts/send-staged-echo-demo.mjs — submits a multi-action stage_call tx
+// scripts/send-step-echo-demo.mjs — submits a multi-action register_step tx
 // whose downstreams all target an echo-style method on one callee.
 //
-// NOTE: superseded by scripts/send-stage-call-multi.mjs for new work.
+// NOTE: superseded by scripts/send-register-step-multi.mjs for new work.
 // This script is kept because chapters 03, 06, 07, and 10 reference it
 // in their Recipes sections and those recipes should remain reproducible.
-// New experiments should use send-stage-call-multi.mjs which takes
+// New experiments should use send-register-step-multi.mjs which takes
 // per-action JSON specs instead of a single shared target/method.
 
 import process from "node:process";
@@ -14,10 +14,10 @@ import { parseArgs } from "node:util";
 import { shortHash } from "./lib/fastnear.mjs";
 import { connectNearWithSigners, sendTransactionAsync } from "./lib/near-cli.mjs";
 import {
-  diagnoseStageTransaction,
-  getMainnetStageGasGuidance,
-  renderStageOutcomeSummary,
-} from "./lib/staged-sequence.mjs";
+  diagnoseRegisterTransaction,
+  getMainnetStepGasGuidance,
+  renderStepOutcomeSummary,
+} from "./lib/step-sequence.mjs";
 
 const MAX_CONTRACT_GAS_TGAS = 1_000;
 
@@ -34,7 +34,7 @@ const { values, positionals } = parseArgs({
     "sequence-order": { type: "string" },
     "conduct-order": { type: "string" },
     "poll-ms": { type: "string", default: "1000" },
-    "stage-timeout-ms": { type: "string", default: "15000" },
+    "step-register-timeout-ms": { type: "string", default: "15000" },
     dry: { type: "boolean", default: false },
     json: { type: "boolean", default: false },
   },
@@ -48,7 +48,7 @@ assertUniqueStepIds(specs.map((spec) => spec.step_id), "submitted actions");
 const actionGasTgas = Number(values["action-gas"]);
 const callGasTgas = Number(values["call-gas"]);
 const pollMs = Number(values["poll-ms"]);
-const stageTimeoutMs = Number(values["stage-timeout-ms"]);
+const stepRegisterTimeoutMs = Number(values["step-register-timeout-ms"]);
 const sequenceOrder = resolveSequenceOrder(values, specs);
 
 if (!Number.isFinite(actionGasTgas) || actionGasTgas <= 0) {
@@ -60,8 +60,8 @@ if (!Number.isFinite(callGasTgas) || callGasTgas <= 0) {
 if (!Number.isFinite(pollMs) || pollMs <= 0) {
   throw new Error("--poll-ms must be a positive number");
 }
-if (!Number.isFinite(stageTimeoutMs) || stageTimeoutMs < 0) {
-  throw new Error("--stage-timeout-ms must be zero or positive");
+if (!Number.isFinite(stepRegisterTimeoutMs) || stepRegisterTimeoutMs < 0) {
+  throw new Error("--step-register-timeout-ms must be zero or positive");
 }
 
 const totalActionGasTgas = actionGasTgas * specs.length;
@@ -70,7 +70,7 @@ if (totalActionGasTgas > MAX_CONTRACT_GAS_TGAS) {
     `requested ${totalActionGasTgas} TGas across ${specs.length} actions; keep one transaction at or under ${MAX_CONTRACT_GAS_TGAS} TGas`
   );
 }
-const mainnetGasGuidance = getMainnetStageGasGuidance({
+const mainnetGasGuidance = getMainnetStepGasGuidance({
   network: values.network,
   actionCount: specs.length,
   actionGasTgas,
@@ -89,7 +89,7 @@ if (values.dry) {
     downstream_call_gas_tgas: callGasTgas,
     downstream_call_deposit_yocto: values["call-deposit-yocto"],
     poll_ms: pollMs,
-    stage_timeout_ms: stageTimeoutMs,
+    step_register_timeout_ms: stepRegisterTimeoutMs,
     guidance: mainnetGasGuidance,
     sequence_order: sequenceOrder,
     actions: specs,
@@ -101,7 +101,7 @@ const { nearApi, accounts } = await connectNearWithSigners(values.network, [valu
 const account = accounts[values.signer];
 const actions = specs.map(({ step_id, n }) =>
   nearApi.transactions.functionCall(
-    "stage_call",
+    "register_step",
     Buffer.from(
       JSON.stringify({
         target_id: values.target,
@@ -119,14 +119,14 @@ const actions = specs.map(({ step_id, n }) =>
 
 const result = await sendTransactionAsync(account, values.contract, actions);
 const txHash = result.transaction?.hash || "?";
-const diagnosis = await diagnoseStageTransaction({
+const diagnosis = await diagnoseRegisterTransaction({
   network: values.network,
   txHash,
   signer: values.signer,
   contractId: values.contract,
   expectedCount: specs.length,
   pollMs,
-  timeoutMs: stageTimeoutMs,
+  timeoutMs: stepRegisterTimeoutMs,
 });
 
 if (values.json) {
@@ -155,19 +155,19 @@ for (const line of mainnetGasGuidance) {
   console.log(line);
 }
 console.log(`tx_hash=${txHash}`);
-console.log(renderStageOutcomeSummary(diagnosis.stage_outcome));
+console.log(renderStepOutcomeSummary(diagnosis.step_outcome));
 for (const { step_id, n } of specs) {
   console.log(`  ${step_id} -> ${values.target}.${values.method}({\"n\":${n}})`);
 }
 console.log(`trace: ./scripts/trace-tx.mjs ${txHash} ${values.signer} --wait FINAL`);
-if (diagnosis.stage_outcome.classification === "pending_until_resume") {
+if (diagnosis.step_outcome.classification === "pending_until_resume") {
   console.log(
     `run_sequence: near call ${values.contract} run_sequence '{\"caller_id\":\"${values.signer}\",\"order\":[${sequenceOrder
       .map((step_id) => JSON.stringify(step_id))
       .join(",")}]}' --accountId ${values.signer}`
   );
 } else {
-  console.log("run_sequence: skipped until stage_outcome becomes pending_until_resume");
+  console.log("run_sequence: skipped until step_outcome becomes pending_until_resume");
 }
 console.log(`short=${shortHash(txHash)}`);
 

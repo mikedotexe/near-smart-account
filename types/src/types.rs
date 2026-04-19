@@ -7,11 +7,11 @@
 use near_sdk::json_types::{Base64VecU8, U128};
 use near_sdk::{near, AccountId};
 
-/// How a staged call should be considered "done" before the sequencer
-/// advances to the next step.
+/// Per-step safety policy: how a step in a multi-step plan should resolve
+/// before the smart account advances to the next step.
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub enum SettlePolicy {
+pub enum StepPolicy {
     /// Treat the target receipt's own outcome as truth.
     #[default]
     Direct,
@@ -21,16 +21,16 @@ pub enum SettlePolicy {
         adapter_id: AccountId,
         adapter_method: String,
     },
-    /// Post-call assertion mode. After the target settles successfully, fire
+    /// Post-call assertion mode. After the target resolves successfully, fire
     /// a caller-specified postcheck call and advance the sequence only if the
     /// postcheck returns bytes matching `expected_return` exactly. Mismatch
-    /// halts the sequence as `DownstreamFailed`, same as any other settle
+    /// halts the sequence as `DownstreamFailed`, same as any other resolve
     /// failure.
     Asserted {
         /// Contract hosting the postcheck call. Often the target itself
         /// (asking the target to prove its own state), but any contract works.
         assertion_id: AccountId,
-        /// Method on `assertion_id` to call after the target settles. Called
+        /// Method on `assertion_id` to call after the target resolves. Called
         /// as a regular FunctionCall receipt (not an enforced read-only view),
         /// so gas and receipts are real and the caller must choose a
         /// trustworthy postcheck surface.

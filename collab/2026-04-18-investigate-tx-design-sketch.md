@@ -65,7 +65,9 @@ The wrapper captures that shape directly.
 
 **Optional:**
 - `--view <account>:<method>[:<args-json>]` — a state view to snapshot
-  at each interesting block. Repeatable. For chapter 13's setup:
+  at each interesting block. Repeatable. For the wrap.testnet
+  first-contact setup documented in
+  `md-CLAUDE-chapters/archive-real-world-adapter-lineage.md` §3:
   ```
   --view smart-account.x.mike.testnet:staged_calls_for:'{"caller_id":"x.mike.testnet"}' \
   --view wrap.testnet:ft_balance_of:'{"account_id":"smart-account.x.mike.testnet"}'
@@ -198,7 +200,9 @@ suitable for `jq` queries or regression diffing.
 - Hit RPC harder than the component tools would (same endpoints, same
   batching behaviour)
 - Handle multi-tx saga sagas (halt-then-retry across transactions,
-  like chapter 06 or chapter 07). For those, either run the wrapper
+  like the dual-failure or retry runs in
+  `md-CLAUDE-chapters/archive-staged-call-lineage.md`). For those,
+  either run the wrapper
   once per tx and assemble manually, or write a sibling
   `investigate-saga.mjs` later.
 - Replace `trace-tx`, `state`, `block-window`, `account-history`. The

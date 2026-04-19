@@ -1,8 +1,8 @@
-export function buildDemoExecutionPlan({ stageOnly }) {
+export function buildDemoExecutionPlan({ registerOnly }) {
   return {
-    stageOnly: Boolean(stageOnly),
-    runSequence: !stageOnly,
-    waitForRecorder: !stageOnly,
-    writeArtifacts: !stageOnly,
+    registerOnly: Boolean(registerOnly),
+    runSequence: !registerOnly,
+    waitForRecorder: !registerOnly,
+    writeArtifacts: !registerOnly,
   };
 }

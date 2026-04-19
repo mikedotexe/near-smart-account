@@ -11,7 +11,7 @@
 //!    by `receipt_id` because the DAG isn't a tree.
 //!
 //! The fourth pattern (yield / resume) lives on `contracts/smart-account/`'s
-//! `stage_call` / `run_sequence` surface — this contract stays focused on
+//! `execute_steps` / `register_step` / `run_sequence` surface — this contract stays focused on
 //! flat promise shapes so the pedagogy separates cleanly.
 
 use near_sdk::serde_json::from_slice;

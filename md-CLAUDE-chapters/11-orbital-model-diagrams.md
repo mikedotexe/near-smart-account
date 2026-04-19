@@ -153,9 +153,11 @@ sequenceDiagram
 ```
 
 Three phases, two `run_sequence` calls, one halt, three labels drained
-via Ok and one via Halt. This is the pattern chapter 08 captured live.
+via Ok and one via Halt. This is the pattern captured live in
+[`archive-staged-call-lineage.md`](./archive-staged-call-lineage.md) §2
+under the mixed-outcome run.
 
-## 5. Cross-caller isolation (chapter 09)
+## 5. Cross-caller isolation
 
 ```mermaid
 graph TB
@@ -213,8 +215,9 @@ flowchart TD
 ```
 
 Two of the four exits are intentional success paths
-(`OkDone` / `OkAdvance`); the other two
-(`Halt` / `Decay`) are the failure paths that chapter 06 validated.
+(`OkDone` / `OkAdvance`); the other two (`Halt` / `Decay`) are the
+failure paths validated in the dual-failure run of
+[`archive-staged-call-lineage.md`](./archive-staged-call-lineage.md) §2.
 The diagram above is what makes "the saga semantic is closed" concrete:
 every fate is observable and handled.
 
@@ -231,9 +234,9 @@ every fate is observable and handled.
 | ground-station pass | one `run_sequence` tx | each "run_sequence #N" tx hash in our chapters |
 | retrieval payload | `yield_id.resume(payload)` data receipt | the Data receipt at block N+1 of a cascade step |
 | retrieval cycle | resume → downstream → settle (3 blocks) | the 3-block cascade chunk per label |
-| decay | NEP-519 200-block expiry → `PromiseError::Failed` | block 246227624 in chapter 06 |
-| disintegration on retrieval | downstream `Failure` → `Err` branch in settle | beta in chapter 06 §3, alpha/beta/gamma in chapter 07 |
-| caller's flight | one caller's set of orbital records | each row group in chapter 09's side-by-side state table |
+| decay | NEP-519 200-block expiry → `PromiseError::Failed` | block 246227624 in the dual-failure run of `archive-staged-call-lineage.md` |
+| disintegration on retrieval | downstream `Failure` → `Err` branch in settle | beta in dual-failure run; alpha/beta/gamma in retry run (same archive) |
+| caller's flight | one caller's set of orbital records | each row group in the cross-caller side-by-side state table in `archive-automation-lineage.md` §4.2 |
 
 ## 8. Why the orbital frame is generative
 
@@ -244,8 +247,9 @@ by analogy:
   *simultaneous* (a real `promise_and` inside a `stage_call`'s
   downstream)? Today each cascade step is strictly sequential.
 - **Higher orbits**: can a `stage_call`'s downstream itself be a
-  `stage_call` on a different contract? Nested orbits — chapter 03 §1's
-  recursion case.
+  `stage_call` on a different contract? Nested orbits — the recursion
+  case discussed under the staged-call lineage archive's semantics
+  section.
 - **Orbit-to-orbit transfer**: can a satellite be re-staged onto a
   different label without round-tripping through `Drained_Ok`? Today
   the only re-entry is via a fresh `stage_call`.

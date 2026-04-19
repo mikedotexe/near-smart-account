@@ -7,11 +7,11 @@
 //!   success value).
 //! - This crate covers four distinct pathologies that fire-and-forget
 //!   does not: gas exhaustion, pure lie (no work at all), decoy-promise
-//!   indirection (settle chains on a decoy while real work detaches),
-//!   and oversized return payload (probes the 16 KiB settle ceiling).
+//!   indirection (resolve chains on a decoy while real work detaches),
+//!   and oversized return payload (probes the 16 KiB resolve ceiling).
 //!
 //! Each method is intentionally minimal so chapter 19 can characterize
-//! what the smart-account's `Direct` completion policy sees for each
+//! what the smart-account's `Direct` resolution policy sees for each
 //! shape, and where signal is lost.
 
 use near_sdk::{env, ext_contract, near, AccountId, Gas, Promise};
@@ -56,7 +56,7 @@ impl PathologicalRouter {
     /// host-function call (`sha256_array`) with well-understood per-call
     /// cost, so gas depletes predictably. From the smart-account's
     /// perspective this is indistinguishable from an honest panic:
-    /// `on_stage_call_settled` receives `PromiseError::Failed`.
+    /// `on_step_resolved` receives `PromiseError::Failed`.
     pub fn burn_gas(&self) {
         let mut seed: [u8; 32] = [0; 32];
         loop {
@@ -68,7 +68,7 @@ impl PathologicalRouter {
     ///
     /// Returns the literal string `"ok"` as SuccessValue without doing
     /// any work: no state mutation, no downstream promise. `Direct`
-    /// settle sees `Ok(bytes)` where bytes is the JSON-encoded `"ok"`
+    /// resolve sees `Ok(bytes)` where bytes is the JSON-encoded `"ok"`
     /// (4 bytes on the wire including quotes), and advances the
     /// sequence. `get_calls_completed` remains 0, proving the lie.
     pub fn noop_claim_success(&self, label: String) -> String {
@@ -82,7 +82,7 @@ impl PathologicalRouter {
     ///
     /// Detaches the "real" work as a fire-and-forget echo call
     /// (`echo(42)`), and returns a SEPARATE Promise to a cheap decoy
-    /// (`echo(0)`). The smart-account's `on_stage_call_settled` chains
+    /// (`echo(0)`). The smart-account's `on_step_resolved` chains
     /// on the returned Promise, sees the decoy's success, and advances.
     /// The real work's outcome is never examined.
     ///
@@ -90,7 +90,7 @@ impl PathologicalRouter {
     /// are TWO child receipts from this call's outcome — one for the
     /// detached echo(42) (unreturned) and one for the chained echo(0)
     /// (the decoy). A naive trace-viewer audit that trusts "the thing
-    /// settle chained on succeeded" is fooled.
+    /// resolve chained on succeeded" is fooled.
     pub fn return_decoy_promise(&mut self, callee: AccountId) -> Promise {
         self.last_burst = Some("decoy-returned".to_string());
 

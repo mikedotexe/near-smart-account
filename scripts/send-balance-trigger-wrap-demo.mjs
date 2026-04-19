@@ -317,7 +317,7 @@ function buildDepositCall(mode, values, step_id, amountNear, amountYocto, index,
       args: argsBase64,
       attached_deposit_yocto: (amountYocto + FT_TRANSFER_DEPOSIT_YOCTO).toString(),
       gas_tgas: callGasTgas,
-      settle_policy: {
+      policy: {
         Adapter: {
           adapter_id: values.adapter,
           adapter_method: values["adapter-method"],
@@ -337,16 +337,16 @@ function buildDepositCall(mode, values, step_id, amountNear, amountYocto, index,
 }
 
 function policyLabel(call) {
-  const settlePolicy = call.settle_policy;
-  if (!settlePolicy) return "Direct";
-  if (settlePolicy.Adapter) {
-    return `Adapter via ${settlePolicy.Adapter.adapter_id}.${settlePolicy.Adapter.adapter_method}`;
+  const policy = call.policy;
+  if (!policy) return "Direct";
+  if (policy.Adapter) {
+    return `Adapter via ${policy.Adapter.adapter_id}.${policy.Adapter.adapter_method}`;
   }
   return "Direct";
 }
 
 function describeCall(values, call, spec) {
-  if (call.settle_policy?.Adapter) {
+  if (call.policy?.Adapter) {
     return `${values.adapter}.${values["adapter-method"]}({ target: ${values.wrap}.near_deposit(), beneficiary: predecessor=${values.contract}, amount: ${spec.amountNear} wNEAR })`;
   }
   return `${values.wrap}.near_deposit({}) -> ${spec.amountNear} wNEAR to predecessor=${values.contract}`;

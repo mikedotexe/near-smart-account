@@ -106,7 +106,7 @@ export function groupEventsByNamespace(events) {
  *
  * Returns an array of run summaries, one per distinct namespace. Fields pulled
  * from v1.1.0 events include: executor_id, runs_started, max_runs,
- * balance/required-balance, duration_ms, settle latency, assertion outcomes.
+ * balance/required-balance, duration_ms, resolve latency, assertion outcomes.
  */
 export function summarizeRuns(events) {
   const byNamespace = groupEventsByNamespace(events);
@@ -135,7 +135,7 @@ export function summarizeRuns(events) {
       errorKind: null,
       errorMsg: null,
       stepCount: 0,
-      stepsSettledOk: 0,
+      stepsResolvedOk: 0,
       runsStarted: null,
       maxRuns: null,
       runsRemaining: null,
@@ -144,13 +144,13 @@ export function summarizeRuns(events) {
       minBalanceYocto: null,
       templateTotalDepositYocto: null,
       resumeLatencyMsSamples: [],
-      settleLatencyMsSamples: [],
+      resolveLatencyMsSamples: [],
       gasBurntTgasSamples: [],
       storageUsageSamples: [],
       resumeLatencyMsAvg: null,
       resumeLatencyMsMax: null,
-      settleLatencyMsAvg: null,
-      settleLatencyMsMax: null,
+      resolveLatencyMsAvg: null,
+      resolveLatencyMsMax: null,
       maxUsedGasTgas: null,
       latestStorageUsage: null,
       assertions: [],
@@ -223,17 +223,17 @@ export function summarizeRuns(events) {
         if (typeof data.resume_latency_ms === "number") {
           summary.resumeLatencyMsSamples.push(data.resume_latency_ms);
         }
-      } else if (event.event === "step_settled_ok") {
-        summary.stepsSettledOk += 1;
-        summary.stepCount = Math.max(summary.stepCount, summary.stepsSettledOk);
-        if (typeof data.settle_latency_ms === "number") {
-          summary.settleLatencyMsSamples.push(data.settle_latency_ms);
+      } else if (event.event === "step_resolved_ok") {
+        summary.stepsResolvedOk += 1;
+        summary.stepCount = Math.max(summary.stepCount, summary.stepsResolvedOk);
+        if (typeof data.resolve_latency_ms === "number") {
+          summary.resolveLatencyMsSamples.push(data.resolve_latency_ms);
         }
-      } else if (event.event === "step_settled_err") {
+      } else if (event.event === "step_resolved_err") {
         summary.errorKind = data.error_kind ?? summary.errorKind;
         summary.errorMsg = data.error_msg ?? summary.errorMsg;
-        if (typeof data.settle_latency_ms === "number") {
-          summary.settleLatencyMsSamples.push(data.settle_latency_ms);
+        if (typeof data.resolve_latency_ms === "number") {
+          summary.resolveLatencyMsSamples.push(data.resolve_latency_ms);
         }
       } else if (event.event === "sequence_completed") {
         summary.status = "succeeded";
@@ -266,8 +266,8 @@ export function summarizeRuns(events) {
 
     summary.resumeLatencyMsAvg = average(summary.resumeLatencyMsSamples);
     summary.resumeLatencyMsMax = maximum(summary.resumeLatencyMsSamples);
-    summary.settleLatencyMsAvg = average(summary.settleLatencyMsSamples);
-    summary.settleLatencyMsMax = maximum(summary.settleLatencyMsSamples);
+    summary.resolveLatencyMsAvg = average(summary.resolveLatencyMsSamples);
+    summary.resolveLatencyMsMax = maximum(summary.resolveLatencyMsSamples);
     summary.maxUsedGasTgas = maximum(summary.gasBurntTgasSamples);
     summary.latestStorageUsage =
       summary.storageUsageSamples.length > 0

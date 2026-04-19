@@ -6,7 +6,7 @@ Short reading path for smart NEAR engineers who want the idea quickly.
 
 This repo shows that a NEAR smart account can use **yield / resume**
 (`NEP-519`) to create the next real downstream `FunctionCall` receipt only
-after the previous step's trusted completion surface resolves.
+after the previous step's trusted resolution surface resolves.
 
 That means **deterministic receipt-release order**, not global receipt ordering
 and not exclusive chain execution.
@@ -25,7 +25,7 @@ That is the shortest path to the kernel claim and the current repo shape.
 Read these in order:
 
 1. [simple-example/README.md](./simple-example/README.md)
-   Minimal kernel: `stage_call` + `run_sequence` + a tiny recorder leaf.
+   Minimal kernel: `yield_promise` + `run_sequence` + a tiny recorder leaf.
 2. [README.md](./README.md)
    Current public surface: smart account, adapters, probes, tooling.
 3. [PROTOCOL-ONBOARDING.md](./PROTOCOL-ONBOARDING.md)
@@ -52,17 +52,16 @@ You do **not** need all of this immediately:
 Three layers matter:
 
 1. Minimal kernel
-   A staged step becomes a yielded receipt, and a later call resumes steps in a
-   chosen order.
+   Each step yields a promise, and a later call resumes them in a chosen order.
 2. Current product surface
-   The smart account adds completion policy, automation, and protocol adapters.
+   The smart account adds resolution policy, automation, and protocol adapters.
 3. Historical proof archive
    The chapters show how the idea was validated and hardened over time.
 
 ## Current code surfaces
 
 - [contracts/smart-account/](./contracts/smart-account/)
-  Main contract: manual sequencing, completion policy, automation.
+  Main contract: manual sequencing, resolution policy, automation.
 - [contracts/compat-adapter/](./contracts/compat-adapter/)
   Real protocol adapter surface.
 - [contracts/demo-adapter/](./contracts/demo-adapter/)
@@ -78,9 +77,9 @@ Three layers matter:
 
 Use this phrasing:
 
-> A user stages downstream calls in their smart account, and the account only
+> A user yields downstream promises in their smart account, and the account only
 > creates the next real `FunctionCall` receipt after the previous step's
-> trusted completion surface resolves.
+> trusted resolution surface resolves.
 
 ## Best first caution
 

@@ -38,15 +38,15 @@ test("parseStructuredEvents extracts EVENT_JSON lines and tags with receipt meta
     receipt({
       id: "r1",
       logs: [
-        "stage_call 'alpha' in manual:owner.testnet staged", // prose, ignored
-        eventLine("stage_call_registered", { step_id: "alpha", namespace: "manual:owner.testnet" }),
+        "register_step 'alpha' in manual:owner.testnet registered", // prose, ignored
+        eventLine("step_registered", { step_id: "alpha", namespace: "manual:owner.testnet" }),
       ],
     }),
   ];
 
   const events = parseStructuredEvents(receipts);
   assert.equal(events.length, 1);
-  assert.equal(events[0].event, "stage_call_registered");
+  assert.equal(events[0].event, "step_registered");
   assert.equal(events[0].standard, SA_AUTOMATION_STANDARD);
   assert.equal(events[0].data.step_id, "alpha");
   assert.equal(events[0].receipt.id, "r1");
@@ -139,11 +139,11 @@ test("summarizeRuns collapses a full automation run into one summary", () => {
           resume_latency_ms: 50,
           runtime: { used_gas_tgas: 18, storage_usage: 112 },
         }),
-        eventLine("step_settled_ok", {
+        eventLine("step_resolved_ok", {
           step_id: "alpha",
           namespace: "auto:t1:1",
           next_step_id: "beta",
-          settle_latency_ms: 75,
+          resolve_latency_ms: 75,
           runtime: { used_gas_tgas: 24, storage_usage: 113 },
         }),
       ],
@@ -152,11 +152,11 @@ test("summarizeRuns collapses a full automation run into one summary", () => {
       id: "r3",
       blockHeight: 120,
       logs: [
-        eventLine("step_settled_ok", {
+        eventLine("step_resolved_ok", {
           step_id: "beta",
           namespace: "auto:t1:1",
           next_step_id: null,
-          settle_latency_ms: 125,
+          resolve_latency_ms: 125,
           runtime: { used_gas_tgas: 30, storage_usage: 114 },
         }),
         eventLine("sequence_completed", { namespace: "auto:t1:1", final_step_id: "beta" }),
@@ -184,8 +184,8 @@ test("summarizeRuns collapses a full automation run into one summary", () => {
   assert.equal(run.stepCount, 2);
   assert.equal(run.resumeLatencyMsAvg, 50);
   assert.equal(run.resumeLatencyMsMax, 50);
-  assert.equal(run.settleLatencyMsAvg, 100);
-  assert.equal(run.settleLatencyMsMax, 125);
+  assert.equal(run.resolveLatencyMsAvg, 100);
+  assert.equal(run.resolveLatencyMsMax, 125);
   assert.equal(run.maxUsedGasTgas, 30);
   assert.equal(run.latestStorageUsage, 114);
 });

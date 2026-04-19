@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/probe-pathological.mjs — single-step Direct probe against
-// pathological-router via the real smart-account stage_call/run_sequence path.
+// pathological-router via the real smart-account register_step/run_sequence path.
 
 import { execFile } from "node:child_process";
 import path from "node:path";
@@ -24,7 +24,7 @@ export const DEFAULTS = Object.freeze({
   defaultInnerGasTgas: 100,
   pollMs: 1_000,
   viewTimeoutMs: 8_000,
-  stageTimeoutMs: 30_000,
+  stepRegisterTimeoutMs: 30_000,
   postRunObserveMs: 12_000,
 });
 
@@ -96,7 +96,7 @@ export function resolveProbeRequest({
   method,
   argsJson,
   innerGasTgas,
-  settlePolicy,
+  policy,
 }) {
   if (preset === "raw") {
     if (!method) {
@@ -117,8 +117,8 @@ export function resolveProbeRequest({
       expectation:
         "Interpret the result according to the specific downstream method's completion surface.",
     };
-    if (settlePolicy !== undefined) {
-      request.settlePolicy = settlePolicy;
+    if (policy !== undefined) {
+      request.policy = policy;
     }
     return request;
   }
@@ -143,8 +143,8 @@ export function resolveProbeRequest({
     description: definition.description,
     expectation: definition.expectation,
   };
-  if (settlePolicy !== undefined) {
-    request.settlePolicy = settlePolicy;
+  if (policy !== undefined) {
+    request.policy = policy;
   }
   return request;
 }
@@ -179,7 +179,7 @@ export function buildProbeCommands({
   signer,
   contractId,
   targetId,
-  stageTxHash,
+  registerTxHash,
   runTxHash,
 }) {
   const networkFlag = ` --network ${network}`;
@@ -195,10 +195,10 @@ export function buildProbeCommands({
   });
 
   return {
-    trace_stage: `./scripts/trace-tx.mjs ${stageTxHash} ${signer} --wait FINAL${networkFlag}`,
+    trace_register: `./scripts/trace-tx.mjs ${registerTxHash} ${signer} --wait FINAL${networkFlag}`,
     trace_run: `./scripts/trace-tx.mjs ${runTxHash} ${signer} --wait FINAL${networkFlag}`,
-    investigate_stage:
-      `./scripts/investigate-tx.mjs ${stageTxHash} ${signer} --wait FINAL${networkFlag} ` +
+    investigate_register:
+      `./scripts/investigate-tx.mjs ${registerTxHash} ${signer} --wait FINAL${networkFlag} ` +
       `--accounts ${contractId},${targetId} --view '${callsCompletedView}' --view '${lastBurstView}'`,
     state_calls_completed: `./scripts/state.mjs ${targetId} --method get_calls_completed${networkFlag}`,
     state_last_burst: `./scripts/state.mjs ${targetId} --method get_last_burst${networkFlag}`,
@@ -214,16 +214,16 @@ export function renderHumanReport(report) {
   );
   lines.push(`expectation=${report.expectation}`);
   lines.push(`state_before=${renderStateSnapshot(report.state_before)}`);
-  lines.push(`stage_tx=${report.stage_tx_hash}`);
+  lines.push(`register_tx=${report.register_tx_hash}`);
   lines.push(`run_tx=${report.run_tx_hash}`);
   lines.push(`state_after=${renderStateSnapshot(report.state_after)}`);
-  lines.push(`trace(stage): ${report.commands.trace_stage}`);
+  lines.push(`trace(register): ${report.commands.trace_register}`);
   lines.push(`trace(run): ${report.commands.trace_run}`);
-  lines.push(`investigate(stage): ${report.commands.investigate_stage}`);
+  lines.push(`investigate(register): ${report.commands.investigate_register}`);
   lines.push(`state(calls_completed): ${report.commands.state_calls_completed}`);
   lines.push(`state(last_burst): ${report.commands.state_last_burst}`);
   lines.push(
-    `short=stage:${shortHash(report.stage_tx_hash)} run:${shortHash(report.run_tx_hash)}`
+    `short=register:${shortHash(report.register_tx_hash)} run:${shortHash(report.run_tx_hash)}`
   );
   return lines.join("\n");
 }
@@ -290,13 +290,13 @@ async function waitForPathologicalStateChange({
   return latest;
 }
 
-async function waitForStagedStep({
+async function waitForRegisteredStep({
   network,
   contractId,
   callerId,
   stepId,
   pollMs = DEFAULTS.pollMs,
-  timeoutMs = DEFAULTS.stageTimeoutMs,
+  timeoutMs = DEFAULTS.stepRegisterTimeoutMs,
 }) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
@@ -307,19 +307,19 @@ async function waitForStagedStep({
         callViewMethod(
           network,
           contractId,
-          "staged_calls_for",
+          "registered_steps_for",
           { caller_id: callerId }
         ),
         DEFAULTS.viewTimeoutMs,
-        `${contractId}.staged_calls_for`
+        `${contractId}.registered_steps_for`
       );
-      const stagedCalls = Array.isArray(view.value) ? view.value : [];
+      const registeredSteps = Array.isArray(view.value) ? view.value : [];
       last = {
         block_height: view.block_height,
         block_hash: view.block_hash,
-        staged_calls: stagedCalls,
+        registered_steps: registeredSteps,
       };
-      if (stagedCalls.some((call) => call.step_id === stepId)) {
+      if (registeredSteps.some((call) => call.step_id === stepId)) {
         return {
           ready: true,
           ...last,
@@ -329,7 +329,7 @@ async function waitForStagedStep({
       last = {
         block_height: last?.block_height ?? null,
         block_hash: last?.block_hash ?? null,
-        staged_calls: last?.staged_calls ?? [],
+        registered_steps: last?.registered_steps ?? [],
         poll_error: String(error),
       };
     }
@@ -338,11 +338,11 @@ async function waitForStagedStep({
 
   return {
     ready: false,
-    ...(last || { block_height: null, block_hash: null, staged_calls: [] }),
+    ...(last || { block_height: null, block_hash: null, registered_steps: [] }),
   };
 }
 
-function stageActionForRequest(nearApi, request, actionGasTgas) {
+function registerActionForRequest(nearApi, request, actionGasTgas) {
   const payload = {
     target_id: request.targetId,
     method_name: request.methodName,
@@ -351,11 +351,11 @@ function stageActionForRequest(nearApi, request, actionGasTgas) {
     gas_tgas: request.innerGasTgas,
     step_id: request.stepId,
   };
-  if (request.settlePolicy !== undefined) {
-    payload.settle_policy = request.settlePolicy;
+  if (request.policy !== undefined) {
+    payload.policy = request.policy;
   }
   return nearApi.transactions.functionCall(
-    "stage_call",
+    "register_step",
     Buffer.from(JSON.stringify(payload)),
     BigInt(actionGasTgas) * 10n ** 12n,
     0n
@@ -436,20 +436,20 @@ async function runProbe(options) {
   const account = accounts[options.signer];
   const stateBefore = await readPathologicalState(options.network, options.targetId);
 
-  const stageResult = await sendTransactionAsync(account, options.contractId, [
-    stageActionForRequest(nearApi, options.request, options.actionGasTgas),
+  const registerResult = await sendTransactionAsync(account, options.contractId, [
+    registerActionForRequest(nearApi, options.request, options.actionGasTgas),
   ]);
-  const stageTxHash = stageResult.txHash;
+  const registerTxHash = registerResult.txHash;
 
-  const staged = await waitForStagedStep({
+  const registered = await waitForRegisteredStep({
     network: options.network,
     contractId: options.contractId,
     callerId: options.signer,
     stepId: options.request.stepId,
   });
-  if (!staged.ready) {
+  if (!registered.ready) {
     throw new Error(
-      `staged step '${options.request.stepId}' did not materialize within ${DEFAULTS.stageTimeoutMs} ms after stage tx ${stageTxHash}`
+      `registered step '${options.request.stepId}' did not materialize within ${DEFAULTS.stepRegisterTimeoutMs} ms after register tx ${registerTxHash}`
     );
   }
 
@@ -478,7 +478,7 @@ async function runProbe(options) {
     signer: options.signer,
     contractId: options.contractId,
     targetId: options.targetId,
-    stageTxHash,
+    registerTxHash,
     runTxHash,
   });
 
@@ -491,16 +491,16 @@ async function runProbe(options) {
     step_id: options.request.stepId,
     method_name: options.request.methodName,
     args: options.request.args,
-    settle_policy: options.request.settlePolicy ?? null,
+    policy: options.request.policy ?? null,
     description: options.request.description,
     expectation: options.request.expectation,
     state_before: stateBefore,
-    staged_step_visible: {
-      block_height: staged.block_height,
-      block_hash: staged.block_hash,
-      count: staged.staged_calls.length,
+    registered_step_visible: {
+      block_height: registered.block_height,
+      block_hash: registered.block_hash,
+      count: registered.registered_steps.length,
     },
-    stage_tx_hash: stageTxHash,
+    register_tx_hash: registerTxHash,
     run_tx_hash: runTxHash,
     run_status: null,
     state_after: stateAfter,
@@ -523,7 +523,7 @@ export async function main(argv = process.argv.slice(2)) {
       callee: { type: "string", default: DEFAULTS.callee },
       method: { type: "string" },
       "args-json": { type: "string" },
-      "settle-policy-json": { type: "string" },
+      "policy-json": { type: "string" },
       json: { type: "boolean", default: false },
     },
     allowPositionals: true,
@@ -559,9 +559,9 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const stepId = values["step-id"] || defaultStepId(preset);
-  let settlePolicy;
-  if (values["settle-policy-json"] != null) {
-    settlePolicy = parseJsonObject(values["settle-policy-json"], "--settle-policy-json");
+  let policy;
+  if (values["policy-json"] != null) {
+    policy = parseJsonObject(values["policy-json"], "--policy-json");
   }
   const request = resolveProbeRequest({
     preset,
@@ -571,7 +571,7 @@ export async function main(argv = process.argv.slice(2)) {
     method: values.method,
     argsJson: values["args-json"],
     innerGasTgas,
-    settlePolicy,
+    policy,
   });
 
   const report = await runProbe({

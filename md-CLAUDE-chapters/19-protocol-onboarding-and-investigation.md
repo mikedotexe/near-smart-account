@@ -8,7 +8,7 @@ repeatable operator workflow, not just a design instinct.
 The workflow is:
 
 1. identify the step we want to sequence
-2. choose the completion policy that gives one honest completion surface
+2. choose the resolution policy that gives one honest resolution surface
 3. run the smallest useful probe
 4. investigate that tx across the three surfaces
 5. keep the resulting evidence with the conclusion
@@ -24,17 +24,17 @@ observability method, and why `pathological-router` now sits beside
 The smart-account claim is now narrow and stable:
 
 > the account creates the next real `FunctionCall` receipt only after the
-> previous step's trusted completion surface resolves
+> previous step's trusted resolution surface resolves
 
 That claim is easy to over-apply if we do not make the trust boundary explicit.
 The boundary is not “did the target return a meaningful value?” The boundary
-is “did the smart account observe a truthful completion surface for the step it
+is “did the smart account observe a truthful resolution surface for the step it
 is trying to sequence?”
 
 So the operator problem is not just “how do I call this?” It is:
 
 - what exactly is the step?
-- what is the truthful completion surface for that step?
+- what is the truthful resolution surface for that step?
 - how do I prove it with receipts, block-pinned state, and activity rows?
 
 The onboarding guide answers those questions in a short form. This chapter is
@@ -77,7 +77,7 @@ The real failure mode is a target that:
 
 In that shape, the outer receipt can succeed before the protocol effect is
 actually complete. Sequencing still holds at the receipt-release layer, but the
-completion surface is too weak to represent the protocol step honestly.
+resolution surface is too weak to represent the protocol step honestly.
 
 That is exactly why `Adapter` exists.
 
@@ -89,7 +89,7 @@ otherwise successful downstream result that exceeds the callback-size limit is
 treated as failure by the sequencer.
 
 That does not weaken the sequencing claim, but it does mean the current
-implementation's definition of successful settlement is slightly narrower than
+implementation's definition of successful resolution is slightly narrower than
 the protocol runtime's broadest notion of success.
 
 ## 3. Canonical onboarding walk-through
@@ -104,7 +104,7 @@ Why this is the right example:
 
 - it uses a real external protocol we did not write
 - it mixes `Direct` and `Adapter` in one sequence
-- it exercises both simple and protocol-specific completion surfaces
+- it exercises both simple and protocol-specific resolution surfaces
 
 ### Step classification
 
@@ -113,7 +113,7 @@ For that run:
 - `register` is `Direct`
   because `wrap.testnet.storage_deposit` is already an honest leaf-style step
 - `alpha` is `Direct`
-  because `wrap.testnet.near_deposit` itself is the completion surface we want
+  because `wrap.testnet.near_deposit` itself is the resolution surface we want
 - `beta` is `Adapter`
   because the step we actually care about is
   `near_deposit -> ft_transfer back to the smart account`, and we want one
@@ -134,7 +134,7 @@ onboarding unfamiliar protocols:
 - `return_decoy_promise` shows how a caller can be fooled by a decoy returned
   promise while the real work detaches
 - `return_oversized_payload` probes the current callback-size ceiling as part
-  of the completion predicate
+  of the resolution predicate
 
 That makes `pathological-router` part of the repo's public research apparatus,
 not just a hidden lab stub.
@@ -194,8 +194,8 @@ the results.
   investigated tx from unrelated rows that merely share the same block window
 - parse structured `sa-automation` `EVENT_JSON:` logs into receipt-ordered
   events and summarize runs by namespace when that telemetry is present
-- summarize stage-lifecycle and compact telemetry metrics like duration,
-  resume latency, settle latency, and max observed used gas
+- summarize yield-lifecycle and compact telemetry metrics like duration,
+  resume latency, resolve latency, and max observed used gas
 - emit one markdown report and one JSON artifact
 
 The wrapper does **not** change the method. It packages the method so the

@@ -2,19 +2,19 @@
 
 ## The question
 
-Once `stage_call` was working reliably, an obvious simplification appeared:
+Once `yield_promise` was working reliably, an obvious simplification appeared:
 why not remove `yield` entirely?
 
 Mechanically, the smart-account kernel could do this:
 
-1. `stage_call(...)` would only store the downstream call spec in state
+1. `yield_promise(...)` would only store the downstream call spec in state
 2. `run_sequence(...)` or `execute_trigger(...)` would dispatch the first real
    downstream `FunctionCall` directly
-3. `on_stage_call_settled(...)` would dispatch the next call directly
+3. `on_promise_resolved(...)` would dispatch the next call directly
 
 That would still preserve the important sequencing guarantee:
 
-> downstream step B does not start until downstream step A has settled
+> downstream step B does not start until downstream step A has resolved
 
 So the question was not "is no-yield sequencing possible?" It is.
 The real question was "what do we lose if we do that?"
@@ -24,19 +24,19 @@ The real question was "what do we lose if we do that?"
 We are intentionally keeping `yield / resume` canonical for the smart-account
 path because yield is doing something meaningful, not accidental.
 
-### 1. The staging transaction is part of the proof
+### 1. The yield transaction is part of the proof
 
-With the current shape, the original multi-action staging transaction creates
-one yielded callback receipt per staged step.
+With the current shape, the original multi-action yield transaction creates
+one yielded callback receipt per yielded step.
 
 That means the trace tells a clean story:
 
-- the **stage tx** shows the yielded receipts being created
-- the **run / execute tx** shows ordered release beginning
+- the **yield tx** shows the yielded receipts being created
+- the **resume / execute tx** shows ordered release beginning
 - the **downstream receipts** show the real work
 
 If we removed yield, the mechanism would still sequence correctly, but the
-original staging transaction would lose that visible structure. The whole
+original yield transaction would lose that visible structure. The whole
 cascade would attach to `run_sequence` or `execute_trigger` instead.
 
 That would make the kernel smaller, but it would weaken one of the most novel
@@ -44,7 +44,7 @@ and teachable parts of the repo.
 
 ### 2. "Waiting for resume" is a real state, not just bookkeeping
 
-A staged call in this repo is not merely "a saved call spec." It is a saved
+A yielded promise in this repo is not merely "a saved call spec." It is a saved
 call spec **plus a yielded callback receipt that is waiting to be released**.
 
 That is a stronger and more NEAR-native statement.
@@ -53,7 +53,7 @@ It matches the current contract model:
 
 - registration creates the yielded receipt
 - release resumes exactly one yielded step
-- progression happens only after settlement
+- progression happens only after resolution
 
 That three-phase model is more explicit than a purely state-driven queue, even
 if the queue-only design is implementable.
@@ -80,7 +80,7 @@ Instead, the kernel was reshaped so the internal phases are explicit:
 - **registration**: validate and store the call, then allocate the yielded
   callback receipt
 - **release**: resume exactly one stored step by `YieldId`
-- **progression**: after downstream settlement, either release the next step
+- **progression**: after downstream resolution, either release the next step
   or halt/finish the sequence
 
 That is the right compromise for now:
@@ -96,7 +96,7 @@ The trace tooling now renders yielded receipts that have not been resumed yet
 as `waiting_for_resume`, while still keeping the internal `pending_yield`
 classification logic.
 
-That naming matters. It makes the stage tx read like an intentional control
+That naming matters. It makes the yield tx read like an intentional control
 plane:
 
 - not "mysteriously pending"
@@ -107,9 +107,9 @@ plane:
 
 For this repo's smart-account kernel:
 
-- `yield` remains mandatory for staged sequencing
+- `yield` remains mandatory for yielded sequencing
 - there is no parallel no-yield execution mode
-- `stage_call` is intentionally the yielded receipt creation step
+- `yield_promise` is intentionally the yielded receipt creation step
 - `run_sequence` and `execute_trigger` are intentionally the release steps
 
 If the project ever pivots from "prove the NEP-519 mechanism" to "ship the

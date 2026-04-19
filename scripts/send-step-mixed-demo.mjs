@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 //
-// Companion to scripts/send-staged-echo-demo.mjs — same shape, but lets
+// Companion to scripts/send-step-echo-demo.mjs — same shape, but lets
 // individual steps target a different downstream method than the rest.
-// Used by chapter 08 to prove mid-sequence halt-then-retry semantics:
-// some steps get a real `echo_log` downstream, one deliberately bad
-// `not_a_method` downstream sits in the middle of the declared order.
+// Used by the mixed-outcome run in
+// md-CLAUDE-chapters/archive-staged-call-lineage.md to prove
+// mid-sequence halt-then-retry semantics: some steps get a real
+// `echo_log` downstream, one deliberately bad `not_a_method` downstream
+// sits in the middle of the declared order.
 //
-// NOTE: superseded by scripts/send-stage-call-multi.mjs for new work.
-// Kept because chapter 08's recipe references it; the general multi
+// NOTE: superseded by scripts/send-register-step-multi.mjs for new work.
+// Kept because the staged-call lineage archive (historical naming)'s recipes reference it;
+// the general multi
 // helper expresses the same shape via per-action JSON specs.
 //
 // Usage:
-//   scripts/send-staged-mixed-demo.mjs alpha:1 beta:2 gamma:3 delta:4 \
+//   scripts/send-step-mixed-demo.mjs alpha:1 beta:2 gamma:3 delta:4 \
 //     --method echo_log --fail-method not_a_method --fail-step-ids beta \
 //     --action-gas 250 --call-gas 30 --sequence-order alpha,beta,gamma,delta
 //
-// The script calls the currently-deployed contract's `stage_call` method.
-// After the rename landed on testnet it matches contracts/smart-account.
+// The script calls the currently-deployed contract's `register_step` method.
 
 import process from "node:process";
 import { parseArgs } from "node:util";
@@ -90,7 +92,7 @@ const account = accounts[values.signer];
 const actions = specs.map(({ step_id, n }) => {
   const downstream = failStepIdSet.has(step_id) ? values["fail-method"] : values.method;
   return nearApi.transactions.functionCall(
-    "stage_call",
+    "register_step",
     Buffer.from(JSON.stringify({
       target_id: values.target,
       method_name: downstream,

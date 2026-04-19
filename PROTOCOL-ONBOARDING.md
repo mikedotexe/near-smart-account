@@ -6,14 +6,14 @@ contracts we did not write.
 ## Narrow theorem
 
 The smart account creates the next real `FunctionCall` receipt only after the
-previous step's trusted completion surface resolves.
+previous step's trusted resolution surface resolves.
 
 Sequential here means **receipt-release order**, not exclusive chain
 execution. Unrelated receipts may still interleave elsewhere on-chain.
 
 ## Completion surface
 
-A **completion surface** is the callback-visible success/failure signal the
+A **resolution surface** is the callback-visible success/failure signal the
 smart account chooses to trust for one step.
 
 That surface can be:
@@ -23,7 +23,7 @@ That surface can be:
 - a caller-specified postcheck receipt in `Asserted` (chapter 21)
 
 The sequencer does **not** require a meaningful return payload. It requires a
-truthful completion surface.
+truthful resolution surface.
 
 ## Quick rule
 
@@ -39,10 +39,10 @@ truthful completion surface.
 **Choosing between `Adapter` and `Asserted`.** `Adapter` encapsulates
 multi-step reconciliation (poll N times, chain M follow-ups, collapse into
 one honest return) and lives in a dedicated adapter contract. `Asserted`
-encapsulates a single post-settle equality check against whatever
+encapsulates a single post-resolve equality check against whatever
 postcheck method the caller names. That postcheck is a real zero-deposit
 `FunctionCall`, not an enforced read-only view, so the caller must choose
-a trustworthy completion surface. Pick `Asserted` when one postcheck call
+a trustworthy resolution surface. Pick `Asserted` when one postcheck call
 makes success/failure legible in one byte-comparison (e.g., a counter that
 must have incremented, a balance that must equal X, a sentinel flag that
 must be set). Pick `Adapter` when the reconciliation itself is non-trivial
@@ -51,13 +51,13 @@ must be set). Pick `Adapter` when the reconciliation itself is non-trivial
 ## Onboarding checklist
 
 1. Identify the exact step you want the smart account to sequence.
-2. Decide the completion policy:
+2. Decide the resolution policy:
    `Direct` if the target receipt is already truthful, `Adapter` if the target
    can return before the real effect is done.
 3. Run the smallest probe that exercises only that step or one mixed sequence.
 4. Investigate the probe tx with `scripts/investigate-tx.mjs`.
 5. Record the evidence:
-   tx hash, signer, included block, receipt blocks, chosen completion surface,
+   tx hash, signer, included block, receipt blocks, chosen resolution surface,
    conclusion, and caveats.
 
 ## Compatibility rubric
@@ -71,7 +71,7 @@ must be set). Pick `Adapter` when the reconciliation itself is non-trivial
 
 ## Repo-seeded protocol matrix
 
-| Target step | Recommended policy | Trusted completion surface | Notes |
+| Target step | Recommended policy | Trusted resolution surface | Notes |
 |---|---|---|---|
 | `router.route_echo` | `Direct` | `router` receipt chain | Honest demo leaf-style protocol. |
 | `wild-router.route_echo_fire_and_forget` | `Adapter` | `demo-adapter.adapt_fire_and_forget_route_echo` | Outer receipt returns before the real downstream effect is visible. |
@@ -100,11 +100,11 @@ What it gives you:
 - Surface 3: per-block receipt ordering for the investigated tx
 - account activity rows for the investigated tx, with omitted unrelated
   window-row counts called out explicitly
-- stage-lifecycle classification when the traced tx is part of a staged
-  `stage_call` flow
+- yield-lifecycle classification when the traced tx is part of a yielded
+  `yield_promise` flow
 - structured `sa-automation` receipt events and per-namespace run summaries
   when the traced tx emits `EVENT_JSON:` telemetry
-- compact telemetry metrics like duration, resume/settle latency, and max
+- compact telemetry metrics like duration, resume/resolve latency, and max
   observed used gas when those structured events are present
 - a JSON artifact with `schema_version: 1`
 
@@ -134,14 +134,14 @@ Testnet churn rule:
   crosses that guard, either clean its state explicitly or move the probe to a
   fresh child account
 
-Current mainnet stage-call note:
+Current mainnet yield-sequence note:
 
-- on the current `sa-lab.mike.near` lab, single-step staged calls stayed
+- on the current `sa-lab.mike.near` lab, single-step yielded promises stayed
   pending at `180`, `250`, and `500 TGas`
-- two-step staged batches failed at `180` and `250 TGas` per outer action, and
+- two-step yielded batches failed at `180` and `250 TGas` per outer action, and
   stayed pending at `300` and `400 TGas`
-- so the present operator baseline for **mainnet multi-step staging** is:
-  start at `300 TGas` per outer `stage_call` action unless you are
+- so the present operator baseline for **mainnet multi-step yield batches** is:
+  start at `300 TGas` per outer `yield_promise` action unless you are
   intentionally probing the failure boundary
 
 ### Canonical example
@@ -205,7 +205,7 @@ not the personality of the target contract.
 - signer
 - included block height
 - receipt block heights
-- chosen completion policy and completion surface
+- chosen resolution policy and resolution surface
 - one-sentence conclusion
 - caveats
 

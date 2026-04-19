@@ -117,19 +117,19 @@ function formatMetric(value, digits = 1) {
   return `\`${value}\``;
 }
 
-function classifyStageLifecycle(trace, receipts, structuredEvents) {
-  const isStageLike =
-    structuredEvents.some((event) => event.event === "stage_call_registered") ||
+function classifyStepLifecycle(trace, receipts, structuredEvents) {
+  const isStepLike =
+    structuredEvents.some((event) => event.event === "step_registered") ||
     receipts.some((receipt) =>
       (receipt.actions || []).some(
-        (action) => typeof action === "string" && action.includes("FunctionCall(stage_call")
+        (action) => typeof action === "string" && action.includes("FunctionCall(register_step")
       )
     ) ||
     receipts.some((receipt) =>
-      (receipt.logs || []).some((log) => typeof log === "string" && log.includes("stage_call '"))
+      (receipt.logs || []).some((log) => typeof log === "string" && log.includes("register_step '"))
     );
 
-  if (!isStageLike) return null;
+  if (!isStepLike) return null;
 
   const yieldedReceipts = receipts.filter((receipt) => receipt.isPromiseYield);
   const pendingYieldCount = yieldedReceipts.filter(
@@ -141,8 +141,8 @@ function classifyStageLifecycle(trace, receipts, structuredEvents) {
   const yieldedReceiptCount = yieldedReceipts.length;
   const resumedYieldCount = Math.max(0, yieldedReceiptCount - pendingYieldCount);
 
-  let classification = "stage_like_tx_without_clear_outcome";
-  let reason = "stage-like transaction did not preserve enough live pending signal for a stronger classification";
+  let classification = "register_like_tx_without_clear_outcome";
+  let reason = "register-like transaction did not preserve enough live pending signal for a stronger classification";
 
   if (
     trace?.raw_final_status &&
@@ -151,17 +151,17 @@ function classifyStageLifecycle(trace, receipts, structuredEvents) {
     "Failure" in trace.raw_final_status &&
     yieldedReceiptCount === 0
   ) {
-    classification = "hard_fail_before_stage";
-    reason = "stage receipt failed before yielded steps became visible";
+    classification = "hard_fail_before_register";
+    reason = "register receipt failed before registered steps became visible";
   } else if (pendingYieldCount > 0) {
     classification = "pending_until_resume";
-    reason = "yielded receipt is still pending and waiting for explicit release";
+    reason = "registered step receipt is still pending and waiting for explicit release";
   } else if (resumeFailedCount > 0) {
     classification = "immediate_resume_failed";
-    reason = "yielded callback resumed before the intended release path and halted on resume failure";
+    reason = "registered step callback resumed before the intended release path and halted on resume failure";
   } else if (resumedYieldCount > 0) {
-    classification = "released_after_stage";
-    reason = "yielded callbacks were later resumed and executed downstream work";
+    classification = "released_after_register";
+    reason = "registered step callbacks were later resumed and executed downstream work";
   }
 
   return {
@@ -313,19 +313,19 @@ export function renderMarkdownReport(report) {
 
   lines.push("## Sequence telemetry");
   lines.push("");
-  if (!report.stage_lifecycle && !report.run_summaries.length) {
+  if (!report.step_lifecycle && !report.run_summaries.length) {
     lines.push("_No sequence telemetry summary for this tx._");
     lines.push("");
   } else {
-    if (report.stage_lifecycle) {
-      lines.push("### Stage lifecycle");
+    if (report.step_lifecycle) {
+      lines.push("### Step lifecycle");
       lines.push("");
-      lines.push(`- classification: \`${report.stage_lifecycle.classification}\``);
-      lines.push(`- reason: ${report.stage_lifecycle.reason}`);
-      lines.push(`- yielded receipts: \`${report.stage_lifecycle.yielded_receipt_count}\``);
-      lines.push(`- pending yielded receipts: \`${report.stage_lifecycle.pending_yield_count}\``);
-      lines.push(`- resumed yielded receipts: \`${report.stage_lifecycle.resumed_yield_count}\``);
-      lines.push(`- resume-failed signals: \`${report.stage_lifecycle.resume_failed_count}\``);
+      lines.push(`- classification: \`${report.step_lifecycle.classification}\``);
+      lines.push(`- reason: ${report.step_lifecycle.reason}`);
+      lines.push(`- yielded receipts: \`${report.step_lifecycle.yielded_receipt_count}\``);
+      lines.push(`- pending yielded receipts: \`${report.step_lifecycle.pending_yield_count}\``);
+      lines.push(`- resumed yielded receipts: \`${report.step_lifecycle.resumed_yield_count}\``);
+      lines.push(`- resume-failed signals: \`${report.step_lifecycle.resume_failed_count}\``);
       lines.push("");
     }
 
@@ -333,12 +333,12 @@ export function renderMarkdownReport(report) {
       lines.push("### Namespace metrics");
       lines.push("");
       lines.push(
-        "| Namespace | Status | Steps ok/total | Duration ms | Resume latency ms avg/max | Settle latency ms avg/max | Max used gas (TGas) | Latest storage | Error |"
+        "| Namespace | Status | Steps ok/total | Duration ms | Resume latency ms avg/max | Resolve latency ms avg/max | Max used gas (TGas) | Latest storage | Error |"
       );
       lines.push("|---|---|---|---|---|---|---|---|---|");
       for (const run of report.run_summaries) {
         lines.push(
-          `| \`${run.namespace}\` | \`${run.status}\` | \`${run.stepsSettledOk}/${run.stepCount}\` | ${formatMetric(run.durationMs, 0)} | ${formatMetric(run.resumeLatencyMsAvg)}/${formatMetric(run.resumeLatencyMsMax, 0)} | ${formatMetric(run.settleLatencyMsAvg)}/${formatMetric(run.settleLatencyMsMax, 0)} | ${formatMetric(run.maxUsedGasTgas)} | ${formatMetric(run.latestStorageUsage, 0)} | \`${run.errorKind ?? "-"}\` |`
+          `| \`${run.namespace}\` | \`${run.status}\` | \`${run.stepsResolvedOk}/${run.stepCount}\` | ${formatMetric(run.durationMs, 0)} | ${formatMetric(run.resumeLatencyMsAvg)}/${formatMetric(run.resumeLatencyMsMax, 0)} | ${formatMetric(run.resolveLatencyMsAvg)}/${formatMetric(run.resolveLatencyMsMax, 0)} | ${formatMetric(run.maxUsedGasTgas)} | ${formatMetric(run.latestStorageUsage, 0)} | \`${run.errorKind ?? "-"}\` |`
         );
       }
       lines.push("");
@@ -558,7 +558,7 @@ export async function buildInvestigateReport(
     transactionHash: traced.tree.txHash,
   });
   const runSummaries = summarizeRuns(structuredEvents);
-  const stageLifecycle = classifyStageLifecycle(
+  const stepLifecycle = classifyStepLifecycle(
     {
       classification: traced.classification,
       raw_final_status: traced.tree.finalStatus,
@@ -590,7 +590,7 @@ export async function buildInvestigateReport(
     blocks,
     state_snapshots: stateSnapshots,
     account_activity: accountActivity,
-    stage_lifecycle: stageLifecycle,
+    step_lifecycle: stepLifecycle,
     structured_events: structuredEvents,
     run_summaries: runSummaries,
     logs,

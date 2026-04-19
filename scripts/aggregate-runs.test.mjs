@@ -37,7 +37,7 @@ function fixtureReport() {
         receipt: { id: "r1", blockHeight: 100, transactionHash: "tx-1" },
       },
       {
-        event: "step_settled_ok",
+        event: "step_resolved_ok",
         data: { namespace: "auto:t1:1", step_id: "alpha" },
         receipt: { id: "r2", blockHeight: 101, transactionHash: "tx-1" },
       },
@@ -66,11 +66,11 @@ function fixtureReport() {
         errorKind: null,
         errorMsg: null,
         stepCount: 2,
-        stepsSettledOk: 2,
+        stepsResolvedOk: 2,
         resumeLatencyMsAvg: 12.5,
         resumeLatencyMsMax: 15,
-        settleLatencyMsAvg: 22.5,
-        settleLatencyMsMax: 30,
+        resolveLatencyMsAvg: 22.5,
+        resolveLatencyMsMax: 30,
         maxUsedGasTgas: 31,
         latestStorageUsage: 555,
         assertionSuccessCount: 1,
@@ -82,12 +82,12 @@ function fixtureReport() {
             receipt: { blockHeight: 100, id: "r1" },
           },
           {
-            event: "step_settled_ok",
+            event: "step_resolved_ok",
             data: {
               namespace: "auto:t1:1",
               step_id: "alpha",
               next_step_id: "beta",
-              settle_latency_ms: 20,
+              resolve_latency_ms: 20,
             },
             receipt: { blockHeight: 101, id: "r2" },
           },
@@ -115,7 +115,7 @@ test("renderMarkdownReport includes approachable summary and run details", () =>
   assert.match(markdown, /## Run details/);
   assert.match(markdown, /auto:t1:1/);
   assert.match(markdown, /Resume ms avg\/max/);
-  assert.match(markdown, /step_settled_ok/);
+  assert.match(markdown, /step_resolved_ok/);
 });
 
 test("writeAggregateOutputs preserves schema_version in json output", () => {

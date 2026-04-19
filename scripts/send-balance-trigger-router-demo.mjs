@@ -64,8 +64,8 @@ const triggerId = values["trigger-id"] || `balance-trigger-${idSuffix}`;
 const artifactsFile =
   values["artifacts-file"] || defaultArtifactsFile(sequenceId, triggerId);
 const mode = parseMode(values.mode);
-const sequenceCalls = specs.map(({ step_id, n }, index) =>
-  buildSequenceCall(mode, values, step_id, n, index, callGasTgas)
+const steps = specs.map(({ step_id, n }, index) =>
+  buildStep(mode, values, step_id, n, index, callGasTgas)
 );
 
 const preview = {
@@ -86,7 +86,7 @@ const preview = {
   call_gas_tgas: callGasTgas,
   min_balance_yocto: minBalanceYocto.toString(),
   max_runs: maxRuns,
-  calls: sequenceCalls.map((call, index) => ({
+  calls: steps.map((call, index) => ({
     order: index,
     step_id: call.step_id,
     policy: policyLabel(call),
@@ -114,7 +114,7 @@ const saveTemplate = await sendFunctionCall(
   "save_sequence_template",
   {
     sequence_id: sequenceId,
-    calls: sequenceCalls,
+    calls: steps,
   },
   ownerGasTgas
 );
@@ -224,7 +224,7 @@ function assertUniqueStepIds(stepIds, context) {
   }
 }
 
-function buildSequenceCall(mode, values, step_id, n, index, callGasTgas) {
+function buildStep(mode, values, step_id, n, index, callGasTgas) {
   const adapterWrapped = mode === "adapter" || (mode === "mixed" && index % 2 === 1);
   if (adapterWrapped) {
     return {
@@ -239,7 +239,7 @@ function buildSequenceCall(mode, values, step_id, n, index, callGasTgas) {
       ).toString("base64"),
       attached_deposit_yocto: "0",
       gas_tgas: callGasTgas,
-      settle_policy: {
+      policy: {
         Adapter: {
           adapter_id: values.adapter,
           adapter_method: values["adapter-method"],
@@ -264,18 +264,18 @@ function buildSequenceCall(mode, values, step_id, n, index, callGasTgas) {
 }
 
 function policyLabel(call) {
-  const settlePolicy = call.settle_policy;
-  if (!settlePolicy) {
+  const policy = call.policy;
+  if (!policy) {
     return "Direct";
   }
-  if (settlePolicy.Adapter) {
-    return `Adapter via ${settlePolicy.Adapter.adapter_id}.${settlePolicy.Adapter.adapter_method}`;
+  if (policy.Adapter) {
+    return `Adapter via ${policy.Adapter.adapter_id}.${policy.Adapter.adapter_method}`;
   }
   return "Direct";
 }
 
 function describeCall(values, call, n) {
-  if (call.settle_policy?.Adapter) {
+  if (call.policy?.Adapter) {
     return `${values.adapter}.${values["adapter-method"]}({ target: ${values["wild-router"]}.route_echo_fire_and_forget({ callee: ${values.echo}, n: ${n} }) })`;
   }
   return `${values.router}.route_echo({ callee: ${values.echo}, n: ${n} })`;
