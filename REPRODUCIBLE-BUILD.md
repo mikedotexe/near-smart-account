@@ -1,7 +1,7 @@
 # Reproducible build — v4.0.2-ops on `mike.near`
 
 Every reference run in [`MAINNET-PROOF.md`](./MAINNET-PROOF.md)
-pins a specific deployed contract: kernel version `v4.0.2-ops` on
+pins a specific deployed contract: sequencer version `v4.0.2-ops` on
 `mike.near`. Its on-chain `code_hash` is the base58 SHA-256 of the
 WASM the validator actually runs. This doc's job: let any reviewer
 rebuild that WASM locally and confirm the hash matches.
@@ -104,7 +104,7 @@ tip (swap `block_id` for `"finality":"final"`).
 
 ## For maintainers — when v4.0.3 ships
 
-Re-deploying a new kernel version should refresh this doc:
+Re-deploying a new sequencer version should refresh this doc:
 
 1. Bump `rust-toolchain.toml` only if the toolchain also moves.
 2. Update the table at top with the new `code_hash`, hex hash, and

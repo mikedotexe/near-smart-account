@@ -1,7 +1,7 @@
 # Chapter 22 — State-break investigation
 
 > **In today's vocabulary.** This chapter is the source-of-truth for
-> why this repo treats every field on the kernel's `Contract` struct
+> why this repo treats every field on the sequencer's `Contract` struct
 > as a schema commitment, and why the Phase-A rename
 > (`yield_promise` → `execute_steps`, `resolution_policy` →
 > `step_policy`) was done carefully rather than casually. The
@@ -56,7 +56,7 @@ What we can do, and what this doc does:
 2. Enumerate the classes of change that would have broken borsh on
    redeploy.
 3. Rank the likely triggers against what we know was added to the
-   kernel over time.
+   sequencer over time.
 4. Explain why the delete-and-recreate ritual in `deploy-testnet.sh`
    did not prevent the break.
 5. Document the recovery path we chose not to walk, and the patterns a

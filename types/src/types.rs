@@ -76,7 +76,7 @@ pub enum ComparisonKind {
     LexBytes,
 }
 
-/// Pre-dispatch gate on a `Step`. Before the kernel dispatches the step's
+/// Pre-dispatch gate on a `Step`. Before the sequencer dispatches the step's
 /// target `FunctionCall`, it fires `gate_id.gate_method(gate_args)`, reads
 /// the returned bytes, and compares them to `[min_bytes, max_bytes]` under
 /// `comparison`. Advance-and-dispatch only if in range; halt the sequence
@@ -112,7 +112,7 @@ pub struct PreGate {
 }
 
 /// Result of evaluating a `PreGate` against the gate call's return bytes.
-/// Exposed so kernel code + tests share one decision function.
+/// Exposed so sequencer code + tests share one decision function.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PreGateOutcome {
     InRange,
@@ -255,7 +255,7 @@ pub struct SaveResult {
 }
 
 /// Args template for a step — an alternative to static `args` bytes.
-/// If a `Step` has `args_template: Some(...)`, the kernel materializes
+/// If a `Step` has `args_template: Some(...)`, the sequencer materializes
 /// the real args at dispatch time by running each `Substitution` in
 /// order against the surrounding sequence context, then using the
 /// produced bytes as the target FunctionCall's args.
@@ -371,11 +371,11 @@ impl MaterializeError {
 
 /// Materialize the final args bytes for a step that has an
 /// `ArgsTemplate`. Pure function: no `env` calls, no state mutation.
-/// The kernel calls this at dispatch time with the sequence's saved
+/// The sequencer calls this at dispatch time with the sequence's saved
 /// results map.
 ///
 /// Returns `Ok(bytes)` on success, `Err(MaterializeError)` otherwise.
-/// The kernel treats errors as a halt condition (same as a pre-gate
+/// The sequencer treats errors as a halt condition (same as a pre-gate
 /// comparison failure or an Asserted mismatch).
 pub fn materialize_args(
     template: &[u8],

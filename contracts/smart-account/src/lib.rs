@@ -2,7 +2,7 @@
 //!
 //! The public surface is intentionally narrow but now clearly has two layers:
 //!
-//! - Kernel sequencing surface:
+//! - Sequencer surface:
 //!   - `register_step(...)` registers a yielded downstream `FunctionCall` and
 //!     creates its yielded callback receipt
 //!   - `run_sequence(caller, order)` starts ordered release by resuming the
@@ -13,14 +13,14 @@
 //!     downstream call's trusted completion surface has resolved
 //!   - `policy` (`Direct`, `Adapter`, `Asserted`) defines what that
 //!     trusted completion surface is for each step
-//! - Automation/product surface built on top of the kernel:
+//! - Automation/product surface built on top of the sequencer:
 //!   - `save_sequence_template(...)` stores a durable ordered call template
 //!   - `create_balance_trigger(...)` stores a balance gate over a template
 //!   - `execute_trigger(...)` materializes a fresh yielded namespace and starts
 //!     the sequence once an authorized caller spends their own transaction gas
 //!
-//! The kernel is the narrow theorem this repo is built around. The automation
-//! layer is a real product surface built on top of that kernel, not a separate
+//! The sequencer is the narrow theorem this repo is built around. The automation
+//! layer is a real product surface built on top of that sequencer, not a separate
 //! proof.
 
 use near_sdk::json_types::{Base64VecU8, U128};
@@ -64,6 +64,15 @@ const PRE_GATE_CHECK_CALLBACK_GAS_TGAS: u64 = 25;
 /// tree within the PV-83 1 PGas ceiling even for the heaviest
 /// target + gate + callback chain.
 const MAX_PRE_GATE_GAS_TGAS: u64 = 100;
+/// Extra gas budgeted for the authorizer hop on target dispatches when
+/// the sequencer is configured as an extension (`authorizer_id = Some(_)`).
+/// Covers authorizer's two-factor auth check + Promise construction.
+/// Seed value; tune on testnet once the hop is observed under load.
+const AUTHORIZER_HOP_OVERHEAD_TGAS: u64 = 10;
+/// Gas budget for the authorizer hop on session-key mint / revoke. The
+/// authorizer's body is a single auth check + an AccessKey action
+/// (add_access_key_allowance or delete_key), so this is small.
+const SESSION_KEY_AUTHORIZER_HOP_GAS_TGAS: u64 = 15;
 
 #[near(serializers = [borsh])]
 #[derive(BorshStorageKey)]
@@ -75,6 +84,7 @@ enum StorageKey {
     AutomationRuns,
     SequenceContexts,
     SessionGrants,
+    ProxyGrants,
 }
 
 #[near(serializers = [json, borsh])]
@@ -87,7 +97,7 @@ pub struct Step {
     pub attached_deposit_yocto: u128,
     pub gas_tgas: u64,
     pub policy: StepPolicy,
-    /// Optional pre-dispatch gate. If present, the kernel fires
+    /// Optional pre-dispatch gate. If present, the sequencer fires
     /// `pre_gate.gate_id.pre_gate.gate_method(pre_gate.gate_args)` before
     /// dispatching the target. The step advances only if the gate's
     /// returned bytes sit inside `[pre_gate.min_bytes, pre_gate.max_bytes]`
@@ -99,11 +109,11 @@ pub struct Step {
     /// steps can reference it via `args_template`. Saved bytes are
     /// the raw `promise_result_checked` value, quotes and all.
     pub save_result: Option<SaveResult>,
-    /// Optional: if set, the kernel materializes the target's args at
+    /// Optional: if set, the sequencer materializes the target's args at
     /// dispatch time by running each substitution in `args_template`
     /// against the sequence context, then uses the produced bytes as
     /// the FunctionCall's args. When `None`, static `args` is used
-    /// as-is. Kernel materialization failures halt the sequence with
+    /// as-is. Sequencer materialization failures halt the sequence with
     /// `args_materialize_failed`.
     pub args_template: Option<ArgsTemplate>,
 }
@@ -315,6 +325,67 @@ pub struct SessionGrantView {
     pub active: bool,
 }
 
+/// Registry entry for a function-call access key minted by the smart
+/// account for dApp-login proxy use. Unlike a `SessionGrant` (which
+/// authorizes `execute_trigger` against pre-registered trigger ids),
+/// a `ProxyGrant` authorizes `proxy_call` against an explicit
+/// `allowed_targets` / `allowed_methods` allowlist and dispatches the
+/// outgoing Promise with a state-controlled `attach_yocto`. This lets
+/// a dApp's ephemeral local-storage key call downstream contracts
+/// that require an attached deposit (`intents.near`, NEP-141
+/// `ft_transfer`, …) without breaking NEAR's "FCAKs can't attach
+/// deposit" rule — the smart account pays the toll from its own
+/// balance on every dispatch.
+///
+/// Kept as a separate struct from `SessionGrant` for now; unify
+/// later if usage patterns converge.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
+pub struct ProxyGrant {
+    /// Stringified `ed25519:<base58>` — matches
+    /// `env::signer_account_pk().to_string()` when the proxy key
+    /// signs a delegated `proxy_call`.
+    pub session_public_key: String,
+    pub granted_at_ms: u64,
+    pub expires_at_ms: u64,
+    /// Non-empty list of account ids the key may dispatch against.
+    /// One-per-dApp is the expected pattern; a list covers
+    /// multi-contract dApps (e.g. Ref + wNEAR).
+    pub allowed_targets: Vec<AccountId>,
+    /// `Some(vec)` restricts to exactly these method names on the
+    /// allowed targets. `None` permits any method on any allowed
+    /// target — wider blast radius; documented as power-user.
+    pub allowed_methods: Option<Vec<String>>,
+    /// Deposit (in yocto) attached to each outgoing dispatch, paid
+    /// from the smart account's balance. Typical values: `0` for
+    /// most reads/writes, `1` for `ft_transfer` / `intents.near`
+    /// auth challenges.
+    pub attach_yocto: U128,
+    /// Gas budget (in TGas) handed to each dispatch. Bounds the
+    /// per-call gas floor so one rogue call can't burn the whole
+    /// FCAK allowance in a single tx.
+    pub max_gas_tgas: u64,
+    pub max_call_count: u32,
+    pub call_count: u32,
+    pub label: Option<String>,
+}
+
+#[near(serializers = [json])]
+pub struct ProxyGrantView {
+    pub session_public_key: String,
+    pub granted_at_ms: u64,
+    pub expires_at_ms: u64,
+    pub allowed_targets: Vec<AccountId>,
+    pub allowed_methods: Option<Vec<String>>,
+    pub attach_yocto: U128,
+    pub max_gas_tgas: u64,
+    pub max_call_count: u32,
+    pub call_count: u32,
+    pub label: Option<String>,
+    /// Convenience: true iff (now <= expires_at_ms) AND (call_count < max_call_count).
+    pub active: bool,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Contract {
@@ -327,6 +398,55 @@ pub struct Contract {
     pub automation_runs: IterableMap<String, AutomationRun>,
     pub sequence_contexts: IterableMap<String, SequenceContext>,
     pub session_grants: IterableMap<String, SessionGrant>,
+    /// When `Some`, this sequencer runs in *extension* mode: target dispatches
+    /// and session-key mint/revoke route through the authorizer contract at
+    /// this account, preserving `signer_id` of the user's canonical account
+    /// at downstream receivers. When `None`, the sequencer runs in *standalone*
+    /// mode (v3/v4 shape): target dispatches go out directly as
+    /// `signer_id = current_account_id()`. Backward-compat for existing
+    /// standalone deploys is preserved by defaulting to `None`.
+    pub authorizer_id: Option<AccountId>,
+    /// Registry of FCAKs minted as dApp-login proxy keys. Each grant
+    /// authorizes `proxy_call(target, method, args)` against a
+    /// bounded target/method allowlist with a state-controlled
+    /// attached deposit. See `ProxyGrant` docs.
+    pub proxy_grants: IterableMap<String, ProxyGrant>,
+}
+
+/// Legacy v4 shape: Contract state without `authorizer_id` OR
+/// `proxy_grants`. Read by `migrate()` when redeploying a post-proxy
+/// binary over a v4-populated account. Promoted by appending both
+/// `authorizer_id: None` and an empty `proxy_grants` map.
+#[near(serializers = [borsh])]
+pub struct ContractV4 {
+    pub owner_id: AccountId,
+    pub authorized_executor: Option<AccountId>,
+    pub registered_steps: IterableMap<String, RegisteredStep>,
+    pub sequence_queue: IterableMap<String, Vec<String>>,
+    pub sequence_templates: IterableMap<String, SequenceTemplate>,
+    pub balance_triggers: IterableMap<String, BalanceTrigger>,
+    pub automation_runs: IterableMap<String, AutomationRun>,
+    pub sequence_contexts: IterableMap<String, SequenceContext>,
+    pub session_grants: IterableMap<String, SessionGrant>,
+}
+
+/// Legacy v5 shape: Contract state with `authorizer_id` but without
+/// `proxy_grants`. Read by `migrate()` when redeploying a post-proxy
+/// binary over a v5-populated account (the v5-split deploy on
+/// `x.mike.testnet` as of 2026-04-19 is in this shape). Promoted by
+/// appending an empty `proxy_grants` map.
+#[near(serializers = [borsh])]
+pub struct ContractV5 {
+    pub owner_id: AccountId,
+    pub authorized_executor: Option<AccountId>,
+    pub registered_steps: IterableMap<String, RegisteredStep>,
+    pub sequence_queue: IterableMap<String, Vec<String>>,
+    pub sequence_templates: IterableMap<String, SequenceTemplate>,
+    pub balance_triggers: IterableMap<String, BalanceTrigger>,
+    pub automation_runs: IterableMap<String, AutomationRun>,
+    pub sequence_contexts: IterableMap<String, SequenceContext>,
+    pub session_grants: IterableMap<String, SessionGrant>,
+    pub authorizer_id: Option<AccountId>,
 }
 
 #[near]
@@ -338,6 +458,19 @@ impl Contract {
 
     #[init]
     pub fn new_with_owner(owner_id: AccountId) -> Self {
+        Self::new_with_owner_and_authorizer(owner_id, None)
+    }
+
+    /// Initialize in extension mode paired with a root-account authorizer.
+    /// Target dispatches + session-key mint/revoke will route through
+    /// `authorizer_id` so downstream receivers see `signer_id = authorizer_id`.
+    /// Pass `None` to init in standalone mode (equivalent to
+    /// `new_with_owner`).
+    #[init]
+    pub fn new_with_owner_and_authorizer(
+        owner_id: AccountId,
+        authorizer_id: Option<AccountId>,
+    ) -> Self {
         Self {
             owner_id,
             authorized_executor: None,
@@ -348,6 +481,8 @@ impl Contract {
             automation_runs: IterableMap::new(StorageKey::AutomationRuns),
             sequence_contexts: IterableMap::new(StorageKey::SequenceContexts),
             session_grants: IterableMap::new(StorageKey::SessionGrants),
+            authorizer_id,
+            proxy_grants: IterableMap::new(StorageKey::ProxyGrants),
         }
     }
 
@@ -378,22 +513,94 @@ impl Contract {
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let current: Contract =
-            env::state_read().unwrap_or_else(|| env::panic_str("no prior contract state found"));
+        // Try current (v6, with proxy_grants) shape first — fresh deploys
+        // and already-migrated state both land here.
+        if let Some(current) = env::state_read::<Contract>() {
+            env::log_str(&format!(
+                "migrate: current shape preserved for owner={}, {} registered steps, {} templates, {} proxy grants, authorizer_id={:?}",
+                current.owner_id,
+                current.registered_steps.len(),
+                current.sequence_templates.len(),
+                current.proxy_grants.len(),
+                current.authorizer_id,
+            ));
+            return current;
+        }
+        // Fallback #1: v5 shape (authorizer_id present, no proxy_grants).
+        // Promote by appending an empty `proxy_grants` map.
+        if let Some(legacy) = env::state_read::<ContractV5>() {
+            env::log_str(&format!(
+                "migrate: v5 -> current for owner={}, {} registered steps, {} templates (proxy_grants=empty)",
+                legacy.owner_id,
+                legacy.registered_steps.len(),
+                legacy.sequence_templates.len(),
+            ));
+            return Contract {
+                owner_id: legacy.owner_id,
+                authorized_executor: legacy.authorized_executor,
+                registered_steps: legacy.registered_steps,
+                sequence_queue: legacy.sequence_queue,
+                sequence_templates: legacy.sequence_templates,
+                balance_triggers: legacy.balance_triggers,
+                automation_runs: legacy.automation_runs,
+                sequence_contexts: legacy.sequence_contexts,
+                session_grants: legacy.session_grants,
+                authorizer_id: legacy.authorizer_id,
+                proxy_grants: IterableMap::new(StorageKey::ProxyGrants),
+            };
+        }
+        // Fallback #2: v4 shape (no authorizer_id, no proxy_grants).
+        // Promote to current by appending both with default values.
+        let legacy: ContractV4 = env::state_read().unwrap_or_else(|| {
+            env::panic_str("no prior contract state found (neither v4, v5, nor current shape)")
+        });
         env::log_str(&format!(
-            "migrate: read state for owner={}, {} registered steps, {} templates",
-            current.owner_id,
-            current.registered_steps.len(),
-            current.sequence_templates.len(),
+            "migrate: v4 -> current for owner={}, {} registered steps, {} templates (authorizer_id=None, proxy_grants=empty)",
+            legacy.owner_id,
+            legacy.registered_steps.len(),
+            legacy.sequence_templates.len(),
         ));
-        current
+        Contract {
+            owner_id: legacy.owner_id,
+            authorized_executor: legacy.authorized_executor,
+            registered_steps: legacy.registered_steps,
+            sequence_queue: legacy.sequence_queue,
+            sequence_templates: legacy.sequence_templates,
+            balance_triggers: legacy.balance_triggers,
+            automation_runs: legacy.automation_runs,
+            sequence_contexts: legacy.sequence_contexts,
+            session_grants: legacy.session_grants,
+            authorizer_id: None,
+            proxy_grants: IterableMap::new(StorageKey::ProxyGrants),
+        }
     }
 
     /// Contract version string. Returned by `contract_version` view so
-    /// operators and aggregators can probe "which kernel shape is live
+    /// operators and aggregators can probe "which sequencer shape is live
     /// here?" without parsing state.
     pub fn contract_version(&self) -> String {
-        "v4.0.2-ops".to_string()
+        "v5.1.0-proxy".to_string()
+    }
+
+    // --- Extension-mode configuration ---
+
+    /// Owner-only. Set (or clear) the root-account authorizer this sequencer
+    /// pairs with. When set, target dispatches + session-key mint/revoke
+    /// route through `authorizer_id`; when `None`, they go out directly as
+    /// standalone (pre-split) behavior. Can be toggled at runtime — e.g.
+    /// for a testnet rig that wants to compare standalone vs extension
+    /// modes without redeploying.
+    pub fn set_authorizer(&mut self, authorizer_id: Option<AccountId>) {
+        self.assert_owner();
+        let prev = self.authorizer_id.clone();
+        self.authorizer_id = authorizer_id.clone();
+        env::log_str(&format!(
+            "authorizer_changed prev={prev:?} new={authorizer_id:?}"
+        ));
+    }
+
+    pub fn get_authorizer(&self) -> Option<AccountId> {
+        self.authorizer_id.clone()
     }
 
     // --- Manual yielded execution ---
@@ -610,7 +817,7 @@ impl Contract {
         };
 
         let finish_args = Self::encode_callback_args(&sequence_namespace, &step_id);
-        let downstream = Self::dispatch_promise_for_call(&sequence_namespace, &effective_call);
+        let downstream = self.dispatch_promise_for_call(&sequence_namespace, &effective_call);
         let finish = Promise::new(env::current_account_id()).function_call(
             "on_step_resolved",
             finish_args,
@@ -809,7 +1016,7 @@ impl Contract {
                     let finish_args =
                         Self::encode_callback_args(&sequence_namespace, &step_id);
                     let downstream =
-                        Self::dispatch_promise_for_call(&sequence_namespace, &effective_call);
+                        self.dispatch_promise_for_call(&sequence_namespace, &effective_call);
                     let finish = Promise::new(env::current_account_id()).function_call(
                         "on_step_resolved",
                         finish_args,
@@ -1248,13 +1455,7 @@ impl Contract {
             }),
         );
 
-        Promise::new(env::current_account_id()).add_access_key_allowance(
-            parsed_pk,
-            near_sdk::Allowance::limited(NearToken::from_yoctonear(allowance_yocto.0))
-                .unwrap_or_else(|| env::panic_str("allowance_yocto must be > 0")),
-            env::current_account_id(),
-            "execute_trigger".to_string(),
-        )
+        self.build_session_add_key_promise(&parsed_pk, allowance_yocto)
     }
 
     /// Owner-only. Delete the session's access key AND grant state.
@@ -1273,7 +1474,7 @@ impl Contract {
                 "reason": "explicit",
             }),
         );
-        Promise::new(env::current_account_id()).delete_key(parsed_pk)
+        self.build_session_delete_key_promise(&parsed_pk)
     }
 
     /// Public hygiene action. Anyone can call; prunes grants whose
@@ -1296,7 +1497,7 @@ impl Contract {
         for pk in expired {
             self.session_grants.remove(&pk);
             if let Ok(parsed) = pk.parse::<PublicKey>() {
-                let _ = Promise::new(env::current_account_id()).delete_key(parsed);
+                let _ = self.build_session_delete_key_promise(&parsed);
             }
             Self::emit_event(
                 "session_revoked",
@@ -1307,6 +1508,359 @@ impl Contract {
             );
         }
         n
+    }
+
+    /// Build the outgoing Promise that mints a session access key. When
+    /// `authorizer_id` is `Some`, routes through `authorizer.add_session_key`
+    /// so the FCAK lands on the root account. When `None`, adds the key
+    /// directly to `current_account_id` (standalone / v3-v4 behavior).
+    fn build_session_add_key_promise(
+        &self,
+        parsed_pk: &PublicKey,
+        allowance_yocto: U128,
+    ) -> Promise {
+        match &self.authorizer_id {
+            Some(auth) => {
+                let args = serde_json::to_vec(&json!({
+                    "public_key": parsed_pk,
+                    "allowance_yocto": allowance_yocto,
+                    "receiver_id": env::current_account_id(),
+                    "method_name": "execute_trigger",
+                }))
+                .expect("authorizer add_session_key args serialize");
+                Promise::new(auth.clone()).function_call(
+                    "add_session_key".to_string(),
+                    args,
+                    NearToken::from_yoctonear(0),
+                    Gas::from_tgas(SESSION_KEY_AUTHORIZER_HOP_GAS_TGAS),
+                )
+            }
+            None => Promise::new(env::current_account_id()).add_access_key_allowance(
+                parsed_pk.clone(),
+                near_sdk::Allowance::limited(NearToken::from_yoctonear(allowance_yocto.0))
+                    .unwrap_or_else(|| env::panic_str("allowance_yocto must be > 0")),
+                env::current_account_id(),
+                "execute_trigger".to_string(),
+            ),
+        }
+    }
+
+    /// Build the outgoing Promise that deletes a session access key. Same
+    /// routing rule as `build_session_add_key_promise`.
+    fn build_session_delete_key_promise(&self, parsed_pk: &PublicKey) -> Promise {
+        match &self.authorizer_id {
+            Some(auth) => {
+                let args = serde_json::to_vec(&json!({
+                    "public_key": parsed_pk,
+                }))
+                .expect("authorizer delete_session_key args serialize");
+                Promise::new(auth.clone()).function_call(
+                    "delete_session_key".to_string(),
+                    args,
+                    NearToken::from_yoctonear(0),
+                    Gas::from_tgas(SESSION_KEY_AUTHORIZER_HOP_GAS_TGAS),
+                )
+            }
+            None => Promise::new(env::current_account_id()).delete_key(parsed_pk.clone()),
+        }
+    }
+
+    // ─── Proxy keys (dApp-login FCAK proxy) ───────────────────────────────
+    //
+    // A `ProxyGrant` is a policy-bearing registry entry paired with an
+    // FCAK minted on this account. The FCAK is pinned to
+    // `method_name = "proxy_call"`, so a compromised ephemeral key can
+    // only invoke the proxy entry, which then enforces the grant's
+    // allowed_targets / allowed_methods / call_count / expiry before
+    // dispatching the downstream call with a state-controlled
+    // `attach_yocto` paid from this account's balance.
+
+    /// Owner-only, payable (1 yocto). Write a `ProxyGrant` AND mint the
+    /// paired FCAK in a single atomic tx. The FCAK's `receiver_id` is
+    /// this account and its `method_name` is `proxy_call`.
+    ///
+    /// `allowed_targets` must be non-empty. `allowed_methods = None`
+    /// permits any method on any allowed target — wider blast radius;
+    /// prefer `Some(vec)` when you can enumerate. `attach_yocto` is
+    /// the deposit the outgoing dispatch attaches (paid from this
+    /// account's balance, not the FCAK's allowance).
+    #[payable]
+    pub fn enroll_proxy_key(
+        &mut self,
+        session_public_key: String,
+        expires_at_ms: u64,
+        allowed_targets: Vec<AccountId>,
+        allowed_methods: Option<Vec<String>>,
+        attach_yocto: U128,
+        max_gas_tgas: u64,
+        max_call_count: u32,
+        allowance_yocto: U128,
+        label: Option<String>,
+    ) -> Promise {
+        assert!(
+            env::attached_deposit().as_yoctonear() >= 1,
+            "enroll_proxy_key requires attaching at least 1 yoctoNEAR (proves full-access-key caller)"
+        );
+        self.assert_owner();
+        let now = env::block_timestamp_ms();
+        assert!(
+            expires_at_ms > now,
+            "expires_at_ms must be strictly in the future"
+        );
+        assert!(max_call_count > 0, "max_call_count must be greater than zero");
+        assert!(
+            !allowed_targets.is_empty(),
+            "allowed_targets must be non-empty"
+        );
+        assert!(
+            max_gas_tgas > 0 && max_gas_tgas <= 200,
+            "max_gas_tgas must be in (0, 200]"
+        );
+        if let Some(methods) = &allowed_methods {
+            assert!(
+                !methods.is_empty(),
+                "allowed_methods must be `None` or a non-empty Vec"
+            );
+        }
+        // Parse pubkey up front so invalid input panics BEFORE we record
+        // state or fire the promise.
+        let parsed_pk: PublicKey = session_public_key
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("invalid session_public_key"));
+
+        let grant = ProxyGrant {
+            session_public_key: session_public_key.clone(),
+            granted_at_ms: now,
+            expires_at_ms,
+            allowed_targets: allowed_targets.clone(),
+            allowed_methods: allowed_methods.clone(),
+            attach_yocto,
+            max_gas_tgas,
+            max_call_count,
+            call_count: 0,
+            label: label.clone(),
+        };
+        self.proxy_grants.insert(session_public_key.clone(), grant);
+
+        Self::emit_event(
+            "proxy_key_enrolled",
+            json!({
+                "session_public_key": session_public_key,
+                "granted_at_ms": now,
+                "expires_at_ms": expires_at_ms,
+                "allowed_targets": allowed_targets,
+                "allowed_methods": allowed_methods,
+                "attach_yocto": attach_yocto.0.to_string(),
+                "max_gas_tgas": max_gas_tgas,
+                "max_call_count": max_call_count,
+                "allowance_yocto": allowance_yocto.0.to_string(),
+                "label": label,
+            }),
+        );
+
+        self.build_proxy_add_key_promise(&parsed_pk, allowance_yocto)
+    }
+
+    /// FCAK-invoked entry. The caller's public key is looked up in
+    /// `proxy_grants`; if present and the grant hasn't expired or
+    /// exhausted its call cap, dispatches `target.method(args)` with
+    /// `attach_yocto` deposit drawn from this account's balance.
+    ///
+    /// The outgoing Promise preserves `signer_id` at the target —
+    /// downstream contracts see the FCAK's owner (this account) as the
+    /// actor, not the ephemeral key.
+    pub fn proxy_call(
+        &mut self,
+        target: AccountId,
+        method: String,
+        args: Base64VecU8,
+    ) -> Promise {
+        let signer_pk = env::signer_account_pk().to_string();
+        let grant = self
+            .proxy_grants
+            .get(&signer_pk)
+            .cloned()
+            .unwrap_or_else(|| env::panic_str("no proxy grant for signer key"));
+
+        let now = env::block_timestamp_ms();
+        assert!(now <= grant.expires_at_ms, "proxy grant expired");
+        assert!(
+            grant.call_count < grant.max_call_count,
+            "proxy grant call cap reached"
+        );
+        assert!(
+            grant.allowed_targets.contains(&target),
+            "target not in allowed_targets"
+        );
+        if let Some(methods) = &grant.allowed_methods {
+            assert!(
+                methods.contains(&method),
+                "method not in allowed_methods"
+            );
+        }
+
+        let mut updated = grant.clone();
+        updated.call_count += 1;
+        let new_call_count = updated.call_count;
+        self.proxy_grants.insert(signer_pk.clone(), updated);
+
+        Self::emit_event(
+            "proxy_call_dispatched",
+            json!({
+                "session_public_key": signer_pk,
+                "target": target,
+                "method": method,
+                "args_bytes_len": args.0.len(),
+                "attach_yocto": grant.attach_yocto.0.to_string(),
+                "max_gas_tgas": grant.max_gas_tgas,
+                "call_count": new_call_count,
+                "max_call_count": grant.max_call_count,
+                "label": grant.label,
+            }),
+        );
+
+        Promise::new(target).function_call(
+            method,
+            args.0,
+            NearToken::from_yoctonear(grant.attach_yocto.0),
+            Gas::from_tgas(grant.max_gas_tgas),
+        )
+    }
+
+    /// Owner-only. Delete the proxy grant AND the paired FCAK.
+    pub fn revoke_proxy_key(&mut self, session_public_key: String) -> Promise {
+        self.assert_owner();
+        let existed = self.proxy_grants.remove(&session_public_key).is_some();
+        assert!(existed, "no proxy grant for that public key");
+        let parsed_pk: PublicKey = session_public_key
+            .parse()
+            .unwrap_or_else(|_| env::panic_str("invalid session_public_key"));
+        Self::emit_event(
+            "proxy_key_revoked",
+            json!({
+                "session_public_key": session_public_key,
+                "reason": "explicit",
+            }),
+        );
+        self.build_proxy_delete_key_promise(&parsed_pk)
+    }
+
+    /// Public hygiene action. Anyone can call; prunes proxy grants whose
+    /// `expires_at_ms <= now` OR whose `call_count >= max_call_count`.
+    /// For each pruned grant, deletes the underlying access key. Returns
+    /// the pruned count. Safe to let anyone call — only removes grants
+    /// that are already unusable.
+    pub fn revoke_expired_proxy_keys(&mut self) -> u32 {
+        let now = env::block_timestamp_ms();
+        let expired: Vec<String> = self
+            .proxy_grants
+            .iter()
+            .filter(|(_, g)| g.expires_at_ms <= now || g.call_count >= g.max_call_count)
+            .map(|(pk, _)| pk.clone())
+            .collect();
+        let n = expired.len() as u32;
+        for pk in expired {
+            self.proxy_grants.remove(&pk);
+            if let Ok(parsed) = pk.parse::<PublicKey>() {
+                let _ = self.build_proxy_delete_key_promise(&parsed);
+            }
+            Self::emit_event(
+                "proxy_key_revoked",
+                json!({
+                    "session_public_key": pk,
+                    "reason": "expired_or_exhausted",
+                }),
+            );
+        }
+        n
+    }
+
+    /// View: single proxy grant by public key.
+    pub fn get_proxy_grant(&self, session_public_key: String) -> Option<ProxyGrantView> {
+        self.proxy_grants
+            .get(&session_public_key)
+            .map(|g| Self::proxy_grant_view(g))
+    }
+
+    /// View: list all proxy grants (including expired/exhausted; use
+    /// `revoke_expired_proxy_keys` to prune).
+    pub fn list_proxy_grants(&self) -> Vec<ProxyGrantView> {
+        self.proxy_grants
+            .iter()
+            .map(|(_, g)| Self::proxy_grant_view(g))
+            .collect()
+    }
+
+    fn proxy_grant_view(g: &ProxyGrant) -> ProxyGrantView {
+        let now = env::block_timestamp_ms();
+        let active = now <= g.expires_at_ms && g.call_count < g.max_call_count;
+        ProxyGrantView {
+            session_public_key: g.session_public_key.clone(),
+            granted_at_ms: g.granted_at_ms,
+            expires_at_ms: g.expires_at_ms,
+            allowed_targets: g.allowed_targets.clone(),
+            allowed_methods: g.allowed_methods.clone(),
+            attach_yocto: g.attach_yocto,
+            max_gas_tgas: g.max_gas_tgas,
+            max_call_count: g.max_call_count,
+            call_count: g.call_count,
+            label: g.label.clone(),
+            active,
+        }
+    }
+
+    /// Build the outgoing Promise that mints a proxy FCAK. Mirrors
+    /// `build_session_add_key_promise` exactly — just pins
+    /// `method_name = "proxy_call"`.
+    fn build_proxy_add_key_promise(
+        &self,
+        parsed_pk: &PublicKey,
+        allowance_yocto: U128,
+    ) -> Promise {
+        match &self.authorizer_id {
+            Some(auth) => {
+                let args = serde_json::to_vec(&json!({
+                    "public_key": parsed_pk,
+                    "allowance_yocto": allowance_yocto,
+                    "receiver_id": env::current_account_id(),
+                    "method_name": "proxy_call",
+                }))
+                .expect("authorizer add_session_key args serialize");
+                Promise::new(auth.clone()).function_call(
+                    "add_session_key".to_string(),
+                    args,
+                    NearToken::from_yoctonear(0),
+                    Gas::from_tgas(SESSION_KEY_AUTHORIZER_HOP_GAS_TGAS),
+                )
+            }
+            None => Promise::new(env::current_account_id()).add_access_key_allowance(
+                parsed_pk.clone(),
+                near_sdk::Allowance::limited(NearToken::from_yoctonear(allowance_yocto.0))
+                    .unwrap_or_else(|| env::panic_str("allowance_yocto must be > 0")),
+                env::current_account_id(),
+                "proxy_call".to_string(),
+            ),
+        }
+    }
+
+    /// Build the outgoing Promise that deletes a proxy FCAK. Same
+    /// routing rule as `build_proxy_add_key_promise`.
+    fn build_proxy_delete_key_promise(&self, parsed_pk: &PublicKey) -> Promise {
+        match &self.authorizer_id {
+            Some(auth) => {
+                let args = serde_json::to_vec(&json!({
+                    "public_key": parsed_pk,
+                }))
+                .expect("authorizer delete_session_key args serialize");
+                Promise::new(auth.clone()).function_call(
+                    "delete_session_key".to_string(),
+                    args,
+                    NearToken::from_yoctonear(0),
+                    Gas::from_tgas(SESSION_KEY_AUTHORIZER_HOP_GAS_TGAS),
+                )
+            }
+            None => Promise::new(env::current_account_id()).delete_key(parsed_pk.clone()),
+        }
     }
 
     /// Public hygiene action. Anyone can call; prunes `automation_runs`
@@ -1801,7 +2355,7 @@ impl Contract {
         }
     }
 
-    // --- Sequencing kernel: registration ---
+    // --- Sequencer: registration ---
 
     fn register_step_in_namespace(
         &mut self,
@@ -1857,7 +2411,7 @@ impl Contract {
         register_step
     }
 
-    // --- Sequencing kernel: release ---
+    // --- Sequencer: release ---
 
     fn start_sequence_release_in_namespace(
         &mut self,
@@ -2274,22 +2828,24 @@ impl Contract {
             .map_err(|_| format!("failed to resume yielded step '{step_id}'"))
     }
 
-    fn dispatch_promise_for_call(sequence_namespace: &str, call: &Step) -> Promise {
+    fn dispatch_promise_for_call(&self, sequence_namespace: &str, call: &Step) -> Promise {
         match &call.policy {
-            StepPolicy::Direct => Promise::new(call.target_id.clone()).function_call(
+            StepPolicy::Direct => self.build_call_promise(
+                call.target_id.clone(),
                 call.method_name.clone(),
                 call.args.clone(),
-                NearToken::from_yoctonear(call.attached_deposit_yocto),
-                Gas::from_tgas(call.gas_tgas),
+                call.attached_deposit_yocto,
+                call.gas_tgas,
             ),
             StepPolicy::Adapter {
                 adapter_id,
                 adapter_method,
-            } => Promise::new(adapter_id.clone()).function_call(
+            } => self.build_call_promise(
+                adapter_id.clone(),
                 adapter_method.clone(),
                 Self::encode_adapter_dispatch_args(call),
-                NearToken::from_yoctonear(call.attached_deposit_yocto),
-                Gas::from_tgas(call.gas_tgas + ADAPTER_SEQUENCE_OVERHEAD_TGAS),
+                call.attached_deposit_yocto,
+                call.gas_tgas + ADAPTER_SEQUENCE_OVERHEAD_TGAS,
             ),
             StepPolicy::Asserted {
                 assertion_id,
@@ -2298,11 +2854,16 @@ impl Contract {
                 expected_return,
                 assertion_gas_tgas,
             } => {
-                let target_promise = Promise::new(call.target_id.clone()).function_call(
+                // Target routes through authorizer when set (so signer_id
+                // stays on the root). Postcheck is a view and stays direct:
+                // it reads state, doesn't mutate, doesn't need signer_id
+                // preservation.
+                let target_promise = self.build_call_promise(
+                    call.target_id.clone(),
                     call.method_name.clone(),
                     call.args.clone(),
-                    NearToken::from_yoctonear(call.attached_deposit_yocto),
-                    Gas::from_tgas(call.gas_tgas),
+                    call.attached_deposit_yocto,
+                    call.gas_tgas,
                 );
                 let postcheck_args = Self::encode_asserted_postcheck_args(
                     sequence_namespace,
@@ -2325,6 +2886,51 @@ impl Contract {
                 );
                 target_promise.then(postcheck_callback)
             }
+        }
+    }
+
+    /// Build the outgoing function-call Promise for a target (or adapter).
+    /// When `self.authorizer_id` is `Some`, wraps the call in an
+    /// `authorizer.dispatch(...)` hop so downstream receivers see
+    /// `signer_id = authorizer_id`. When `None`, issues the call directly
+    /// (standalone / v3-v4 behavior).
+    ///
+    /// Semantics of the extension-mode hop: the SDK's `Promise` return
+    /// from `authorizer.dispatch` chains to the target's resolution via
+    /// `env::promise_return`, so the caller's `.then(callback)` sees the
+    /// target's result bytes — not the authorizer's local return. This is
+    /// what lets the `on_step_resolved` / `on_asserted_run_postcheck`
+    /// callback chains stay unchanged across the rewire.
+    fn build_call_promise(
+        &self,
+        target_id: AccountId,
+        method_name: String,
+        args: Vec<u8>,
+        attached_deposit_yocto: u128,
+        gas_tgas: u64,
+    ) -> Promise {
+        match &self.authorizer_id {
+            Some(auth) => {
+                let dispatch_args = serde_json::to_vec(&json!({
+                    "target_id": target_id,
+                    "method_name": method_name,
+                    "args": Base64VecU8::from(args),
+                    "gas_tgas": gas_tgas,
+                }))
+                .expect("authorizer dispatch args serialize");
+                Promise::new(auth.clone()).function_call(
+                    "dispatch".to_string(),
+                    dispatch_args,
+                    NearToken::from_yoctonear(attached_deposit_yocto),
+                    Gas::from_tgas(gas_tgas + AUTHORIZER_HOP_OVERHEAD_TGAS),
+                )
+            }
+            None => Promise::new(target_id).function_call(
+                method_name,
+                args,
+                NearToken::from_yoctonear(attached_deposit_yocto),
+                Gas::from_tgas(gas_tgas),
+            ),
         }
     }
 
@@ -2387,7 +2993,7 @@ impl Contract {
             .collect()
     }
 
-    // --- Sequencing kernel: progression after resolution ---
+    // --- Sequencer: progression after resolution ---
 
     fn progress_sequence_after_successful_resolution(
         &mut self,
@@ -4666,7 +5272,7 @@ mod tests {
 
     #[test]
     fn save_and_materialize_round_trip_across_helpers() {
-        // Simulates what the kernel does between step N's on_step_resolved
+        // Simulates what the sequencer does between step N's on_step_resolved
         // and step N+1's on_step_resumed: save_step_result + materialize.
         // This runs outside of execute_steps so yield-resume mocking
         // doesn't interfere.
@@ -4999,6 +5605,322 @@ mod tests {
         assert!(!pks.contains(&session_pk_alt().as_str()));
     }
 
+    // ─── Proxy-key tests ─────────────────────────────────────────────────
+
+    fn dapp_target() -> AccountId {
+        "my-dapp.near".parse().unwrap()
+    }
+
+    fn dapp_other() -> AccountId {
+        "other-dapp.near".parse().unwrap()
+    }
+
+    #[test]
+    fn enroll_proxy_key_succeeds_for_owner_with_1_yocto() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            Some(vec!["buy".into(), "claim".into()]),
+            U128(1),
+            30,
+            1000,
+            U128(250_000_000_000_000_000_000_000),
+            Some("dapp-v1".into()),
+        );
+        let grant = c.get_proxy_grant(session_pk()).expect("grant recorded");
+        assert_eq!(grant.max_call_count, 1000);
+        assert_eq!(grant.call_count, 0);
+        assert_eq!(grant.allowed_targets, vec![dapp_target()]);
+        assert_eq!(grant.attach_yocto, U128(1));
+        assert_eq!(grant.max_gas_tgas, 30);
+        assert!(grant.active);
+
+        let enrolled = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "proxy_key_enrolled",
+        )
+        .expect("proxy_key_enrolled event");
+        assert_eq!(enrolled["data"]["session_public_key"], session_pk());
+        assert_eq!(enrolled["data"]["max_call_count"], 1000);
+        assert_eq!(enrolled["data"]["attach_yocto"], "1");
+    }
+
+    #[test]
+    #[should_panic(expected = "enroll_proxy_key requires attaching at least 1 yoctoNEAR")]
+    fn enroll_proxy_key_rejects_zero_deposit() {
+        enroll_ctx(owner(), 0);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None,
+            U128(0),
+            30,
+            10,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "owner-only")]
+    fn enroll_proxy_key_rejects_non_owner() {
+        enroll_ctx(other_account(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None,
+            U128(0),
+            30,
+            10,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "allowed_targets must be non-empty")]
+    fn enroll_proxy_key_rejects_empty_targets() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![], // ← violates non-empty
+            None,
+            U128(0),
+            30,
+            10,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "allowed_methods must be `None` or a non-empty Vec")]
+    fn enroll_proxy_key_rejects_empty_methods_vec() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            Some(vec![]), // ← Some-with-empty is ambiguous; reject
+            U128(0),
+            30,
+            10,
+            U128(1),
+            None,
+        );
+    }
+
+    #[test]
+    fn proxy_call_happy_path_dispatches_and_bumps_count() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            Some(vec!["buy".into()]),
+            U128(1),
+            30,
+            5,
+            U128(1),
+            None,
+        );
+
+        session_call_ctx(&session_pk());
+        let _ = c.proxy_call(
+            dapp_target(),
+            "buy".into(),
+            Base64VecU8(b"{\"qty\":1}".to_vec()),
+        );
+
+        let grant = c.get_proxy_grant(session_pk()).expect("still recorded");
+        assert_eq!(grant.call_count, 1);
+
+        let dispatched = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "proxy_call_dispatched",
+        )
+        .expect("proxy_call_dispatched event");
+        assert_eq!(dispatched["data"]["target"], "my-dapp.near");
+        assert_eq!(dispatched["data"]["method"], "buy");
+        assert_eq!(dispatched["data"]["call_count"], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "target not in allowed_targets")]
+    fn proxy_call_rejects_unknown_target() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None,
+            U128(0),
+            30,
+            5,
+            U128(1),
+            None,
+        );
+        session_call_ctx(&session_pk());
+        let _ = c.proxy_call(dapp_other(), "any".into(), Base64VecU8(vec![]));
+    }
+
+    #[test]
+    #[should_panic(expected = "method not in allowed_methods")]
+    fn proxy_call_rejects_unallowed_method() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            Some(vec!["buy".into()]),
+            U128(0),
+            30,
+            5,
+            U128(1),
+            None,
+        );
+        session_call_ctx(&session_pk());
+        let _ = c.proxy_call(dapp_target(), "drain".into(), Base64VecU8(vec![]));
+    }
+
+    #[test]
+    fn proxy_call_accepts_any_method_when_allowlist_is_none() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None, // ← any method
+            U128(0),
+            30,
+            5,
+            U128(1),
+            None,
+        );
+        session_call_ctx(&session_pk());
+        // A method nobody listed — should still succeed.
+        let _ = c.proxy_call(dapp_target(), "whatever".into(), Base64VecU8(vec![]));
+        let grant = c.get_proxy_grant(session_pk()).unwrap();
+        assert_eq!(grant.call_count, 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "proxy grant call cap reached")]
+    fn proxy_call_rejects_past_call_cap() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None,
+            U128(0),
+            30,
+            1, // cap = 1
+            U128(1),
+            None,
+        );
+        session_call_ctx(&session_pk());
+        let _ = c.proxy_call(dapp_target(), "buy".into(), Base64VecU8(vec![]));
+        // Second call exceeds cap.
+        session_call_ctx(&session_pk());
+        let _ = c.proxy_call(dapp_target(), "buy".into(), Base64VecU8(vec![]));
+    }
+
+    #[test]
+    #[should_panic(expected = "no proxy grant for signer key")]
+    fn proxy_call_rejects_unknown_signer() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        // Never enroll the signer's pk.
+        session_call_ctx(&session_pk());
+        let _ = c.proxy_call(dapp_target(), "buy".into(), Base64VecU8(vec![]));
+    }
+
+    #[test]
+    fn revoke_proxy_key_removes_grant_and_emits_event() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None,
+            U128(0),
+            30,
+            5,
+            U128(1),
+            None,
+        );
+        assert!(c.get_proxy_grant(session_pk()).is_some());
+
+        ctx(owner());
+        let _ = c.revoke_proxy_key(session_pk());
+        assert!(c.get_proxy_grant(session_pk()).is_none());
+
+        let revoked = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "proxy_key_revoked",
+        )
+        .expect("proxy_key_revoked event");
+        assert_eq!(revoked["data"]["reason"], "explicit");
+    }
+
+    #[test]
+    #[should_panic(expected = "no proxy grant for that public key")]
+    fn revoke_proxy_key_rejects_unknown_pk() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        let _ = c.revoke_proxy_key(session_pk());
+    }
+
+    #[test]
+    fn list_proxy_grants_returns_all_with_active_flag() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner(owner());
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_proxy_key(
+            session_pk(),
+            now + 3_600_000,
+            vec![dapp_target()],
+            None,
+            U128(0),
+            30,
+            5,
+            U128(1),
+            None,
+        );
+        let all = c.list_proxy_grants();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].session_public_key, session_pk());
+        assert!(all[0].active);
+    }
+
     fn other_account() -> AccountId {
         "other.near".parse().unwrap()
     }
@@ -5235,5 +6157,214 @@ mod tests {
         assert!(view.finished_at_ms.is_none());
         // In-flight → duration_ms is None, since finished_at_ms is None.
         assert!(view.duration_ms.is_none());
+    }
+
+    // ---------- v5 split: authorizer-mode dispatch / session-key routing ----------
+    //
+    // These tests cover the sequencer in *extension mode* — i.e. when
+    // `authorizer_id: Some(...)` is set. Target dispatches + session-key
+    // mint/revoke must route through the authorizer's `dispatch` /
+    // `add_session_key` / `delete_session_key` methods so the receipt tree
+    // preserves `signer_id` of the user's canonical account at downstream
+    // receivers. Standalone mode (authorizer_id: None) retains direct-dispatch
+    // behavior — that path is already covered by the prior 97 tests.
+
+    fn authorizer() -> AccountId {
+        "authorizer.near".parse().unwrap()
+    }
+
+    #[test]
+    fn new_with_owner_defaults_authorizer_id_to_none() {
+        ctx(owner());
+        let c = Contract::new_with_owner(owner());
+        assert_eq!(c.get_authorizer(), None);
+    }
+
+    #[test]
+    fn new_with_owner_and_authorizer_round_trips() {
+        ctx(owner());
+        let c = Contract::new_with_owner_and_authorizer(owner(), Some(authorizer()));
+        assert_eq!(c.get_authorizer(), Some(authorizer()));
+    }
+
+    #[test]
+    fn set_authorizer_rotates_and_clears() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        assert_eq!(c.get_authorizer(), None);
+
+        ctx(owner());
+        c.set_authorizer(Some(authorizer()));
+        assert_eq!(c.get_authorizer(), Some(authorizer()));
+
+        ctx(owner());
+        c.set_authorizer(None);
+        assert_eq!(c.get_authorizer(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "owner-only")]
+    fn set_authorizer_rejects_non_owner() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        ctx(stranger());
+        c.set_authorizer(Some(authorizer()));
+    }
+
+    #[test]
+    fn extension_mode_direct_step_routes_target_through_authorizer() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner_and_authorizer(owner(), Some(authorizer()));
+        c.execute_steps(vec![yield_input("alpha", 1)]);
+
+        // Resume the step — this triggers dispatch_promise_for_call.
+        callback_ctx(PromiseResult::Successful(vec![]));
+        let _ = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
+
+        let receipts = get_created_receipts();
+
+        // In extension mode, the receipt for the target dispatch must go
+        // to the authorizer, not directly to router().
+        let (auth_method, auth_args, _, _) = find_function_call(&receipts, &authorizer())
+            .expect("authorizer dispatch receipt must be queued in extension mode");
+        assert_eq!(auth_method, "dispatch");
+
+        // The authorizer.dispatch args must carry the real target +
+        // method, with the step's args base64-encoded.
+        let parsed: serde_json::Value = serde_json::from_slice(&auth_args).unwrap();
+        assert_eq!(parsed["target_id"], router().to_string());
+        assert_eq!(parsed["method_name"], "route_echo");
+        assert!(parsed["args"].is_string(), "authorizer dispatch args must carry base64 args");
+        assert_eq!(parsed["gas_tgas"], 40);
+
+        // And no direct receipt to the router is queued — the sequencer
+        // must not bypass the authorizer in extension mode.
+        assert!(
+            find_function_call(&receipts, &router()).is_none(),
+            "no direct target receipt should be queued in extension mode"
+        );
+    }
+
+    #[test]
+    fn standalone_mode_direct_step_goes_straight_to_target() {
+        // Sanity: without an authorizer configured, the target dispatch
+        // goes straight to the router — preserves v3/v4 behavior.
+        ctx(owner());
+        let mut c = Contract::new_with_owner(owner());
+        c.execute_steps(vec![yield_input("alpha", 1)]);
+
+        callback_ctx(PromiseResult::Successful(vec![]));
+        let _ = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
+
+        let receipts = get_created_receipts();
+        let (method, _, _, _) = find_function_call(&receipts, &router())
+            .expect("standalone: target receipt goes straight to router");
+        assert_eq!(method, "route_echo");
+    }
+
+    #[test]
+    fn extension_mode_enroll_session_routes_through_authorizer() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner_and_authorizer(owner(), Some(authorizer()));
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(
+            session_pk(),
+            now + 3_600_000,
+            None,
+            3,
+            U128(1_000_000_000_000_000_000),
+            None,
+        );
+
+        let receipts = get_created_receipts();
+
+        // Receipt must go to the authorizer, method = add_session_key.
+        let (method, args, _, _) = find_function_call(&receipts, &authorizer())
+            .expect("authorizer add_session_key receipt must be queued in extension mode");
+        assert_eq!(method, "add_session_key");
+
+        let parsed: serde_json::Value = serde_json::from_slice(&args).unwrap();
+        assert_eq!(parsed["method_name"], "execute_trigger");
+        assert_eq!(parsed["receiver_id"], current().to_string());
+        assert_eq!(parsed["public_key"], session_pk());
+        assert_eq!(parsed["allowance_yocto"], "1000000000000000000");
+    }
+
+    #[test]
+    fn extension_mode_revoke_session_routes_through_authorizer() {
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner_and_authorizer(owner(), Some(authorizer()));
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(session_pk(), now + 3_600_000, None, 3, U128(1), None);
+
+        ctx(owner());
+        let _ = c.revoke_session(session_pk());
+
+        let receipts = get_created_receipts();
+
+        // Find a delete_session_key receipt to the authorizer. The first
+        // enroll receipt also targets the authorizer (add_session_key), so
+        // we look specifically for the delete one.
+        let delete_receipt = receipts.iter().find(|r| {
+            r.receiver_id == authorizer()
+                && r.actions.iter().any(|a| {
+                    matches!(
+                        a,
+                        MockAction::FunctionCallWeight { method_name, .. }
+                            if String::from_utf8(method_name.clone()).unwrap() == "delete_session_key"
+                    )
+                })
+        });
+        assert!(
+            delete_receipt.is_some(),
+            "authorizer delete_session_key receipt must be queued when revoking in extension mode"
+        );
+    }
+
+    #[test]
+    fn extension_mode_enroll_session_still_emits_session_enrolled_event() {
+        // The grant state is recorded on the extension (this contract)
+        // before the authorizer promise is dispatched, so the
+        // `session_enrolled` event still fires from here. The authorizer
+        // is responsible for the actual key mint; we're just asserting
+        // that the annotation layer still behaves.
+        enroll_ctx(owner(), 1);
+        let mut c = Contract::new_with_owner_and_authorizer(owner(), Some(authorizer()));
+        let now = env::block_timestamp_ms();
+        let _ = c.enroll_session(session_pk(), now + 3_600_000, None, 3, U128(1), None);
+
+        assert!(c.get_session(session_pk()).is_some());
+        let enrolled = find_structured_event(
+            &near_sdk::test_utils::get_logs(),
+            "session_enrolled",
+        )
+        .expect("session_enrolled event");
+        assert_eq!(enrolled["data"]["session_public_key"], session_pk());
+    }
+
+    #[test]
+    fn extension_mode_adapter_step_routes_adapter_call_through_authorizer() {
+        ctx(owner());
+        let mut c = Contract::new_with_owner_and_authorizer(owner(), Some(authorizer()));
+        c.execute_steps(vec![adapter_yield_input("alpha", 1)]);
+
+        callback_ctx(PromiseResult::Successful(vec![]));
+        let _ = c.on_step_resumed(manual_namespace(&owner()), "alpha".into(), Ok(()));
+
+        let receipts = get_created_receipts();
+        let (auth_method, auth_args, _, _) = find_function_call(&receipts, &authorizer())
+            .expect("authorizer dispatch receipt must be queued for adapter step");
+        assert_eq!(auth_method, "dispatch");
+
+        let parsed: serde_json::Value = serde_json::from_slice(&auth_args).unwrap();
+        // For Adapter policy, the `target_id` forwarded to the authorizer
+        // is the adapter account, not the real final target.
+        assert_eq!(parsed["target_id"], adapter().to_string());
+        assert_eq!(parsed["method_name"], "adapt_fire_and_forget_route_echo");
+
+        assert!(
+            find_function_call(&receipts, &adapter()).is_none(),
+            "no direct adapter receipt should be queued in extension mode"
+        );
     }
 }

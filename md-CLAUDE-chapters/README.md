@@ -11,11 +11,11 @@ different branch of the cascade.
 
 ## Five sections
 
-1. **Using** — how the kernel exposes multi-step cross-contract
+1. **Using** — how the sequencer exposes multi-step cross-contract
    composition today.
 2. **Policies** — one chapter per primitive, grounded in the trust
    taxonomy we found in the wild.
-3. **Foundations** — the NEAR runtime mechanics the kernel rides on.
+3. **Foundations** — the NEAR runtime mechanics the sequencer rides on.
 4. **Lineage** — historical proof archive; valuable as validation
    history, not first-pass reading.
 5. **Operations** — what to do when state drifts and how to
@@ -23,7 +23,7 @@ different branch of the cascade.
 
 ## 1. Using
 
-How the kernel is consumed today.
+How the sequencer is consumed today.
 
 - [`19-protocol-onboarding-and-investigation.md`](./19-protocol-onboarding-and-investigation.md)
   — Adding a new protocol as a sequential-intents step; policy decision
@@ -41,7 +41,7 @@ One chapter per `StepPolicy` variant, grounded in live probes.
   classification, resolve log, target state). Maps directly to what
   `Direct` can and cannot catch.
 - [`21-asserted-resolve-policy.md`](./21-asserted-resolve-policy.md)
-  — `Asserted` semantics + four testnet probes proving the kernel
+  — `Asserted` semantics + four testnet probes proving the sequencer
   catches noop and decoy pathologies via inline postcheck.
 - [`23-pre-gate-policy.md`](./23-pre-gate-policy.md)
   — `PreGate` pre-dispatch conditional gate design; six-branch
@@ -61,7 +61,7 @@ One chapter per `StepPolicy` variant, grounded in live probes.
 
 ## 3. Foundations
 
-The NEAR-runtime mechanics the whole kernel rides on.
+The NEAR-runtime mechanics the whole sequencer rides on.
 
 - [`01-near-cross-contract-tracing.md`](./01-near-cross-contract-tracing.md)
   — Receipt mechanics, tracing model, the three-surfaces method.

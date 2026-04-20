@@ -79,7 +79,7 @@ Sources: `contracts/smart-account/src/lib.rs`.
 | `failed_step_id` | `Option<String>` | telemetry-only |
 
 5 of 9 fields are load-bearing; 4 are pure metrics. Arguably the
-load-bearing set could shrink further — the kernel really only needs to
+load-bearing set could shrink further — the sequencer really only needs to
 answer "is this namespace in flight?" and "what run_nonce did we issue
 for the current run?" — but this is the honest baseline split.
 
@@ -304,7 +304,7 @@ Once the versioned-state migration discipline is in place:
 - remove the four telemetry-only `AutomationRun` fields
   (`executor_id`, `started_at_ms`, `finished_at_ms`, `failed_step_id`)
 - consider removing `AutomationRun` entirely —
-  `BalanceTrigger.in_flight` may be sufficient for kernel correctness,
+  `BalanceTrigger.in_flight` may be sufficient for sequencer correctness,
   and run-level telemetry now lives in logs
 
 This tranche **is a schema change**. Chapter 22 §5 and §7 describe the

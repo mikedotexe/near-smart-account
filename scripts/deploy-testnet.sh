@@ -88,8 +88,19 @@ deploy_one router              router
 deploy_one wild_router         wild-router
 deploy_one pathological_router pathological-router
 
+# The smart-account above deploys in *standalone* mode (authorizer_id =
+# None). It is fully functional for exercising v3/v4-shape sequencer logic
+# against this shared rig.
+#
+# The v5 split — thin authorizer on the SIGNER's own account + extension
+# sequencer on a subaccount — is a separate topology that doesn't fit this
+# script's "each contract on a subaccount" model (the authorizer must
+# live at the user's canonical signing account, not at a subaccount, per
+# ARCHITECTURE-V5-SPLIT.md's two-factor auth). For the v5 recipe see the
+# "Testnet recipe" section of ARCHITECTURE-V5-SPLIT.md.
+
 echo
-echo "Deployed:"
+echo "Deployed (standalone mode; smart-account's authorizer_id = None):"
 echo "  smart-account:        $(subaccount smart-account)"
 echo "  compat-adapter:       $(subaccount compat-adapter)"
 echo "  demo-adapter:         $(subaccount demo-adapter)"

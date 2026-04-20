@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "run_id": "20260420T14372",
+  "short_hash": "9wy36H...Y361",
+  "network": "testnet",
+  "smart_account": "sa-proxy.x.mike.testnet",
+  "owner_signer": "x.mike.testnet",
+  "target_contract": "pathological-router.x.mike.testnet",
+  "target_method": "require_one_yocto",
+  "counter_method": "get_calls_completed",
+  "counter_before": 13,
+  "counter_after": 16,
+  "counter_delta": 3,
+  "proxy_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+  "grant": {
+    "granted_at_approx_ms": 1776695847539,
+    "expires_at_ms": 1776696747539,
+    "allowed_targets": [
+      "pathological-router.x.mike.testnet"
+    ],
+    "allowed_methods": [
+      "require_one_yocto"
+    ],
+    "attach_yocto": "1",
+    "max_gas_tgas": 50,
+    "max_call_count": 3,
+    "allowance_yocto": "100000000000000000000000",
+    "label": "proxy-dapp-20260420T14372"
+  },
+  "mechanic": {
+    "state_controlled_deposit_demonstrated": true,
+    "claim": "FCAK signing proxy_call carries tx-layer deposit=0; target require_one_yocto panics unless exactly 1 yN is attached; successful counter_delta == max_calls proves the smart account added 1 yN from its own balance on the outgoing Promise, per-grant state-controlled."
+  },
+  "signer_preserved_at_target": {
+    "tx_signer_id": "sa-proxy.x.mike.testnet",
+    "target_executor": "pathological-router.x.mike.testnet",
+    "target_predecessor": "sa-proxy.x.mike.testnet"
+  },
+  "tx_hashes": {
+    "enroll": "9wy36HvviTikVPqqy7ue4cK9N8MZPUT2EWQA8PpLY361",
+    "calls": [
+      "2ivhfcpDG4HMDzhMGXozhMtdZBr5AyrexNzQchd4tuUC",
+      "uUEWCKBXdJNJJFW9wGNi3Ws1x12LbaDy3XpDeb3iGaM",
+      "CFB8FYqJgbUHXh2EaQQ8jxYyZX9SwRQbWYdWCYhijRY2"
+    ],
+    "revoke": "38uzNofJFAhFJytR1a9wtT31jENXgyC1addim9VoFGYW",
+    "post_revoke_attempt": {
+      "rejected": true,
+      "message": "Signer \"sa-proxy.x.mike.testnet\" doesn't have access key with the given public_key ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D"
+    }
+  },
+  "block_info": {
+    "enroll": {
+      "transaction_block_hash": "4iq7GydfuQkm6b2tsa3EbsC7JrSy918jW5SiZtUrapBk",
+      "receipts": [
+        {
+          "receipt_id": "EKR8RyBKV6oDaeSTg613ndZWmDNdESR8sJDcwMRjAdPg",
+          "block_hash": "89fvyk2V2WF1E1XuGrT4GxY3tXFBFW5Tugc3BykHQGs9"
+        },
+        {
+          "receipt_id": "AFZhLwJtFZ78HaK4PnaBRBvqCJrNsnd36GC81UxbeGgy",
+          "block_hash": "AWg7hep7bnatFa5LTShfbqpXvmsrvtAryPdFciSeRbDZ"
+        },
+        {
+          "receipt_id": "9NGxXSqW3syFamaRwZWtJfbhSZ2bd8hY8R45EuSMdU8v",
+          "block_hash": "AWg7hep7bnatFa5LTShfbqpXvmsrvtAryPdFciSeRbDZ"
+        }
+      ]
+    },
+    "calls": [
+      {
+        "transaction_block_hash": "Ge7jceu98Y4wc1TZ4dfQDiUR8S3ocNZGbpkcr6WhnuUF",
+        "receipts": [
+          {
+            "receipt_id": "61SuWxmGKp8kXqNEMgxNnwAkeihd52x7pABZDjvsdK3J",
+            "block_hash": "Ge7jceu98Y4wc1TZ4dfQDiUR8S3ocNZGbpkcr6WhnuUF"
+          },
+          {
+            "receipt_id": "EKTL3yGQHpHqKQ5GDGnP2NHHs9JLinH7TgEwbPQGiCsx",
+            "block_hash": "6K86RtnwXeYEAP4ns6hARTVYUatHraGEeUMDsHP5rbTD"
+          },
+          {
+            "receipt_id": "4cFk7b63VR8d4uusKSAct6R9pob3yxpy3n5jULu8nauH",
+            "block_hash": "8NbFL91NRhAhyXTdfd2uCVTw1xwaxTuvzeLj5bHgK7B4"
+          },
+          {
+            "receipt_id": "9STGL2m2SbshFYtFDSYLmAjhHW4Sfm8HzHsBjUALu47v",
+            "block_hash": "6K86RtnwXeYEAP4ns6hARTVYUatHraGEeUMDsHP5rbTD"
+          }
+        ]
+      },
+      {
+        "transaction_block_hash": "6YssDK7EJk59Evrn6F9ZvWM96pFeGzJh4cqsRkAyG14h",
+        "receipts": [
+          {
+            "receipt_id": "GmdFdQVh8ZVuvDuWuknVU2kEqzqf7H5pSJLjowQ9ob1L",
+            "block_hash": "6YssDK7EJk59Evrn6F9ZvWM96pFeGzJh4cqsRkAyG14h"
+          },
+          {
+            "receipt_id": "39TLZiL684hBfPDoBgPTaWgEXhqFxKTMCMQPb3XwgR8f",
+            "block_hash": "4hwUmKfE1mtGmzLTvx1pg7rjLFfAAy87ZnEu9UtY7MTv"
+          },
+          {
+            "receipt_id": "CULag6rKoA3SryWp9gQq5EzxEEfSVNKRALmEC25M31hy",
+            "block_hash": "3JAiG3K42yJzrGp36mrFZSUggAzGTFHLEPdDBLS1qMXP"
+          },
+          {
+            "receipt_id": "9gWLF5N4hgXN1G1BW5TdvSyXhBaPRMkjcP3zFwvkwdq4",
+            "block_hash": "4hwUmKfE1mtGmzLTvx1pg7rjLFfAAy87ZnEu9UtY7MTv"
+          }
+        ]
+      },
+      {
+        "transaction_block_hash": "BcxevjTbQGgUKqikqgZPW1Mjy6pfthXKzxkAB5FyEpCg",
+        "receipts": [
+          {
+            "receipt_id": "3Fnim94xxCfMYLwBcFBAnUxuXmXELmrw2w12sgANqkpD",
+            "block_hash": "BcxevjTbQGgUKqikqgZPW1Mjy6pfthXKzxkAB5FyEpCg"
+          },
+          {
+            "receipt_id": "Fe6JyJ4bbqcHN81czYWMkuu6PKu3vzeaJ76TuXdz1PS6",
+            "block_hash": "ERLGmPUuCoU8BsVuENzbpFG5wwA58NohkgzduBff8uK9"
+          },
+          {
+            "receipt_id": "ByURrTDEn9pHiQZ8tcQSTZCHMEdQoZznzUHDKjYwFzSa",
+            "block_hash": "7fRGrWqJwNF7ne7acsy1TaqWuZe76u7gvXX92zgBdySK"
+          },
+          {
+            "receipt_id": "DCeuyAQJjYP6jsyLg5GQdWAvaqt7CsXH9zz4UTrwqyvc",
+            "block_hash": "ERLGmPUuCoU8BsVuENzbpFG5wwA58NohkgzduBff8uK9"
+          }
+        ]
+      }
+    ],
+    "revoke": {
+      "transaction_block_hash": "9t68x29mirnS2uuRkwQHnmqzbtvC6eZwrxWPYGkLPTEg",
+      "receipts": [
+        {
+          "receipt_id": "Ss2GzbyfVLoawHpvwBbEBQBrB5jfecXTU5VJA4rFwhG",
+          "block_hash": "GLYt5DaJbWQijrVr3A5ntPciX3HURRasaQbJJxiNhEkX"
+        },
+        {
+          "receipt_id": "pMBah7j1cp95MroPfzc4HAg5wEEYfhijkhvTii49add",
+          "block_hash": "9sbx8STroakP61g9CcnhKaHVTtK2E8qCFdscMkQaGBZg"
+        },
+        {
+          "receipt_id": "CxRCQ3RF3RNRFggF3siydCNHshy3iLachEe8DCRT3nQm",
+          "block_hash": "9sbx8STroakP61g9CcnhKaHVTtK2E8qCFdscMkQaGBZg"
+        }
+      ]
+    }
+  },
+  "grant_after_calls": {
+    "session_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+    "granted_at_ms": 1776695849273,
+    "expires_at_ms": 1776696747539,
+    "allowed_targets": [
+      "pathological-router.x.mike.testnet"
+    ],
+    "allowed_methods": [
+      "require_one_yocto"
+    ],
+    "attach_yocto": "1",
+    "max_gas_tgas": 50,
+    "max_call_count": 3,
+    "call_count": 3,
+    "label": "proxy-dapp-20260420T14372",
+    "active": false
+  },
+  "grant_after_revoke": null,
+  "events": [
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "proxy_key_enrolled",
+      "data": {
+        "session_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+        "granted_at_ms": 1776695849273,
+        "expires_at_ms": 1776696747539,
+        "allowed_targets": [
+          "pathological-router.x.mike.testnet"
+        ],
+        "allowed_methods": [
+          "require_one_yocto"
+        ],
+        "attach_yocto": "1",
+        "max_gas_tgas": 50,
+        "max_call_count": 3,
+        "allowance_yocto": "100000000000000000000000",
+        "label": "proxy-dapp-20260420T14372",
+        "runtime": {
+          "block_height": 246623208,
+          "block_timestamp_ms": 1776695849273,
+          "epoch_height": 4727,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 100,
+          "attached_deposit_yocto": "1",
+          "account_balance_yocto": "9986825554338892900000001",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 585263,
+          "predecessor_id": "x.mike.testnet",
+          "current_account_id": "sa-proxy.x.mike.testnet",
+          "signer_id": "x.mike.testnet"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "proxy_call_dispatched",
+      "data": {
+        "session_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+        "target": "pathological-router.x.mike.testnet",
+        "method": "require_one_yocto",
+        "args_bytes_len": 39,
+        "attach_yocto": "1",
+        "max_gas_tgas": 50,
+        "call_count": 1,
+        "max_call_count": 3,
+        "label": "proxy-dapp-20260420T14372",
+        "runtime": {
+          "block_height": 246623212,
+          "block_timestamp_ms": 1776695851733,
+          "epoch_height": 4727,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 80,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "9978767732829764300000001",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 585787,
+          "predecessor_id": "sa-proxy.x.mike.testnet",
+          "current_account_id": "sa-proxy.x.mike.testnet",
+          "signer_id": "sa-proxy.x.mike.testnet"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "proxy_call_dispatched",
+      "data": {
+        "session_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+        "target": "pathological-router.x.mike.testnet",
+        "method": "require_one_yocto",
+        "args_bytes_len": 39,
+        "attach_yocto": "1",
+        "max_gas_tgas": 50,
+        "call_count": 2,
+        "max_call_count": 3,
+        "label": "proxy-dapp-20260420T14372",
+        "runtime": {
+          "block_height": 246623220,
+          "block_timestamp_ms": 1776695856614,
+          "epoch_height": 4727,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 80,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "9978379985571532300000000",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 585787,
+          "predecessor_id": "sa-proxy.x.mike.testnet",
+          "current_account_id": "sa-proxy.x.mike.testnet",
+          "signer_id": "sa-proxy.x.mike.testnet"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "proxy_call_dispatched",
+      "data": {
+        "session_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+        "target": "pathological-router.x.mike.testnet",
+        "method": "require_one_yocto",
+        "args_bytes_len": 39,
+        "attach_yocto": "1",
+        "max_gas_tgas": 50,
+        "call_count": 3,
+        "max_call_count": 3,
+        "label": "proxy-dapp-20260420T14372",
+        "runtime": {
+          "block_height": 246623229,
+          "block_timestamp_ms": 1776695861421,
+          "epoch_height": 4727,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 80,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "9977992088638754199999999",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 585787,
+          "predecessor_id": "sa-proxy.x.mike.testnet",
+          "current_account_id": "sa-proxy.x.mike.testnet",
+          "signer_id": "sa-proxy.x.mike.testnet"
+        }
+      }
+    },
+    {
+      "standard": "sa-automation",
+      "version": "1.1.0",
+      "event": "proxy_key_revoked",
+      "data": {
+        "session_public_key": "ed25519:GJfThScq3rXR2tWhhqxhEc2xjLrw1TtQbzL6eA6Xnp4D",
+        "reason": "explicit",
+        "runtime": {
+          "block_height": 246623240,
+          "block_timestamp_ms": 1776695867298,
+          "epoch_height": 4727,
+          "used_gas_tgas": 0,
+          "prepaid_gas_tgas": 50,
+          "attached_deposit_yocto": "0",
+          "account_balance_yocto": "9985723869789622499999998",
+          "account_locked_balance_yocto": "0",
+          "storage_usage": 585787,
+          "predecessor_id": "x.mike.testnet",
+          "current_account_id": "sa-proxy.x.mike.testnet",
+          "signer_id": "x.mike.testnet"
+        }
+      }
+    }
+  ],
+  "explorer_links": {
+    "enroll": "https://near.rocks/tx/9wy36HvviTikVPqqy7ue4cK9N8MZPUT2EWQA8PpLY361",
+    "calls": [
+      "https://near.rocks/tx/2ivhfcpDG4HMDzhMGXozhMtdZBr5AyrexNzQchd4tuUC",
+      "https://near.rocks/tx/uUEWCKBXdJNJJFW9wGNi3Ws1x12LbaDy3XpDeb3iGaM",
+      "https://near.rocks/tx/CFB8FYqJgbUHXh2EaQQ8jxYyZX9SwRQbWYdWCYhijRY2"
+    ],
+    "revoke": "https://near.rocks/tx/38uzNofJFAhFJytR1a9wtT31jENXgyC1addim9VoFGYW",
+    "smart_account": "https://near.rocks/account/sa-proxy.x.mike.testnet",
+    "target_contract": "https://near.rocks/account/pathological-router.x.mike.testnet"
+  }
+}

@@ -49,7 +49,7 @@ cross-contract call:
 - **Auth delegation** — session keys (annotated function-call access
   keys with expiry / fire-cap / trigger-allowlist enforcement)
 
-`execute_steps(steps)` facade over the kernel; automation surface
+`execute_steps(steps)` facade over the sequencer; automation surface
 (templates, balance triggers, execution delegation, session-key auth
 hub); `sequential-intents.mike.near` is mainnet-validated for
 `Direct` / `Adapter` / `Asserted` (see
@@ -82,7 +82,7 @@ someone who's never held it in their head."*
 | Layer | Primitive, as pedagogy | Product | Model, as pedagogy |
 | Scope | 4 recipes, one contract | Full smart-account + automation | Animation pipeline + live-trace translation |
 | Network | Testnet-only | Mainnet-validated | Testnet (mainnet archival infra, no scenes yet) |
-| Contracts? | `recipes` + `counter` | 6 crates (kernel + adapters + routers + echo) | None — visualization only |
+| Contracts? | `recipes` + `counter` | 6 crates (sequencer + adapters + routers + echo) | None — visualization only |
 | Flagship script? | `scripts/src/demo.ts` | `examples/sequential-intents.mjs` | `scripts/pull-trace.mjs` + scene renders |
 | Animations? | Yes (vendored from `manim-visualizations`) | None | Yes (primary output) |
 | Key novelty | DAG-placement machine-check | Six orthogonal primitives composing on one step | Orbital metaphor + visual QA invariants |
@@ -134,14 +134,14 @@ different sub-claims at different stakes.
 | Repo | What its evidence establishes | What it is silent on |
 |---|---|---|
 | `near-sequencer-demo` (testnet) | The NEP-519 **primitive** itself: one yield → one resume → one callback ordering. The DAG-placement invariant is **machine-checked**, so a violation is an assertion, not a style warning. | Multi-step sequencing across separate yielded receipts. Each recipe is "one yield, one resume" in isolation. |
-| `smart-account-contract` (mainnet + testnet) | **Multi-step sequencing with six orthogonal per-step/per-account primitives.** Mainnet: `Direct` / `Adapter` / `Asserted` on `sequential-intents.mike.near`; halt latency bifurcation (§10.3) is DAG-level proof that step N+1 did not fire when step N halted. Testnet: `PreGate` / threading / session keys on three fresh subaccounts of `x.mike.testnet`. | Independent implementation. All evidence comes from one party's kernel. |
+| `smart-account-contract` (mainnet + testnet) | **Multi-step sequencing with six orthogonal per-step/per-account primitives.** Mainnet: `Direct` / `Adapter` / `Asserted` on `sequential-intents.mike.near`; halt latency bifurcation (§10.3) is DAG-level proof that step N+1 did not fire when step N halted. Testnet: `PreGate` / threading / session keys on three fresh subaccounts of `x.mike.testnet`. | Independent implementation. All evidence comes from one party's sequencer. |
 | `manim-visualizations` (testnet renderings of this repo's testnet traces) | The observed receipt DAGs **look like** the mental model claims. Useful as sanity check on the framing. | Independent verification — it's our traces through another lens, not a separate source of evidence. |
 
 The single-sentence version: **only this repo has mainnet evidence of
 sequential receipt execution.** Convergence across the three repos
 strengthens the mental model, not the mainnet claim. If you want
 independent mainnet verification, a different party has to deploy the
-kernel and reproduce the battletests — which hasn't happened.
+sequencer and reproduce the battletests — which hasn't happened.
 
 ## Cross-references that already exist
 

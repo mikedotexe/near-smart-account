@@ -119,6 +119,28 @@ impl PathologicalRouter {
         "x".repeat((kb as usize) * 1024)
     }
 
+    /// Payable companion to `do_honest_work`. Asserts `env::attached_deposit()`
+    /// is exactly `1 yoctoNEAR` — mirrors the NEP-141 `ft_transfer` / `intents.near`
+    /// 1-yN toll semantically without the storage-deposit + token-balance setup.
+    ///
+    /// Falsifiable companion for the proxy-key flagship: the FCAK signing
+    /// `proxy_call` carries zero deposit at the NEAR-tx layer (protocol rule),
+    /// so this call can only succeed if the smart account attached 1 yN from
+    /// its own balance on the outgoing Promise. Change the grant's
+    /// `attach_yocto` to `0` and re-run — this method will panic, proving the
+    /// state-controlled deposit mechanic is load-bearing.
+    #[payable]
+    pub fn require_one_yocto(&mut self, label: String) -> String {
+        assert_eq!(
+            env::attached_deposit().as_yoctonear(),
+            1,
+            "require_one_yocto: expected exactly 1 yoctoNEAR attached"
+        );
+        self.calls_completed += 1;
+        self.last_burst = Some(format!("one-yocto:{label}"));
+        format!("completed-1yn:{label}")
+    }
+
     pub fn get_calls_completed(&self) -> u32 {
         self.calls_completed
     }
@@ -175,5 +197,49 @@ mod tests {
         let c = PathologicalRouter::default();
         let payload = c.return_oversized_payload(0);
         assert_eq!(payload.len(), 0);
+    }
+
+    #[test]
+    fn require_one_yocto_accepts_exactly_one() {
+        use near_sdk::test_utils::VMContextBuilder;
+        use near_sdk::{testing_env, NearToken};
+
+        let mut ctx = VMContextBuilder::new();
+        ctx.attached_deposit(NearToken::from_yoctonear(1));
+        testing_env!(ctx.build());
+
+        let mut c = PathologicalRouter::default();
+        let result = c.require_one_yocto("proxy-demo".to_string());
+        assert_eq!(result, "completed-1yn:proxy-demo");
+        assert_eq!(c.calls_completed, 1);
+        assert_eq!(c.last_burst, Some("one-yocto:proxy-demo".to_string()));
+    }
+
+    #[test]
+    #[should_panic(expected = "expected exactly 1 yoctoNEAR attached")]
+    fn require_one_yocto_panics_on_zero_deposit() {
+        use near_sdk::test_utils::VMContextBuilder;
+        use near_sdk::{testing_env, NearToken};
+
+        let mut ctx = VMContextBuilder::new();
+        ctx.attached_deposit(NearToken::from_yoctonear(0));
+        testing_env!(ctx.build());
+
+        let mut c = PathologicalRouter::default();
+        c.require_one_yocto("no-deposit".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "expected exactly 1 yoctoNEAR attached")]
+    fn require_one_yocto_panics_on_larger_deposit() {
+        use near_sdk::test_utils::VMContextBuilder;
+        use near_sdk::{testing_env, NearToken};
+
+        let mut ctx = VMContextBuilder::new();
+        ctx.attached_deposit(NearToken::from_yoctonear(2));
+        testing_env!(ctx.build());
+
+        let mut c = PathologicalRouter::default();
+        c.require_one_yocto("two-yocto".to_string());
     }
 }

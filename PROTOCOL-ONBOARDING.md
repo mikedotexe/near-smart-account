@@ -42,12 +42,12 @@ optionally a `PreGate` (pre-dispatch gate). They compose:
   mess into one honest top-level result.
 - **`Asserted { assertion_id, assertion_method, assertion_args, expected_return, assertion_gas_tgas }`** (StepPolicy) —
   you want a postcondition on target state (not just "receipt
-  succeeded"). The kernel fires a zero-deposit `FunctionCall` after
+  succeeded"). The sequencer fires a zero-deposit `FunctionCall` after
   the target resolves and advances only if the returned bytes match
   `expected_return` exactly.
 - **`PreGate { gate_id, gate_method, gate_args, min_bytes, max_bytes, comparison, gate_gas_tgas }`** —
   optional **pre-dispatch** gate alongside any `StepPolicy`. The
-  kernel fires the gate BEFORE dispatching the target, compares the
+  sequencer fires the gate BEFORE dispatching the target, compares the
   returned bytes to `[min_bytes, max_bytes]` under `comparison`, and
   advances-and-dispatches only if in range. Out-of-range or gate
   panic → the sequence halts with `pre_gate_checked.outcome != "in_range"`
@@ -135,7 +135,7 @@ quotes) or the match will fail.
 | `wrap.near.near_deposit → ft_transfer` via `compat-adapter` | `Adapter` | `compat-adapter.adapt_wrap_near_deposit_then_transfer` | Real external protocol path where the adapter collapses the sequence into one honest result. |
 | `router.route_echo` | `Direct` | `router` receipt chain | Honest demo leaf-style protocol. |
 | `wild-router.route_echo_fire_and_forget` | `Adapter` | `demo-adapter.adapt_fire_and_forget_route_echo` | Outer receipt returns before the real downstream effect is visible. |
-| `pathological-router.noop_claim_success` / `return_decoy_promise` | `Asserted` | `pathological-router.get_calls_completed` | Pathology probe for noop / decoy. Chapter 21 shows the kernel catches them via counter-equality postcheck. |
+| `pathological-router.noop_claim_success` / `return_decoy_promise` | `Asserted` | `pathological-router.get_calls_completed` | Pathology probe for noop / decoy. Chapter 21 shows the sequencer catches them via counter-equality postcheck. |
 | `pathological-router.do_honest_work` | `Direct` | `pathological-router.do_honest_work` receipt | Honest control probe. |
 
 ## Investigation workflow

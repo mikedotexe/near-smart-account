@@ -14,7 +14,7 @@ runtime:
 - no resolution-policy abstraction or adapters
 - no external `types/` crate
 
-## Kernel claim
+## Sequencer claim
 
 > One multi-action transaction can manufacture multiple yielded callbacks,
 > and a later `run_sequence` can release real downstream cross-contract
@@ -68,7 +68,7 @@ against the captured tx hashes.
 
 ### 3. Live public witnesses (clickable on real contracts)
 
-The sequencer targets arbitrary contracts, so the same kernel works
+The sequencer targets arbitrary contracts, so the same sequencer works
 against `social.near` on mainnet and `v1.social08.testnet` on testnet.
 Each yielded step becomes a real NEAR Social post; release order becomes
 reverse-chronological feed order at `near.social/<sequencer>`.
@@ -113,7 +113,7 @@ original yield tree, not on the release tx's own tree.
 
 | Path | Role |
 | --- | --- |
-| `contracts/simple-sequencer/` | Minimal caller-scoped `yield_promise` / `run_sequence` kernel |
+| `contracts/simple-sequencer/` | Minimal caller-scoped `yield_promise` / `run_sequence` sequencer |
 | `contracts/recorder/` | Tiny stateful leaf contract that records downstream order |
 | `scripts/` | Standalone build, deploy, and demo helpers for this mini-workspace |
 | `res/` | Local Wasm artifacts built for the example |
@@ -125,7 +125,7 @@ so it can evolve independently without disturbing the main
 ## Two things that look like complexity but aren't
 
 **Why `yield_promise` takes six arguments.** `target_id`, `method_name`, and
-`args` are the kernel essentials — what downstream call this step will
+`args` are the sequencer essentials — what downstream call this step will
 make. `attached_deposit_yocto` and `gas_tgas` are per-call downstream
 plumbing that the sequencer passes through untouched. `step_id` is the
 caller's label used later by `run_sequence` to choose the release order.
@@ -155,7 +155,7 @@ cargo test --manifest-path ./simple-example/Cargo.toml --workspace
   surfaces, artifact schema, and the FastNEAR endpoints each step uses
 - [`../contracts/smart-account/`](../contracts/smart-account/) — the
   full account runtime that adds execution rights, durable automation
-  state, and per-call resolution-policy hardening on top of this kernel
+  state, and per-call resolution-policy hardening on top of this sequencer
 - [`../md-CLAUDE-chapters/01-near-cross-contract-tracing.md`](../md-CLAUDE-chapters/01-near-cross-contract-tracing.md)
   — receipt mechanics and why the yield tx tree is the primary forensic
   anchor

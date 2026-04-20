@@ -19,7 +19,7 @@ contract itself.
     `FunctionCall` after the target resolves and advance only on
     exact byte-match of the return value
 - **`PreGate`** — optional **pre-dispatch gate** carried on a `Step`
-  alongside `StepPolicy`. Before the kernel dispatches the target, it
+  alongside `StepPolicy`. Before the sequencer dispatches the target, it
   fires `gate_id.gate_method(gate_args)` and compares the returned
   bytes to `[min_bytes, max_bytes]` under `comparison`. Advance-and-
   dispatch only if in range; halt the sequence with
@@ -31,12 +31,12 @@ contract itself.
   `PreGate` compares the gate's returned bytes to its bounds. JSON
   integer-string variants handle both quoted and unquoted NEAR
   return shapes.
-- **`evaluate_pre_gate`** — pure decision function used by the kernel
+- **`evaluate_pre_gate`** — pure decision function used by the sequencer
   and by tests. Given the gate's actual bytes + bounds + comparison,
   returns a `PreGateOutcome` (`InRange` / `BelowMin` / `AboveMax` /
   `ComparisonError`).
 - **`SaveResult { as_name, kind }`** — optional per-`Step` directive.
-  On the step's successful resolution, the kernel saves the
+  On the step's successful resolution, the sequencer saves the
   promise-result bytes into the sequence context under `as_name`.
   `kind` is advisory (downstream `SubstitutionOp` decides how to
   parse).
@@ -56,7 +56,7 @@ contract itself.
   `UnparseableSavedResult` / `NumericOverflow` / `InvalidBps` /
   `PlaceholderNotFound`. Each has a `kind_tag()` used as the
   `error_kind` suffix on `sequence_halted` events.
-- **`materialize_args`** — pure function the kernel calls at dispatch
+- **`materialize_args`** — pure function the sequencer calls at dispatch
   time; can be tested without a VM. Returns the substituted byte
   slice or a `MaterializeError`.
 - **`AdapterDispatchInput`** — the canonical argument shape the smart

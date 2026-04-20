@@ -242,7 +242,7 @@ The onboarding guide is intentionally strict about a few things:
 
 - it does not promise that `Direct` is good enough for every successful call
 - it does not claim that sequential release means global chain ordering
-- it does not treat protocol-specific truth as something the generic kernel can
+- it does not treat protocol-specific truth as something the generic sequencer can
   infer automatically
 - it does not collapse multi-tx saga analysis into one tool yet
 

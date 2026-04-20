@@ -1,7 +1,7 @@
 # Archive — Automation lineage
 
 Consolidated archive of three historical chapters that together validated
-the first automation layer on top of the staged-call kernel: sequence
+the first automation layer on top of the staged-call sequencer: sequence
 templates, balance triggers, authorized execution, cross-caller
 isolation, and positive dual-retry. Superseded by the current reference
 chapters (14, 18, 19) and by `TELEMETRY-DESIGN.md` for the telemetry
@@ -26,7 +26,7 @@ Original chapters, now merged:
 > programmable automation layer for ordered on-chain intent execution.
 
 The automation layer decides **when a sequence may begin**. The staged
-execution kernel (documented in
+execution sequencer (documented in
 [`archive-staged-call-lineage.md`](./archive-staged-call-lineage.md))
 decides **how the sequence is released**. That separation is the
 point.
@@ -62,7 +62,7 @@ The automation layer adds:
 
 The key refactor: staged execution is no longer keyed by caller
 account id. It is keyed by a generic **sequence namespace**, so the
-same kernel serves both flows while keeping their state isolated.
+same sequencer serves both flows while keeping their state isolated.
 
 - manual runs: `manual:{caller_id}`
 - automation runs: `auto:{trigger_id}:{run_nonce}`
@@ -84,7 +84,7 @@ Durable state carried by the smart account:
 If all yes, the contract manufactures a fresh staged sequence from the
 template under `auto:{trigger_id}:{run_nonce}`.
 
-**Layer B — deterministic release.** The same staged-call kernel takes
+**Layer B — deterministic release.** The same staged-call sequencer takes
 over: `on_stage_call_resume` dispatches the downstream; the next step
 is resumed only after `on_stage_call_settled` sees the previous
 downstream's result. Identical semantics to the manual path, just
@@ -250,7 +250,7 @@ automation runs above:
 
 What remains substantively is either (a) contract changes (e.g.,
 compensation hooks) or (b) a different surface (signed user-ops,
-multi-account flows). The kernel saga semantic itself is closed.
+multi-account flows). The sequencer saga semantic itself is closed.
 
 ## 7. Current limits and honest caveats
 

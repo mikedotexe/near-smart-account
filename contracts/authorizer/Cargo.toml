@@ -1,0 +1,15 @@
+[package]
+name = "authorizer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Thin root-account authorizer: holds an extension allowlist and forwards dispatch / session-key actions when the caller is an armed extension AND the top-level signer matches this contract's own account."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.26.1"
+
+[dev-dependencies]
+near-sdk = { version = "5.26.1", features = ["unit-testing"] }

@@ -18,7 +18,7 @@ is legal — one step can carry multiple.
 |---|---|---|
 | "Do I need to read view state BEFORE committing the call?" | `PreGate` | Pre-dispatch gate |
 | "Do I need step N's returned value feeding step N+1's args?" | `save_result` + `args_template` | Value threading |
-| "Do I need to assert a specific venue-side postcondition AFTER the call succeeds?" | `Asserted` | Execution-trust policy |
+| "Do I need to assert a specific receiver-side postcondition AFTER the call succeeds?" | `Asserted` | Execution-trust policy |
 | "Does the target have hidden async (fire-and-forget, messy promise chain)?" | `Adapter` | Execution-trust policy |
 | "Do I just trust the target's top-level resolution?" | `Direct` (default) | Execution-trust policy |
 | "Should a dapp fire this repeatedly without owner signing each time?" | Session key + balance trigger | Per-account auth |
@@ -125,7 +125,7 @@ const step = {
 
   // Optional: pre-dispatch gate. Fires BEFORE target; if gate passes,
   // target fires chained with on_step_resolved; if gate fails, the
-  // kernel halts the sequence cleanly — target never fires.
+  // sequencer halts the sequence cleanly — target never fires.
   pre_gate: {
     gate_id: "wrap.near",
     gate_method: "ft_balance_of",
@@ -182,7 +182,7 @@ template: base64Utf8('{"amount":${wnear_balance}}')
 
 When in doubt: run with `--dry` and eyeball the materialized args.
 
-## Onboarding a new venue (target protocol)
+## Onboarding a new receiver (target protocol)
 
 Before composing primitives, validate the target surface:
 
@@ -197,9 +197,9 @@ Before composing primitives, validate the target surface:
    alongside our `sa-automation` events — corroboration surface.
 4. **Testnet rehearsal first.** `x.mike.testnet` rig is shared; spin
    up a fresh probe subaccount (`sa-yourname.x.mike.testnet`) for
-   schema-breaking experiments. Mainnet only when kernel and venue
+   schema-breaking experiments. Mainnet only when sequencer and receiver
    both settle.
-5. **Mainnet on `mike.near`.** The v4.0.2-ops kernel is active;
+5. **Mainnet on `mike.near`.** The v4.0.2-ops sequencer is active;
    `NETWORK=mainnet --smart-account mike.near` is the default target.
    Keep probes small (≤ 0.1 NEAR of movement per run).
 
@@ -223,7 +223,7 @@ top-level keys:
 - `block_info` — output of `extractBlockInfo(trace)` per fire; gives
   archival verifiers the block hashes they need
 - `structured_events` — filtered to `sa-automation`-standard events
-  only (venue events like `nep245/mt_mint` are observable in the
+  only (receiver events like `nep245/mt_mint` are observable in the
   receipt tree but NOT duplicated in the artifact)
 - `balances` — optional; before/after token balances where relevant
 - `outcomes` — per-fire classification ("completed", "halted (...)")
@@ -255,7 +255,7 @@ The densest four-primitive flagship, walked in decisions not code:
    across repeated fires (session key fires many times), so a static
    `expected_return` would fail on fire #2+. The PreGate already guards
    the deposit condition; `refund_if_fails: true` in the NEP-141 `msg`
-   handles venue-side refund if anything goes wrong downstream.
+   handles receiver-side refund if anything goes wrong downstream.
 5. **Session-key wrapping.** One `enroll_session` tx (1 yocto,
    2h expiry, 2 triggers allowed, 5 max fires). Two templates (pass
    + halt) → two triggers → one session key allowlisted for both →
@@ -271,7 +271,7 @@ the mainnet proof lives at
 
 ## Checklist before opening a PR
 
-- `./scripts/check.sh` green (kernel checks + existing node tests pass)
+- `./scripts/check.sh` green (sequencer checks + existing node tests pass)
 - Flagship runs end-to-end with `--dry` (templates materialize
   without error)
 - Testnet rehearsal: one successful end-to-end run, artifact captured

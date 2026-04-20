@@ -1,7 +1,7 @@
 # Mainnet proof — v4.0.2-ops on `mike.near`
 
 Four reference artifacts capture fresh live runs against the
-**currently-deployed** kernel on `mike.near`. The first three isolate
+**currently-deployed** sequencer on `mike.near`. The first three isolate
 a single new v4 primitive each; the fourth composes four primitives in
 one real-dapp flow on `intents.near`. Every tx hash and block hash
 below resolves on any public NEAR archival RPC — no coordination with
@@ -66,9 +66,9 @@ the chain.
 For a focused run of all three on just the 4-primitive flagship
 (~2 min total), see [`QUICK-VERIFY.md`](./QUICK-VERIFY.md).
 
-## Verification recipe 1 — confirm the kernel version at the tx's block
+## Verification recipe 1 — confirm the sequencer version at the tx's block
 
-Two independent surfaces pin the kernel at the same block:
+Two independent surfaces pin the sequencer at the same block:
 
 **1a — contract_version view (human-readable):**
 
@@ -123,10 +123,10 @@ below for the current state of that bridge).
 
 1a and 1b are independent: 1a reads a contract-provided string
 (trusts the contract's self-report), 1b reads a validator-computed
-hash (doesn't). Agreement across both = kernel pinned.
+hash (doesn't). Agreement across both = sequencer pinned.
 
 Swap the `block_id` for any tx's `block_info.transaction_block_hash`
-from the artifact — every one of them resolves to the same kernel
+from the artifact — every one of them resolves to the same sequencer
 version. (`args_base64: "e30="` is just base64 of `{}`.)
 
 ## Verification recipe 2 — confirm events match the artifact
@@ -214,7 +214,7 @@ sa-automation / run_finished
 
 Two standards:
 
-- **`sa-automation` (14 events)** — emitted by our kernel on
+- **`sa-automation` (14 events)** — emitted by our sequencer on
   `mike.near`. Step 1's `pre_gate_checked` gates the
   `wrap.near.ft_balance_of` floor; step 2's `pre_gate_checked`
   gates the Ref Finance quote; both `in_range`; sequence
@@ -223,7 +223,7 @@ Two standards:
   `jq -r '.structured_events.fire_pass | map(.event) | .[]'`.
 - **`nep245 / mt_mint` (1 event)** — emitted by `intents.near`
   itself when the deposit hit its NEP-245 ledger. This is
-  *venue-side* confirmation — the destination contract
+  *receiver-side* confirmation — the destination contract
   independently logging that the balance grew. In recipe 3c
   below we confirm the same fact via a `mt_balance_of` diff
   across blocks; the `mt_mint` event and the balance diff are
@@ -283,14 +283,14 @@ Pass-vs-halt asymmetry across recipes 3a and 3b:
 - Same session key, same step shape, different trigger.
 - Pass fire (3a) shows `pre_gate_checked { outcome: in_range }` on
   step 2 followed by `nep245 / mt_mint` — gate passed, deposit
-  dispatched, venue ledger updated.
+  dispatched, receiver ledger updated.
 - Halt fire (3b) shows `pre_gate_checked { outcome: below_min }`
   on step 2 followed by `sequence_halted { reason: pre_gate_failed }`
   and **no `mt_mint`** — gate refused, target `ft_transfer_call`
   never fired, ledger unchanged.
 
 The absence of `mt_mint` in the halt is proof by silence: if the
-gate had leaked a zero-quote deposit through, the venue would
+gate had leaked a zero-quote deposit through, the receiver would
 have logged it.
 
 ### 3c. `intents.near`'s NEP-245 ledger actually grew
@@ -381,7 +381,7 @@ gate branch — this run proves the happy path.
 - Step 1 fires `probe-v4.mike.near.do_honest_work` (increments a
   counter as a side effect).
 - Step 2 fires `probe-v4.mike.near.get_calls_completed` and the
-  kernel emits `result_saved { as_name: "counter", kind:
+  sequencer emits `result_saved { as_name: "counter", kind:
   "u128_json", bytes_len: 2 }`. Those saved bytes are `"23"` at
   the time of capture.
 - Step 3 fires `do_honest_work` with `label` derived via
@@ -412,7 +412,7 @@ chain the full lifecycle:
    account), not the owner — confirmed in the `transaction.signer_id`
    field returned by `tx`.
 3. **revoke** (`qtMAms…`) — owner deletes the grant state and
-   emits `session_revoked { reason: "explicit" }`. The kernel also
+   emits `session_revoked { reason: "explicit" }`. The sequencer also
    fires a `Promise::delete_key` action in the same receipt; the
    post-revoke fire attempt captured in the artifact's
    `tx_hashes.post_revoke_attempt` was rejected by the NEAR
@@ -446,7 +446,7 @@ The artifact carries **two fires** side by side:
   credited to `mike.near`. Events end with `sequence_completed` +
   `run_finished { status: "Succeeded" }`.
 - **Halt fire** (`EEC83U…` @ block `6nCyyu…`) — same session key,
-  same kernel, different trigger. Step 2's `pre_gate_checked` emits
+  same sequencer, different trigger. Step 2's `pre_gate_checked` emits
   `outcome: "below_min", matched: false` because `1401639 <
   5000000000` (an intentionally-impossible $5000/NEAR threshold).
   Target never fires; no deposit; sequence halts cleanly with
@@ -515,7 +515,7 @@ What the proof establishes:
 - Each artifact's `tx_hash` resolves to an on-chain tx with exactly
   the events recorded.
 - Each artifact's `block_info.transaction_block_hash` pins the
-  kernel state at execution time to `v4.0.2-ops`.
+  sequencer state at execution time to `v4.0.2-ops`.
 - The bridge from "our repo" to "mainnet" is a byte-for-byte hash
   match. Build `res/smart_account_local.wasm` locally under the
   pinned toolchain (`rust-toolchain.toml`: `nightly-2026-04-17`),
@@ -556,7 +556,7 @@ NETWORK=mainnet ./examples/limit-order.mjs \
 ```
 
 Your own run will emit the same event shapes against `mike.near`
-(the kernel is public; anyone can call `execute_steps` under their
+(the sequencer is public; anyone can call `execute_steps` under their
 own `manual:<signer>` namespace). Compare your artifact's events
 to the reference's — they'll differ in timestamps and gas
 amounts, but the event names + payload shapes will match exactly.
@@ -565,6 +565,6 @@ amounts, but the event names + payload shapes will match exactly.
 
 **Falsifiability.** If any verification path above disagrees with
 the committed artifact — wrong event, missing `pre_gate_checked`,
-mismatched balance delta, kernel version off — the bug is in this
+mismatched balance delta, sequencer version off — the bug is in this
 repo, not on-chain. Please open an issue with the RPC output you
 saw so we can fix or retract the claim.

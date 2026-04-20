@@ -33,7 +33,7 @@ Value threading adds two orthogonal primitives to `Step`:
    the final args by substituting `${name}` placeholders with
    previously-saved values (optionally transformed)."
 
-Together they close the "static args" limitation of the kernel
+Together they close the "static args" limitation of the sequencer
 without adopting a full scripting language. The substitution engine
 is deliberately narrow: `Raw`, `DivU128 { denominator }`,
 `PercentU128 { bps }`. Anything more is a future extension.
@@ -100,7 +100,7 @@ also has three receipts — substitution is a pure function run during
 `on_step_resumed`, no extra promise.
 
 So the cascade count is unchanged. Value threading is a **state layer
-on top of the existing kernel**, not new receipts.
+on top of the existing sequencer**, not new receipts.
 
 ### The sequence context
 
@@ -138,7 +138,7 @@ Clear paths (ensures saved bytes never leak across runs):
 - `halt_sequence_on_pre_gate_failure` — gate out of range or panicked.
 - `halt_sequence_on_materialize_failure` — substitution itself failed.
 
-The kernel never retains sequence context across a run boundary.
+The sequencer never retains sequence context across a run boundary.
 Re-running the same namespace (`manual:<same_caller>` back-to-back,
 say) starts with an empty map.
 
@@ -156,7 +156,7 @@ pub fn materialize_args(
 
 It's a pure function — no `env` calls, no state mutation. That means
 every edge case can be exercised with plain Rust unit tests, no
-VM context needed. The kernel's `materialize_step_call` is a thin
+VM context needed. The sequencer's `materialize_step_call` is a thin
 wrapper that pulls the sequence's saved results and calls this.
 
 ### Errors
@@ -301,7 +301,7 @@ combination for `materialize_args`:
 - Multi-substitution templates; placeholder-not-found.
 - Every `MaterializeError` variant has its `kind_tag()` covered.
 
-7 kernel unit tests in `contracts/smart-account/src/lib.rs`
+7 sequencer unit tests in `contracts/smart-account/src/lib.rs`
 exercise the wiring:
 
 - `save_step_result_populates_sequence_context` and
@@ -317,7 +317,7 @@ exercise the wiring:
 - `halt_sequence_on_materialize_failure_emits_distinct_error_kind` —
   `sequence_halted.error_kind` starts with `args_materialize_`.
 
-Integration-level testnet probes (against a deployed kernel) are
+Integration-level testnet probes (against a deployed sequencer) are
 exercised via `examples/ladder-swap.mjs`. The artifact captures the
 `result_saved` event, the next step's materialized args, and the
 final target-side state so mismatches are visible.

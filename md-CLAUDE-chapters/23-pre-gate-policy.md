@@ -3,7 +3,7 @@
 ## §1 Motivation
 
 Chapter 21's `Asserted` closed the Layer-3 post-state blindspot: the
-kernel can now halt a sequence AFTER a target resolves, based on a
+sequencer can now halt a sequence AFTER a target resolves, based on a
 byte-equality check against any view. Useful, but limited in one
 specific way: by the time `Asserted` halts the sequence, the target's
 side effects have already landed. For "fire-and-regret-on-mismatch"

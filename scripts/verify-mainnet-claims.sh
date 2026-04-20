@@ -5,7 +5,7 @@
 #
 #   collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json
 #
-# Any disagreement — FastNEAR drift, artifact edit, kernel redeploy
+# Any disagreement — FastNEAR drift, artifact edit, sequencer redeploy
 # invalidating block anchors — surfaces here as a non-zero exit plus a
 # specific "saw X, expected Y" diagnostic.
 #
@@ -236,6 +236,6 @@ if problems:
     sys.exit(1)
 
 print(f"All four paths agree with {ARTIFACT_PATH}")
-print(f"Headline claim still falsifiable; kernel v4.0.2-ops on mike.near verified")
+print(f"Headline claim still falsifiable; sequencer v4.0.2-ops on mike.near verified")
 print(f"  (contract self-report via events + code_hash pin + balance diff).")
 PY

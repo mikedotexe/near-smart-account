@@ -9,7 +9,7 @@
 // Default plan is a three-step round-trip that demonstrates what the
 // smart account uniquely enables: sequential execution across separate
 // `intents.near` operations, each gated by the previous step's settled
-// state on the verifier ledger. Without this kernel, step 3 would race
+// state on the verifier ledger. Without this sequencer, step 3 would race
 // step 2 and fail with insufficient balance on `intents.near`.
 //
 //   Step 1  wrap.near.near_deposit        (mint N wNEAR to the smart-
@@ -127,7 +127,7 @@ const { values } = parseArgs({
     "step-register-timeout-ms": { type: "string", default: "30000" },
     "resolve-timeout-ms": { type: "string", default: "180000" },
     // Battletest: deliberately poison a step's Asserted expected_return
-    // so its postcheck will fail the byte-match, forcing the kernel to
+    // so its postcheck will fail the byte-match, forcing the sequencer to
     // halt the sequence before subsequent steps fire. --poison-step=2
     // makes step 2's expected off by +1 yocto; --poison-step=3 poisons
     // step 3's withdraw postcheck. Use only on a dev/lab account — the
@@ -135,7 +135,7 @@ const { values } = parseArgs({
     "poison-step": { type: "string" },
     // Battletest: substitute the Asserted policy's assertion_method with
     // a non-existent method name on the target contract. Probes how the
-    // kernel handles *view-call errors* (MethodNotFound) during the
+    // sequencer handles *view-call errors* (MethodNotFound) during the
     // postcheck phase, versus --poison-step which probes byte mismatch.
     //   --bogus-method=2  → step 2's assertion_method becomes bogus
     //   --bogus-method=3  → step 3's assertion_method becomes bogus

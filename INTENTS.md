@@ -31,7 +31,7 @@ Worth naming so we're honest about what we're **not** re-inventing:
 - **Atomic batched intents inside one `execute_intents` call.** If the
   call includes a deposit, a swap, and a withdrawal as three signed
   intents, the verifier settles them atomically or not at all. You
-  don't need our kernel to batch *within* one signed intent.
+  don't need our sequencer to batch *within* one signed intent.
 - **`token_diff` swap semantics.** The verifier matches opposing
   `token_diff` intents across signers to produce atomic swaps without
   a solver-run AMM. This is the core of the `intents.near` product —
@@ -52,7 +52,7 @@ post-state gating **across** `execute_intents` calls, or **between**
 
 - **Cross-tx ordering across separate `execute_intents` calls.** A
   single `execute_intents` is atomic with itself, but two back-to-back
-  `execute_intents` calls are just async receipts. Our kernel forces
+  `execute_intents` calls are just async receipts. Our sequencer forces
   the second to wait on the first's resolution surface.
 - **Atomic halt on `Asserted` mismatch.** `ft_transfer_call` into
   `intents.near` can succeed at the receipt level while the verifier
@@ -62,7 +62,7 @@ post-state gating **across** `execute_intents` calls, or **between**
   B4 in `SEQUENTIAL-INTENTS-DESIGN.md §10.2`.
 - **Cross-protocol sequencing.** `intents.near` deposits from NEAR
   require wrapping first (`wrap.near.near_deposit` → `ft_transfer_call`
-  to `intents.near`). Our kernel sequences both hops in one user tx
+  to `intents.near`). Our sequencer sequences both hops in one user tx
   with `Direct` on the wrap and `Asserted` on the deposit.
 - **Balance-trigger automation.** `save_sequence_template` +
   `create_balance_trigger` + `execute_trigger` let an authorized

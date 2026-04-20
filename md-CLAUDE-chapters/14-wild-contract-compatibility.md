@@ -1,6 +1,6 @@
 # 14 · Wild-contract compatibility
 
-> **In today's vocabulary.** This chapter was written when the kernel
+> **In today's vocabulary.** This chapter was written when the sequencer
 > exposed `yield_promise` / `run_sequence` with a `resolution_policy`
 > field per call. The current surface is `execute_steps` /
 > `register_step` / `run_sequence` with a `step_policy` field per
@@ -10,7 +10,7 @@
 
 ## BLUF
 
-The yield/resume smart-account kernel is now hardened for real-world protocols by
+The yield/resume smart-account sequencer is now hardened for real-world protocols by
 making compatibility a **per-call resolution policy** (`resolution_policy` in
 code) instead of a silent assumption.
 
@@ -141,7 +141,7 @@ New behavior:
 - the adapter drives the messy protocol and returns one honest success/failure
   surface to the smart account
 
-The sequencing kernel does **not** become protocol-aware. It still only knows:
+The sequencer does **not** become protocol-aware. It still only knows:
 
 - the adapter call succeeded
 - or it failed
@@ -150,7 +150,7 @@ That is intentional. Protocol-specific truth stays in the adapter layer.
 
 ### `Asserted`
 
-Shipped in v1. After the target resolves successfully, the kernel fires a
+Shipped in v1. After the target resolves successfully, the sequencer fires a
 caller-specified check call and compares its return bytes to caller-specified
 expected bytes. Match → sequence advances. Mismatch → sequence halts
 identically to any other resolve failure.
@@ -166,9 +166,9 @@ requires non-trivial reconciliation (multi-poll, retry, cross-contract
 aggregation); `Asserted` is the right answer when one view-call on target
 state is enough to distinguish honest from fraudulent resolution.
 
-## 3. Kernel changes
+## 3. Sequencer changes
 
-The smart-account kernel in `contracts/smart-account/` did **not** change its
+The smart-account sequencer in `contracts/smart-account/` did **not** change its
 receipt semantics.
 
 Still true:
@@ -259,7 +259,7 @@ has to do work:
 - poll protocol state
 - potentially repoll
 
-So the smart-account kernel now reserves a fixed adapter overhead budget and
+So the smart-account sequencer now reserves a fixed adapter overhead budget and
 applies a lower max raw-target gas ceiling when `resolution_policy = Adapter`.
 
 That is the correct tradeoff:
@@ -339,7 +339,7 @@ Still open:
 
 The important thing is that the repo now has a clean conceptual split:
 
-- sequencing kernel stays generic
+- sequencer stays generic
 - protocol weirdness lives in adapters
 
 That is a strong place to continue from.

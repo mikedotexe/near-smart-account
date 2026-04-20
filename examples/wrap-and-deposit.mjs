@@ -5,8 +5,8 @@
 //
 // Companion to `examples/sequential-intents.mjs`. That flagship shows
 // sequential execution *inside* NEAR Intents (`intents.near`); this one
-// shows the same kernel working across *different* protocols, so
-// `intents.near` is not a required target — our sequential kernel
+// shows the same sequencer working across *different* protocols, so
+// `intents.near` is not a required target — our sequential sequencer
 // composes any protocol with the same Asserted-policy discipline.
 //
 // Signs ONE multi-action tx that calls `execute_steps(plan)` on the smart

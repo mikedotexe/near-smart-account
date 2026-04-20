@@ -12,8 +12,9 @@ cd "$DIR"
 RF="${RUSTFLAGS:--A warnings}"
 
 RUSTFLAGS="$RF" cargo check -p smart-account-types
+RUSTFLAGS="$RF" cargo check -p smart-account-observer
 RUSTFLAGS="$RF" cargo check \
-  -p smart-account -p compat-adapter -p demo-adapter -p echo -p router -p wild-router -p pathological-router \
+  -p smart-account -p authorizer -p compat-adapter -p demo-adapter -p echo -p router -p wild-router -p pathological-router \
   --target wasm32-unknown-unknown
 node --test \
   scripts/lib/near-cli.test.mjs \

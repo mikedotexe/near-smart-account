@@ -1,7 +1,7 @@
 # Archive — Real-world adapter lineage
 
 Consolidated archive of four historical chapters that together
-validated the smart-account's kernel against real external protocols
+validated the smart-account's sequencer against real external protocols
 we did not write, surfaced the structural opacity of `Direct` settle,
 proved the first live `Adapter` path, and landed the first
 three-contract orchestration. Superseded by the current reference
@@ -247,7 +247,7 @@ The chapter's unifying insight:
 
 Both observations point at the same architectural conclusion:
 **meaningful interpretation of downstream behaviour is
-protocol-aware work that does not belong in the kernel.** Either
+protocol-aware work that does not belong in the sequencer.** Either
 route through an `Adapter` that encodes the protocol's conventions,
 or read the trace off-chain. This is the direct motivation for
 chapter 14's `Adapter` policy.
@@ -467,7 +467,7 @@ StorageBalance JSON from NEP-145. 0 bytes signals void-return
 visible to a protocol-agnostic orchestrator.
 
 **`Direct` is structurally opaque; `Adapter` is the answer.** The
-kernel's success-or-failure signal is truthful but not
+sequencer's success-or-failure signal is truthful but not
 interpretable across protocols. An adapter that encodes one
 protocol's conventions and returns one honest top-level completion
 surface is how multi-step protocol actions become sequencable
@@ -543,7 +543,7 @@ near view wrap.testnet ft_balance_of \
 - [chapter 14](./14-wild-contract-compatibility.md) — the current
   `Direct` vs `Adapter` compatibility model, distilled from the
   empirical findings above
-- [chapter 18](./18-keep-yield-canonical.md) — why the kernel keeps
+- [chapter 18](./18-keep-yield-canonical.md) — why the sequencer keeps
   yield/resume canonical
 - [chapter 19](./19-protocol-onboarding-and-investigation.md) —
   operator rationale for onboarding a new protocol safely

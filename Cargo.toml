@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "contracts/smart-account",
+    "contracts/authorizer",
     "contracts/compat-adapter",
     "contracts/demo-adapter",
     "contracts/echo",
@@ -9,6 +10,7 @@ members = [
     "contracts/wild-router",
     "contracts/pathological-router",
     "types",
+    "observer",
 ]
 
 [profile.release]

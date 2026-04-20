@@ -4,11 +4,11 @@
 // gate policy on a smart-account step.
 //
 // Mechanism: each `Step` can carry an optional `pre_gate` block that
-// names a `FunctionCall` the kernel fires BEFORE dispatching the real
+// names a `FunctionCall` the sequencer fires BEFORE dispatching the real
 // target. If the gate's returned bytes sit inside `[min_bytes, max_bytes]`
-// (under `comparison`), the kernel dispatches the target and chains the
+// (under `comparison`), the sequencer dispatches the target and chains the
 // usual `on_step_resolved` callback. Out of range, or gate panic → the
-// kernel halts the sequence cleanly before the target ever fires.
+// sequencer halts the sequence cleanly before the target ever fires.
 //
 // Use case: limit orders. One signed plan says "execute this swap, but
 // ONLY if the quoted price is within [min, max]." Out-of-range halts
@@ -23,7 +23,7 @@
 // fires, counter increments, sequence completes.
 //
 // Fail scenario: gate bounds exclude the current counter value →
-// kernel halts with `pre_gate_checked.outcome != "in_range"`, target
+// sequencer halts with `pre_gate_checked.outcome != "in_range"`, target
 // does NOT fire, counter does NOT increment. Verified via view call.
 //
 // Usage:
@@ -151,7 +151,7 @@ console.log("  gate          :", `${gateContract}.${gateMethod}(${gateArgsJson})
 console.log("  gate bounds   :", `min=${gateMin ?? "-∞"} max=${gateMax ?? "+∞"}`);
 console.log("  target        :", `${targetContract}.${targetMethod}(${targetArgsJson})`);
 
-// Probe the gate before submitting so the operator sees what the kernel
+// Probe the gate before submitting so the operator sees what the sequencer
 // will see. This is advisory — the on-chain gate call is still the
 // authoritative read.
 try {

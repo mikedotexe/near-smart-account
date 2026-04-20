@@ -25,6 +25,11 @@ Primary sources of truth:
 - [FLAGSHIP-HOWTO.md](./FLAGSHIP-HOWTO.md) — contributor guide:
   composing primitives into a new runnable flagship. Decision
   table + common skeleton + artifact conventions + worked example.
+- [ARCHITECTURE-V5-SPLIT.md](./ARCHITECTURE-V5-SPLIT.md) — v5
+  architectural split: thin Authorizer on root + Extension sequencer on
+  subaccount with a dispatch-back pattern that preserves `signer_id =
+  root` at downstream receivers. Testnet-validated in this tranche;
+  mainnet migration explicitly deferred.
 - [INTENTS.md](./INTENTS.md) — positioning note: this smart account
   vs `intents.near`, when to use which
 - [SISTER-REPOS.md](./SISTER-REPOS.md) — three-repo positioning:
@@ -55,20 +60,31 @@ Primary sources of truth:
   `session_enrolled` / `session_fired` / `session_revoked` events
 - [SESSION-KEYS.md](./SESSION-KEYS.md) — user-facing session-key
   walkthrough: enroll → fire → revoke, safety model, limitations
+- [md-CLAUDE-chapters/26-proxy-keys.md](./md-CLAUDE-chapters/26-proxy-keys.md)
+  — `ProxyGrant` + `proxy_call`: smart-account as universal dApp-login
+  FCAK proxy. FCAK pinned to `method_name = "proxy_call"`; grant carries
+  `allowed_targets` + `allowed_methods` + state-controlled `attach_yocto`
+  so the smart account pays the 1 yN toll for `intents.near.add_public_key`
+  / NEP-141 transfers without breaking NEAR's FCAK-can't-attach-deposit
+  rule. `proxy_key_enrolled` / `proxy_call_dispatched` / `proxy_key_revoked`
+  events.
+- [PROXY-KEYS.md](./PROXY-KEYS.md) — user-facing proxy-key walkthrough:
+  login batch → proxy_call → revoke, safety model, comparison vs
+  session keys.
 
 ## Repo in one paragraph
 
 **The gap this fills.** Native NEAR `Actions` batch multiple
 `FunctionCall`s in one tx, but all must target one `receiver_id`;
 cross-contract workflows default to fire-and-forget async. This
-kernel ships **sequential, policy-gated, multi-receiver composition
+sequencer ships **sequential, policy-gated, multi-receiver composition
 in one signed plan** — step N+1 only fires after step N's resolution
 surface settles AND its policy passes.
 
 **Mechanic: NEP-519 yield/resume.** A step yields its callback
-receipt; the receipt stays pending on-chain until the kernel resumes
+receipt; the receipt stays pending on-chain until the sequencer resumes
 it (triggered by the target's resolution); after ~200 blocks an
-unresumed callback decays with `PromiseError::Failed`. The kernel
+unresumed callback decays with `PromiseError::Failed`. The sequencer
 registers each step as a yielded receipt and releases them
 sequentially. See chapter 18 for the canonical walkthrough.
 
@@ -79,11 +95,11 @@ about a cross-contract call: `Direct` / `Adapter` / `Asserted`
 annotated FCAK delegation). Every combination is legal — one step
 can carry `PreGate` + `Asserted` + `args_template` + session-key
 auth simultaneously. User calls `execute_steps(steps)` in one tx.
-`intents.near` is the primary venue (NEP-413-signed deposits, swaps,
-withdrawals), but the kernel composes any multi-protocol plan.
+`intents.near` is the primary receiver (NEP-413-signed deposits, swaps,
+withdrawals), but the sequencer composes any multi-protocol plan.
 
 **Validation.** All six primitives mainnet-validated on `mike.near`
-as kernel version `v4.0.2-ops` (2026-04-19). Four reference
+as sequencer version `v4.0.2-ops` (2026-04-19). Four reference
 artifacts in `collab/artifacts/reference/`: three isolate one
 primitive each (`limit-order` / `ladder-swap` / `session-dapp`); the
 fourth (`intents-deposit-limit`) composes four primitives in one
@@ -108,6 +124,20 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
   `automation_runs_count` / `prune_finished_automation_runs`),
   session-key auth hub (`enroll_session` / `revoke_session` /
   `revoke_expired_sessions` / `get_session` / `list_active_sessions`).
+  As of v5.0.0-split carries an optional `authorizer_id` — when set,
+  target dispatches + session-key mint/revoke route through the
+  paired Authorizer contract (see next). When unset, behaves exactly
+  as v3/v4 did (standalone mode, backward-compat).
+- `contracts/authorizer/`
+  Root-shape thin contract for the v5 split. Holds the
+  owner-managed `extensions: IterableSet<AccountId>` allowlist +
+  three extension-callable primitives: `dispatch(target, method,
+  args, gas_tgas)`, `add_session_key(pk, allowance, receiver,
+  method)`, `delete_session_key(pk)`. Every extension-callable
+  method asserts two-factor: `signer_id == current_account_id`
+  (user signed top-level tx) AND `predecessor ∈ extensions`
+  (caller is armed). Owner can add/remove extensions for surgical
+  disarm without redeploy. See `ARCHITECTURE-V5-SPLIT.md`.
 - `contracts/compat-adapter/`
   Real external-protocol adapter surface; currently wrap-specific
 - `contracts/demo-adapter/`
@@ -132,6 +162,21 @@ execution. Unrelated receipts can still interleave elsewhere on-chain.
   JSON-first three-surfaces investigation wrapper
 - `web/`
   Static trace viewer
+- `observer/`
+  Rust binary crate (`smart-account-observer`) with two modes:
+  - `stream` polls FastNEAR's neardata service, filters receipt
+    outcomes by `executor_id`, parses `EVENT_JSON:` log lines,
+    emits one jsonl line per event on stdout. Live feed —
+    complements `scripts/aggregate-runs.mjs` (retroactive) and
+    the client-authored `examples/*.mjs` artifact path.
+  - `trace` fetches one tx from FastNEAR's TX API
+    (`tx.main.fastnear.com/v0/transactions`) and renders a
+    receipt-DAG walkthrough: execution-ordered rows anchored to
+    block heights, NEP-519 yield/resume correlation, event
+    inlining, gas burn, refund collapsing. Pedagogical surface
+    for the sequencer thesis — block heights and receipt IDs in
+    the output stay verifiable forever via archival RPC. Also
+    emits structured `--json` for downstream tooling.
 
 ## Compatibility rule
 
@@ -154,7 +199,7 @@ the code exposes this as `StepPolicy` on each `Step` passed to
 Optional per-step **pre-dispatch gate**, orthogonal to `StepPolicy`:
 
 - `PreGate { gate_id, gate_method, gate_args, min_bytes, max_bytes, comparison, gate_gas_tgas }`
-  Before the kernel dispatches the target, it fires the gate view and
+  Before the sequencer dispatches the target, it fires the gate view and
   compares returned bytes to `[min_bytes, max_bytes]` under `comparison`
   (`U128Json` / `I128Json` / `LexBytes`). In-range → dispatch target
   as usual. Out-of-range or gate panic → halt sequence cleanly with
@@ -214,6 +259,7 @@ Canonical shared rig uses `MASTER=x.mike.testnet` and currently centers on:
 - `sa-pregate.x.mike.testnet` (chapter 23 probe subaccount, PreGate-aware)
 - `sa-threading.x.mike.testnet` (chapter 24 target; value threading)
 - `sa-session.x.mike.testnet` (chapter 25 target; session keys)
+- `sa-proxy.x.mike.testnet` (chapter 26 target; proxy keys — `v5.1.0-proxy`, standalone-mode; deployed 2026-04-20 with owner `x.mike.testnet`)
 - `compat-adapter.x.mike.testnet`
 - `demo-adapter.x.mike.testnet`
 - `router.x.mike.testnet`
@@ -244,10 +290,10 @@ Shared-rig churn rule:
 
 ## Mainnet lab rig
 
-The stable v4 kernel lives on `mike.near` itself; ancillary v3 +
+The stable v4 sequencer lives on `mike.near` itself; ancillary v3 +
 older probes live on child accounts.
 
-- `mike.near` — **active v4 smart-account**, kernel version
+- `mike.near` — **active v4 smart-account**, sequencer version
   `v4.0.2-ops` since 2026-04-19 (redeploys use `migrate()`, not
   `new_with_owner`). Active target for `examples/limit-order.mjs`,
   `examples/ladder-swap.mjs`, `examples/session-dapp.mjs`, and
@@ -263,7 +309,7 @@ older probes live on child accounts.
 - `sa-lab.mike.near` — older (pre-rename) smart-account deployed with
   `owner_id = mike.near`; kept around for historical tx lookup only
 - `echo.sa-lab.mike.near` — trivial leaf for the mainnet echo probe
-- `simple-sequencer.sa-lab.mike.near` — simple-example kernel used by the
+- `simple-sequencer.sa-lab.mike.near` — simple-example sequencer used by the
   NEAR Social variant; see `simple-example/SOCIALDB-VARIANT.md`
 
 Validated round-trip on `sequential-intents.mike.near` (reference runs
@@ -278,7 +324,7 @@ DCA one-tick reference (`examples/dca.mjs`, balance-trigger automation):
 - create_balance_trigger : `AAJSKYgSYVn7pwd5XtVWjPhfruAVTCfc1DRhPtdMaGJy`
 - execute_trigger        : `E9VDdwXz52VfveWvZfkWKg9QTsW6oduoA1WLB5itFByX`
 
-Battletest sweep (5 kernel edges proved on mainnet v3): full tx-level log
+Battletest sweep (5 sequencer edges proved on mainnet v3): full tx-level log
 in [`MAINNET-V3-JOURNAL.md`](./MAINNET-V3-JOURNAL.md); design-relevant
 findings (halt semantics, outcome taxonomy, halt latency bifurcation,
 namespace separation, back-to-back idempotency) distilled in
@@ -289,9 +335,59 @@ Safety rules:
 - treat lab accounts as disposable infrastructure; do not move
   meaningful assets into them
 - keep each probe small enough that a bad surprise is cheap
-- `mike.near` carries the stable v4 kernel today; use fresh child
-  accounts for *new* kernel work (migrations, schema probes, alpha
+- `mike.near` carries the stable v4 sequencer today; use fresh child
+  accounts for *new* sequencer work (migrations, schema probes, alpha
   features) rather than redeploying over the production surface
+
+## v5 architectural split — testnet-validated, mainnet-deferred
+
+The local codebase is now v5-shape: the sequencer's `Contract` struct
+carries an optional `authorizer_id: Option<AccountId>` and the
+smart-account crate is paired with a new `contracts/authorizer/`
+crate. In extension mode (`authorizer_id: Some(_)`), target dispatches
++ session-key mint/revoke route through an authorizer on the user's
+canonical account, which checks `signer == self` + `predecessor ∈
+extensions` then forwards. `signer_id` is preserved at downstream
+receivers, so `intents.near` balance still lands on root. See
+[`ARCHITECTURE-V5-SPLIT.md`](./ARCHITECTURE-V5-SPLIT.md).
+
+**Design constraint surfaced during first testnet deploy
+(2026-04-19):** the authorizer MUST live at the account whose FAK
+signs the top-level tx (on mainnet: `mike.near` itself). Putting it
+at a subaccount panics at `dispatch` with the auth check disagreeing
+— this is the architecture working correctly. So
+`scripts/deploy-testnet.sh` now only deploys standalone-mode
+contracts; the v5 pair recipe (which deploys authorizer ON the
+signer's account) lives in `ARCHITECTURE-V5-SPLIT.md` "Testnet
+recipe" section.
+
+Deployment state:
+
+- **mainnet `mike.near`**: still `v4.0.2-ops` (single-contract v4
+  sequencer). Not changed by this tranche.
+- **mainnet `sequential-intents.mike.near`**: still v3 (post-Phase-A
+  `execute_steps` rename, no authorizer concept). Not changed.
+- **testnet `x.mike.testnet`**: carries the v5 authorizer contract
+  (`authorizer-v5.0.0`) as of 2026-04-19, with
+  `smart-account-v5.x.mike.testnet` armed in its extensions list.
+  First live v5 hop: tx
+  `6xiTMCvkaTQTsii5ZQLAvJiotyZ1bAwxGGHZumqApe2C`. Disarm / re-arm
+  cycle validated. See ARCHITECTURE-V5-SPLIT.md "Testnet recipe"
+  table.
+- **testnet `smart-account-v5.x.mike.testnet`**: v5 extension
+  sequencer paired with `x.mike.testnet`. Separate account from
+  `smart-account.x.mike.testnet` (which has broken state from an
+  earlier schema bump and can't be cleanly deleted —
+  `DeleteAccountWithLargeState` guard).
+- **local source `contract_version` string**: `v5.0.0-split` — reports
+  this when built and queried. Does NOT match live mainnet versions
+  until a deliberate mainnet-migration tranche happens.
+
+Standalone mode (`authorizer_id: None`) preserves exact v3/v4
+semantics — including for `sequential-intents.mike.near` if the v5
+binary is ever `migrate()`-ed over that state (migrate promotes v4
+shape to v5 shape with `authorizer_id: None`, leaving behavior
+unchanged).
 
 Mainnet gas matrix (multi-action `register_step` calibration on
 `sa-lab.mike.near`):

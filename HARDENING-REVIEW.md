@@ -1,7 +1,7 @@
 # HARDENING-REVIEW.md
 
 A living, deliberately short repo-shape audit for places where the project
-may be overengineered now that the kernel, compatibility model, and
+may be overengineered now that the sequencer, compatibility model, and
 operator tooling are all real.
 
 The goal is not "delete complexity." It is to separate:
@@ -16,7 +16,7 @@ The goal is not "delete complexity." It is to separate:
 
 The core mechanism is in good shape, and the sequential-intents reshape
 has landed: `execute_steps` / `register_step` / `run_sequence` / `StepPolicy`
-is the external surface; `mike.near` itself now runs the v4 kernel
+is the external surface; `mike.near` itself now runs the v4 sequencer
 (`v4.0.2-ops`) with four curated reference artifacts under
 `collab/artifacts/reference/` — see
 [`MAINNET-PROOF.md`](./MAINNET-PROOF.md). The flagship gallery, mainnet
@@ -28,7 +28,7 @@ README. Most of the earlier audit's concrete trims have shipped:
 - `md-CLAUDE-chapters/README.md` classifies each chapter as current
   reference vs historical proof archive
 - `scripts/README.md` catalogs the demo / probe / operator surfaces
-- the `simple-example/` README now leads with the kernel claim and
+- the `simple-example/` README now leads with the sequencer claim and
   three tiers of proof (local cargo test → testnet → mainnet
   `near.social`) with the forensic material split into
   `simple-example/OPERATOR-APPENDIX.md`
@@ -61,7 +61,7 @@ hardening pass.
 **Evidence.** `contracts/smart-account/src/lib.rs` is large and clearly
 contains two distinct surfaces:
 
-- the narrow sequencing kernel (`execute_steps` / `register_step` /
+- the narrow sequencer (`execute_steps` / `register_step` /
   `run_sequence`, `on_step_resumed`, `on_step_resolved`, `StepPolicy`
   dispatch)
 - the automation/product layer (templates, triggers, authorized
@@ -74,7 +74,7 @@ are not the same thing.
 
 **Recommendation.** Document the split before trying to refactor it:
 add a short internal surface map to the smart-account crate docs,
-clearly name kernel vs automation sections in module comments. Do not
+clearly name sequencer vs automation sections in module comments. Do not
 split into two contracts yet — the shape is real, the doc split is the
 first hardening move.
 
@@ -99,7 +99,7 @@ already reuse the shared libs; the older `deploy-testnet.sh` and
 
 These are the parts to protect from a reflex simplification pass:
 
-- **The sequencing kernel.**
+- **The sequencer itself.**
   `execute_steps` / `register_step` / `run_sequence` / `on_step_resumed` /
   `on_step_resolved` is the heart of the repo and earns its complexity.
 - **The three step policies.**
@@ -113,7 +113,7 @@ These are the parts to protect from a reflex simplification pass:
 - **`pathological-router` plus `probe-pathological`.**
   Research apparatus, not demo fluff.
 - **`simple-example/` as a concept.**
-  The minimal kernel workspace is worth keeping; it just should not
+  The minimal sequencer workspace is worth keeping; it just should not
   grow a full second ecosystem around itself.
 - **The static web trace viewer.**
   Small, dependency-light, aligned with the repo's mental model.
@@ -124,7 +124,7 @@ The remaining overengineering is **architectural and presentation**,
 not **mechanism**. The right hardening move is not to flatten the repo
 until it becomes vague — it is to make the four layers clearer:
 
-- the kernel
+- the sequencer
 - the automation/product surface
 - the proof archive
 - the operator bench

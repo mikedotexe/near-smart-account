@@ -9,7 +9,7 @@ account contract must be deployed at `--smart-account <id>` first.
 ## [`sequential-intents.mjs`](./sequential-intents.mjs) — primary flagship
 
 Three-step round-trip on NEAR Intents (`intents.near`). Demonstrates
-what the kernel uniquely enables: sequential ordering across separate
+what the sequencer uniquely enables: sequential ordering across separate
 `intents.near` operations.
 
 1. `wrap.near.near_deposit` — mint `N` wNEAR to the smart account.
@@ -22,7 +22,7 @@ what the kernel uniquely enables: sequential ordering across separate
    on `wrap.near`'s `ft_balance_of(signer)` — advances only when the
    wallet ledger reflects the withdrawal.
 
-Without the kernel, step 3 would race step 2 on-chain and fail with
+Without the sequencer, step 3 would race step 2 on-chain and fail with
 insufficient balance on the verifier; the `Asserted` policy guarantees
 step 3 only fires after step 2's ledger credit is observed.
 
@@ -63,7 +63,7 @@ Exit code: `0` when `intents.near` balance delta is `0` *and* signer's
 
 Two-step atomic composition across unrelated protocols: wrap NEAR and
 deposit the resulting wNEAR into Ref Finance's internal balance.
-Demonstrates that the kernel's sequential guarantees extend beyond
+Demonstrates that the sequencer's sequential guarantees extend beyond
 `intents.near` — any two protocols with clean view methods can be
 composed into a single sequenced plan.
 
@@ -87,7 +87,7 @@ deployment (`ref-finance-101.testnet`).
 ## [`limit-order.mjs`](./limit-order.mjs) — `PreGate` pre-dispatch gate
 
 A single step whose `pre_gate` names a view call and a `[min_bytes,
-max_bytes]` range. The kernel fires the gate BEFORE dispatching the
+max_bytes]` range. The sequencer fires the gate BEFORE dispatching the
 target; in-range → target fires as normal; out-of-range or gate
 panic → the sequence halts cleanly with `pre_gate_checked.outcome`
 tagged accordingly, target never executes. The mechanism of a
@@ -146,6 +146,37 @@ runtime. Prerequisite: a `BalanceTrigger` already configured under
 ```
 
 User-facing walkthrough + safety model: [`../SESSION-KEYS.md`](../SESSION-KEYS.md).
+
+## [`proxy-dapp.mjs`](./proxy-dapp.mjs) — proxy keys (state-controlled deposit)
+
+Owner enrolls an ephemeral ed25519 key on the smart account, restricted
+to `proxy_call`, and records on-chain policy (allowed targets, allowed
+methods, per-dispatch `attach_yocto`, call cap, expiry). The script then
+fires N `proxy_call` txs with the ephemeral key (no main-wallet prompts)
+targeting `pathological-router.x.mike.testnet.require_one_yocto` — a
+`#[payable]` probe that panics unless exactly 1 yoctoNEAR is attached.
+That toll cannot come from the FCAK (NEAR protocol rule: FCAK-signed
+txs carry deposit=0), so successful dispatches prove the smart account
+added the 1 yN from its own balance on the outgoing Promise,
+per-grant state-controlled. Owner revokes; script verifies a post-revoke
+proxy_call is rejected by the NEAR runtime.
+
+```bash
+./examples/proxy-dapp.mjs \
+  --signer x.mike.testnet \
+  --smart-account sa-proxy.x.mike.testnet
+```
+
+Falsifiable zero-deposit boundary (should also pass, no mechanic claim):
+```bash
+./examples/proxy-dapp.mjs \
+  --signer x.mike.testnet \
+  --smart-account sa-proxy.x.mike.testnet \
+  --attach-yocto 0 \
+  --target-method do_honest_work
+```
+
+User-facing walkthrough + safety model: [`../PROXY-KEYS.md`](../PROXY-KEYS.md).
 
 ## [`dca.mjs`](./dca.mjs) — scheduled variant
 

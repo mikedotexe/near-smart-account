@@ -1,7 +1,7 @@
-# Mainnet `mike.near` journal (v4 kernel)
+# Mainnet `mike.near` journal (v4 sequencer)
 
 Every on-chain transaction landed on `mike.near` after the v4 smart-
-account kernel deploy, with block heights for archival lookup.
+account sequencer deploy, with block heights for archival lookup.
 Mirror of [`MAINNET-V3-JOURNAL.md`](./MAINNET-V3-JOURNAL.md) pattern;
 matches [`DEPLOY-MIKE-NEAR.md`](./DEPLOY-MIKE-NEAR.md) recipe.
 
@@ -30,7 +30,7 @@ Artifact snapshots:
 
 ## Phase 2 — `mike.near` identity deploy (2026-04-19)
 
-v4 kernel deployed over `mike.near` itself. Zero prior contract
+v4 sequencer deployed over `mike.near` itself. Zero prior contract
 state (code_hash was `1111…111`); `new_with_owner({owner_id:"mike.near"})`
 initialized cleanly against the ~25 KB of pre-existing access-key
 bookkeeping.
@@ -99,7 +99,7 @@ Auth model on `mike.near`:
 
 ## Phase 3 — `v4.0.2-ops` migrate redeploy (2026-04-19)
 
-Second deployment of the v4 kernel, landing two tranches bundled
+Second deployment of the v4 sequencer, landing two tranches bundled
 together via `#[init(ignore_state)]` migrate:
 
 - **prune tranche** (from the state-health audit): new public
@@ -158,7 +158,7 @@ owner.
 
 ## Phase 4 — reference runs against `v4.0.2-ops` (2026-04-19)
 
-Fresh flagship runs against the post-migrate kernel. Captured with
+Fresh flagship runs against the post-migrate sequencer. Captured with
 full `block_info` anchors and curated under
 `collab/artifacts/reference/` for the
 [`MAINNET-PROOF.md`](./MAINNET-PROOF.md) verification story.
@@ -270,7 +270,7 @@ convention as Phase 4 — verifier can call
   Completes the deposit/withdraw bookend story.
 - **DAO-signed variant.** Any of the existing flagships re-run
   where the owner is a Sputnik2 DAO contract rather than a
-  user FAK — proves the kernel works under multisig governance.
+  user FAK — proves the sequencer works under multisig governance.
 - Consider a one-line `SESSION-KEYS.md` addendum clarifying the
   keystore-slot behavior for dapp integrators who sign from the
   same account that owns the smart account.

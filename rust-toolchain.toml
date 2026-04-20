@@ -1,6 +1,6 @@
 # Pinned Rust toolchain for reproducible smart-account builds.
 #
-# The kernel currently deployed on mainnet (`mike.near`, v4.0.2-ops) was
+# The sequencer currently deployed on mainnet (`mike.near`, v4.0.2-ops) was
 # built with rustc 1.97.0-nightly (7af3402cd 2026-04-16), distributed as
 # the `nightly-2026-04-17` snapshot. Running
 # `./scripts/build-all.sh` under this pinned toolchain produces a

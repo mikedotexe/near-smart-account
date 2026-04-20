@@ -557,7 +557,7 @@ Explaining the mechanism in this tighter form still leaves a few good questions:
 1. Is the parent-receipt lineage of `yield_id.resume(...)` a spec-level
    guarantee, or just a current implementation property we should not lean on
    too hard?
-2. Should the sequencing kernel eventually live in a dedicated internal module,
+2. Should the sequencer eventually live in a dedicated internal module,
    separate from the broader smart-account contract file?
 3. Should the queue move from front-popping `Vec<String>` to a more explicitly
    queue-shaped representation?

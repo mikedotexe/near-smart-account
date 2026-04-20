@@ -187,7 +187,7 @@ function buildTemplate(minUsdtBytes) {
       gate_id: WRAP,
       gate_method: "ft_balance_of",
       gate_args: base64Json({ account_id: smartAccount }),
-      // Raw bytes of JSON-quoted u128; the kernel parses this under
+      // Raw bytes of JSON-quoted u128; the sequencer parses this under
       // U128Json and strips the outer quotes. "1" means any non-zero.
       min_bytes: base64Utf8("1"),
       max_bytes: null,
@@ -202,7 +202,7 @@ function buildTemplate(minUsdtBytes) {
   };
 
   // Step 2 template: amount field uses the substitution "${wnear_balance}"
-  // WITH surrounding JSON quotes. The kernel's placeholder regex is
+  // WITH surrounding JSON quotes. The sequencer's placeholder regex is
   // `"${<ref>}"` (types.rs:396, quotes included), and `PercentU128`
   // emits a JSON-quoted u128 (e.g. `"500"`). Quoted-in, quoted-out —
   // the net effect is a valid JSON string for NEP-141's `amount` field.

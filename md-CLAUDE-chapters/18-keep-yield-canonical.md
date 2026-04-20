@@ -1,6 +1,6 @@
 # 18 · Keep yield canonical — a design note
 
-> **In today's vocabulary.** This chapter argues why the kernel keeps
+> **In today's vocabulary.** This chapter argues why the sequencer keeps
 > NEP-519 `yield_promise` / `resume` as the canonical mechanism rather
 > than collapsing it into a plain state-driven queue. The external
 > surface has since been renamed to `execute_steps` / `register_step`
@@ -14,7 +14,7 @@
 Once `yield_promise` was working reliably, an obvious simplification appeared:
 why not remove `yield` entirely?
 
-Mechanically, the smart-account kernel could do this:
+Mechanically, the smart-account sequencer could do this:
 
 1. `yield_promise(...)` would only store the downstream call spec in state
 2. `run_sequence(...)` or `execute_trigger(...)` would dispatch the first real
@@ -48,7 +48,7 @@ If we removed yield, the mechanism would still sequence correctly, but the
 original yield transaction would lose that visible structure. The whole
 cascade would attach to `run_sequence` or `execute_trigger` instead.
 
-That would make the kernel smaller, but it would weaken one of the most novel
+That would make the sequencer smaller, but it would weaken one of the most novel
 and teachable parts of the repo.
 
 ### 2. "Waiting for resume" is a real state, not just bookkeeping
@@ -84,7 +84,7 @@ the code, the traces, and the docs line up with what we are actually arguing.
 ## What we simplified instead
 
 We did not keep the previous "yield is doing everything at once" feeling.
-Instead, the kernel was reshaped so the internal phases are explicit:
+Instead, the sequencer was reshaped so the internal phases are explicit:
 
 - **registration**: validate and store the call, then allocate the yielded
   callback receipt
@@ -114,7 +114,7 @@ plane:
 
 ## Current decision
 
-For this repo's smart-account kernel:
+For this repo's smart-account sequencer:
 
 - `yield` remains mandatory for yielded sequencing
 - there is no parallel no-yield execution mode

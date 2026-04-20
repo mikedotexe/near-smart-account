@@ -18,7 +18,7 @@ Full reference artifact:
 [`collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json`](./collab/artifacts/reference/mike-near-v4.0.2-intents-deposit-limit.json).
 Deep verification dive: [`MAINNET-PROOF.md`](./MAINNET-PROOF.md).
 
-## 1. Pass fire: kernel sequence + venue-side `mt_mint`  (~30 s)
+## 1. Pass fire: sequencer's receipt chain + receiver-side `mt_mint`  (~30 s)
 
 ```bash
 curl -s -X POST https://archival-rpc.mainnet.fastnear.com \
@@ -48,7 +48,7 @@ sa-automation / sequence_completed
 sa-automation / run_finished
 ```
 
-Two independent log sources confirm the deposit: our kernel's
+Two independent log sources confirm the deposit: our sequencer's
 `step_resolved_ok` + `sequence_completed`, and `intents.near`'s
 own `nep245 / mt_mint` event.
 
@@ -126,7 +126,7 @@ curl -s -X POST https://archival-rpc.mainnet.fastnear.com \
 = 445078236626887452318451` yocto wNEAR — byte-exact match to
 `balances.intents_delta` in the artifact.
 
-## 4. The kernel was actually v4.0.2-ops  (~10 s)
+## 4. The sequencer was actually v4.0.2-ops  (~10 s)
 
 One more curl pins the WASM bytes the validator ran at the pass
 fire's block:

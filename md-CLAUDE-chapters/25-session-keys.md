@@ -183,7 +183,7 @@ grant. Returns the number pruned. No security implication since only
 already-unusable grants are touched.
 
 Composable as a `BalanceTrigger` step itself — schedule a
-hygiene tick the kernel runs without any signature from the owner.
+hygiene tick the sequencer runs without any signature from the owner.
 
 **`get_session`, `list_active_sessions`, `list_all_sessions`** —
 views returning `SessionGrantView`. `list_active_sessions` filters
@@ -329,7 +329,7 @@ comes first), the grant is dead: further fires return an error,
 
 ## §4 Unit tests
 
-10 kernel unit tests in `contracts/smart-account/src/lib.rs`:
+10 sequencer unit tests in `contracts/smart-account/src/lib.rs`:
 
 - `enroll_session_succeeds_for_owner_with_1_yocto` — happy path;
   grant recorded, event emitted.
@@ -455,4 +455,4 @@ new address.
 
 `mike.near` itself will carry all three tranches (`PreGate`,
 threading, sessions) at first-deploy — no migration needed, because
-no kernel state ever lived there before.
+no sequencer state ever lived there before.

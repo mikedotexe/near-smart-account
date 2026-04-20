@@ -3,7 +3,7 @@
 > **In today's vocabulary.** This chapter maps out the pathology
 > taxonomy that `Direct` alone cannot catch. It motivates chapter 21
 > (`Asserted`), which closes the Layer-3 blindspot for noop and decoy
-> shapes by letting the kernel itself fire a postcheck inline. The
+> shapes by letting the sequencer itself fire a postcheck inline. The
 > probe contract (`pathological-router`) is still deployed in the
 > shared testnet rig and is the canonical target for "what can
 > `Direct` miss?" investigations. Surface names below (`yield_promise`,
@@ -182,7 +182,7 @@ smart-account has no way to distinguish "malicious gas burn" from
 "honest panic" because both collapse to the same `PromiseError::Failed`
 variant at resolve. The gas usage is observable (~315 TGas for this
 probe), but that's only visible by examining the downstream receipt's
-`gas_burnt` after the fact, not by the kernel's `Direct` predicate.
+`gas_burnt` after the fact, not by the sequencer's `Direct` predicate.
 
 ### §4.2 Pathology 2 — `noop_claim_success`
 
@@ -270,7 +270,7 @@ results as failure (consistent with CLAUDE.md's Pitfalls claim), but it
 uses a specific `TooLong(usize)` variant that carries the observed size.
 The size would, in principle, let a future sophisticated callback
 distinguish size-limit failures from other failures and react
-differently — but `on_promise_resolved` in the current kernel
+differently — but `on_promise_resolved` in the current sequencer
 collapses both to "sequence halted."
 
 Layer 3 correctly reports "no work done" (the method is `&self` and
@@ -310,7 +310,7 @@ does no state mutation).
 - **oversize** is the only pathology where `Direct`'s Layer 2 gives
   richer signal than `Failed`: the `TooLong(size)` variant carries the
   actual observed size. Today's `on_promise_resolved` discards that
-  detail; a future kernel variant could surface it via a
+  detail; a future sequencer variant could surface it via a
   `SequenceHaltedOversize { step, size }` event.
 
 ## §6 Open questions (feeds v1.1)

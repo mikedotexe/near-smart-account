@@ -47,7 +47,7 @@ Failure runs use `--method not_a_method` to guarantee downstream
 | `alpha` | `9NUCWZ9ugMY3DFzCs2HyKgyKzdvJL5W5Fso1Q7rcyHNr` | 246222030 |
 | `gamma` | `EGV17EG8BJKpSSmiFZdNoAdrPHgeBcX25CsrsnxqDe3q` | 246222033 |
 
-First real proof of the smart-account kernel ordering downstream
+First real proof of the smart-account sequencer ordering downstream
 cross-contract work, not just inert yielded callbacks.
 
 ## 2. Saga semantics, empirically closed

@@ -7,11 +7,11 @@
 // Mechanism: each `Step` may carry:
 //
 //   - `save_result = { as_name, kind }` — on successful resolution, the
-//     kernel saves the step's promise-result bytes (as returned by
+//     sequencer saves the step's promise-result bytes (as returned by
 //     `promise_result_checked(0, MAX_CALLBACK_RESULT_BYTES)`) into the
 //     sequence context under `as_name`.
 //
-//   - `args_template = { template, substitutions }` — the kernel
+//   - `args_template = { template, substitutions }` — the sequencer
 //     materializes the step's real args at dispatch time by running
 //     each `Substitution` against the sequence context, then uses the
 //     produced bytes as the `FunctionCall`'s args.

@@ -47,7 +47,7 @@ https://www.nearblocks.io/txns/<tx_hash>
 | `--deposit-only` (2 steps, no signed intent) | `3sfgmiY94t9VMzBL79Dxms3bbW4CAkTzdPT1xuyuFEoD` | ~194633900 | FULL_SUCCESS; `intents.near`(mike.near) +0.01 wNEAR |
 | Round-trip (3 steps, NEP-413 signed `ft_withdraw`) | `7btFS8LzGQUpHari3EnzCEvyr3dU3r4egKCsnPVZMgmJ` | 194634029–194634046 | FULL_SUCCESS; `wrap.near`(mike.near) +0.01; intents Δ0 |
 
-## 2026-04-18 — Battletest sweep (4 kernel edge cases)
+## 2026-04-18 — Battletest sweep (4 sequencer edge cases)
 
 | # | Test | Tx hash | Block range | Observation |
 |---|---|---|---|---|
@@ -101,7 +101,7 @@ surfaced only by battletest.
 
 | Tx | Observation |
 |---|---|
-| `2Ns6XQAmsGvxLPVQH77sEUDyLP8QNu5Zymo27Y4d8naB` | Step 1's `method_name` replaced with `bogus_method_does_not_exist`. Primary call fails with `MethodNotFound`; Direct policy observes the failed resolution surface; step 1's `step_resolved_err` fires; steps 2+3 never dispatch. Both deltas `0`. Confirms Direct halt path works identically to Asserted halt at the kernel layer. |
+| `2Ns6XQAmsGvxLPVQH77sEUDyLP8QNu5Zymo27Y4d8naB` | Step 1's `method_name` replaced with `bogus_method_does_not_exist`. Primary call fails with `MethodNotFound`; Direct policy observes the failed resolution surface; step 1's `step_resolved_err` fires; steps 2+3 never dispatch. Both deltas `0`. Confirms Direct halt path works identically to Asserted halt at the sequencer layer. |
 
 ### Canonical DCA reference run (user-locked)
 

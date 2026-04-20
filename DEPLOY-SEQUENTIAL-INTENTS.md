@@ -1,17 +1,17 @@
 # Deploy — `sequential-intents.mike.near` (mainnet v3)
 
-> **Historical — v3 era.** This doc describes the v3 kernel deploy to
+> **Historical — v3 era.** This doc describes the v3 sequencer deploy to
 > the `sequential-intents.mike.near` subaccount (2026-04-18). It
 > remains the canonical recipe for anyone reproducing the v3
 > reference runs logged in
 > [`MAINNET-V3-JOURNAL.md`](./MAINNET-V3-JOURNAL.md).
 >
 > **For current (v4) work, use [`DEPLOY-MIKE-NEAR.md`](./DEPLOY-MIKE-NEAR.md).**
-> The v4 kernel intentionally runs on `mike.near` itself (not a
+> The v4 sequencer intentionally runs on `mike.near` itself (not a
 > child account) — the "never deploy to `mike.near`" rule below
 > was period-accurate for v3 but no longer applies to v4.
 
-**Mainnet deploy of the v3 smart-account kernel, targeted by
+**Mainnet deploy of the v3 smart-account sequencer, targeted by
 `examples/sequential-intents.mjs`.** Fresh subaccount; no migration
 (Phase A's Borsh state break doesn't affect a new deploy). Pass 4 of
 the sequential-intents reshape plan.
@@ -62,7 +62,7 @@ near create-account sequential-intents.mike.near \
   Expected: `MethodNotFound` (no contract deployed yet) — confirms the
   account exists but is empty. That's the right state entering Phase 3.
 
-## Phase 3 — deploy the kernel + init
+## Phase 3 — deploy the sequencer + init
 
 ```bash
 near deploy sequential-intents.mike.near res/smart_account_local.wasm \

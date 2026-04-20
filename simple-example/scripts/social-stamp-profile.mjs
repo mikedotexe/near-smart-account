@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 //
 // social-stamp-profile.mjs — have the simple-sequencer introduce itself on
-// near.social using its own kernel.
+// near.social using its own sequencer.
 //
 // Registers one `social.near.set(...)` call that writes
 // `<sequencer>/profile/name` and `<sequencer>/profile/description`
@@ -11,7 +11,7 @@
 // instead of an empty page.
 //
 // This is deliberately a separate helper from `send-social-poem.mjs`:
-// that script stays a clean three-step kernel proof, this one handles
+// that script stays a clean three-step sequencer proof, this one handles
 // the once-per-account profile stamp.
 //
 // Before the first run, pre-fund the sequencer's storage on social:

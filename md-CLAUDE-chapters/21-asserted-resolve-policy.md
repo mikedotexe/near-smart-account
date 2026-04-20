@@ -1,7 +1,7 @@
 # Chapter 21 — `Asserted` resolve policy
 
 > **In today's vocabulary.** `Asserted` is the policy that powers the
-> mainnet `sequential-intents` flagship — the kernel fires a postcheck
+> mainnet `sequential-intents` flagship — the sequencer fires a postcheck
 > `FunctionCall` after the target resolves and advances only on exact
 > byte-match of the return value. In today's code, this is
 > `StepPolicy::Asserted { assertion_id, assertion_method,
@@ -17,11 +17,11 @@ Chapter 20's cross-table left two pathologies (noop, decoy) visible only
 at Layer 3 — target state polling. `Direct` resolve could not distinguish
 them from honest work because both the NEAR receipt class (L1) and the
 smart-account resolve log (L2) saw a clean SuccessValue. The chapter 20
-summary was blunt: *"the kernel is blind; only an external observer
+summary was blunt: *"the sequencer is blind; only an external observer
 polling target state can tell work didn't happen."*
 
-`Asserted` closes this gap by letting the kernel itself do that L3 poll
-inline. After the target resolves successfully, the kernel fires a
+`Asserted` closes this gap by letting the sequencer itself do that L3 poll
+inline. After the target resolves successfully, the sequencer fires a
 caller-specified postcheck call against a caller-specified contract+method,
 compares the returned bytes to caller-specified expected bytes, and
 advances the sequence only on exact-bytes match. Mismatch halts the
@@ -183,7 +183,7 @@ Log sequence crosses three accounts:
 ```
 
 The target emits its own "skipping real work" log proudly — and the
-kernel halts anyway. This is the v1 proof: `Direct` on this exact
+sequencer halts anyway. This is the v1 proof: `Direct` on this exact
 receipt tree would have logged `settled successfully`, but `Asserted`
 saw the unchanged counter and panicked out. Compare chapter 20 §4.2
 where the same target-side behavior advanced the sequence.
@@ -266,11 +266,11 @@ noop/decoy gap. Known limits:
   `AssertedGt { threshold: Base64VecU8 }` and/or
   `AssertedDelta { before, delta }` (the latter also solves the
   concurrent-mutation race below).
-- **No kernel pre-snapshotting.** The caller supplies the expected
+- **No sequencer pre-snapshotting.** The caller supplies the expected
   after-value at yield time. If a second actor increments the target
   counter between the yield and the resolve, the absolute value is
   wrong and `Asserted` halts a sequence that *should* have advanced.
-  v1.1: kernel reads target state at dispatch time, stores the
+  v1.1: sequencer reads target state at dispatch time, stores the
   snapshot in the StagedCall record, and evaluates a delta at resolve.
 - **Single check only.** Decoy-returned-chain motivated a conjunction
   of two checks (counter unchanged AND last_burst != "decoy-returned")
@@ -311,4 +311,4 @@ noop/decoy gap. Known limits:
 - Counter trajectory during the probe run:
   `2 → 3 (honest) → 3 (noop halted) → 3 (decoy halted) → 3 (oversize halted)`.
   Inferring "counter is at N" requires either reading before each
-  probe (what this chapter does) or v1.1's kernel pre-snapshotting.
+  probe (what this chapter does) or v1.1's sequencer pre-snapshotting.

@@ -1,6 +1,6 @@
 # Deploy — `mike.near` (mainnet v4, root identity)
 
-**Mainnet deploy of the v4 smart-account kernel onto `mike.near`
+**Mainnet deploy of the v4 smart-account sequencer onto `mike.near`
 itself** — the root identity account, not a subaccount. Carries
 all three extensions landed in this round: `PreGate` (ch. 23),
 value threading (ch. 24), session keys (ch. 25).
@@ -17,11 +17,11 @@ with command bodies tested live on `sa-v4.mike.near` in Phase 1.
 ## Safety guardrails
 
 - **Phase 1 first.** Never skip straight to Phase 2. The lab
-  deploy to `sa-v4.mike.near` validates the full v4 kernel at
+  deploy to `sa-v4.mike.near` validates the full v4 sequencer at
   mainnet stakes.
 - **No redeployment-over-populated-state without `migrate()`.**
   `new_with_owner` is `#[init]`-gated; calling it on a populated
-  account panics. The kernel ships a `migrate()` safety net
+  account panics. The sequencer ships a `migrate()` safety net
   (`#[init(ignore_state)]`) for schema-evolution redeploys.
 - **206 access keys on `mike.near`.** After deploy, FCAKs whose
   `receiver_id=mike.near` and `method=<anything-we-don't-expose>`
@@ -41,14 +41,14 @@ with command bodies tested live on `sa-v4.mike.near` in Phase 1.
   for probe; Phase 2 needs ~6 for the wasm storage on mike.near
   itself; plus operational headroom).
 - `res/smart_account_local.wasm` present (rebuild with
-  `./scripts/build-all.sh` if stale — the v4 kernel is **~517
+  `./scripts/build-all.sh` if stale — the v4 sequencer is **~517
   KB**, notably larger than v3's ~345 KB).
 - `./scripts/check.sh` green (126 Rust + 46 Node tests).
 
 ## Phase 1 — lab validation at mainnet stakes (`sa-v4.mike.near`)
 
 **Goal.** Prove all three new primitives fire correctly on a
-mainnet deployment of the v4 kernel BEFORE touching `mike.near`.
+mainnet deployment of the v4 sequencer BEFORE touching `mike.near`.
 
 ### 1a. Create sa-v4 + probe-v4 subaccounts
 
@@ -68,7 +68,7 @@ near create-account probe-v4.mike.near \
 - sa-v4 create: `9Wn4zbgApku47nuH971sxkYqQTfTzUTk14TrSfm1rr8w`
 - probe-v4 create: `Cknh1VzTcBNRep7WLq32P7NrCM9577cFDwpVQZZv3koE`
 
-### 1b. Deploy v4 kernel + pathological-router
+### 1b. Deploy v4 sequencer + pathological-router
 
 ```bash
 near deploy sa-v4.mike.near res/smart_account_local.wasm \
@@ -159,7 +159,7 @@ then proceed to Phase 2.
 
 Only after Phase 1 is GREEN.
 
-### 2a. Deploy v4 kernel to mike.near
+### 2a. Deploy v4 sequencer to mike.near
 
 ```bash
 near deploy mike.near res/smart_account_local.wasm \
@@ -240,7 +240,7 @@ logging every on-chain tx, mirrored on
 
 ## Rollback / teardown
 
-The v4 kernel's `migrate()` function makes roll-forward the
+The v4 sequencer's `migrate()` function makes roll-forward the
 default path. If a true rollback is needed:
 
 1. Cut an empty-state wasm with only `new_with_owner` and

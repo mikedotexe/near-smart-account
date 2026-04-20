@@ -2,7 +2,7 @@
 
 Forensic material for operators running the simple-example flow who want
 to reconstruct a run or inspect its evidence surfaces in detail. The
-main [README](./README.md) stays focused on the kernel claim; this file
+main [README](./README.md) stays focused on the sequencer claim; this file
 carries the how-do-I-trace-this material.
 
 ## Four proof surfaces for any run

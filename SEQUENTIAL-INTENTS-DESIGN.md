@@ -6,7 +6,7 @@ Status: **decision doc**. Terminates in a flagship recommendation (§5) and conc
 
 A NEAR smart account built on NEP-519 yield/resume can **fire a sequence of `intents.near` operations in a deliberate order, with each step gated by the previous one's settled state on the verifier ledger** — in a single caller-initiated transaction.
 
-Default NEAR cross-contract semantics: async, unordered, no halt-on-failure across separate calls. Our smart account makes a chain of operations atomic-or-halted as a user-visible unit. `intents.near` on its own provides atomicity *inside* a single `execute_intents` batch; our kernel provides ordering *across* batches and *across protocols*.
+Default NEAR cross-contract semantics: async, unordered, no halt-on-failure across separate calls. Our smart account makes a chain of operations atomic-or-halted as a user-visible unit. `intents.near` on its own provides atomicity *inside* a single `execute_intents` batch; our sequencer provides ordering *across* batches and *across protocols*.
 
 ## 2 · `intents.near` surface map
 
@@ -118,14 +118,14 @@ Token-id convention: `nep141:<contract>` for wrapped FTs. E.g. `nep141:wrap.near
 
 What `intents.near` does **not** provide:
 - Cross-batch ordering. If you call `execute_intents` twice from separate txs, the second may reach the verifier before the first settles (NEAR's async cross-contract semantics).
-- State-asserted advancement across calls. Without a kernel like ours, you can't say "run batch B only if after batch A, `mt_balance_of` reads exactly X."
+- State-asserted advancement across calls. Without a sequencer like ours, you can't say "run batch B only if after batch A, `mt_balance_of` reads exactly X."
 - Cross-protocol gating. If step 1 is `intents.near`, step 2 is Ref Finance, step 3 is `intents.near`, default NEAR gives you no way to sequence them with halt-on-failure.
 
-What our kernel adds:
+What our sequencer adds:
 
 1. **Cross-call ordering across the verifier.** A plan with steps `[execute_intents(A), execute_intents(B)]` fires B only after A's resolution surface resolves. Not possible in vanilla NEAR.
 2. **State-asserted advancement.** Each step can carry `Asserted { intents.near.mt_balance_of, expected: <bytes> }`. If the solver partially filled, filled at a worse price, or didn't fill at all, the postcheck catches it and halts.
-3. **Cross-protocol gating.** The same kernel sequences `intents.near` with wrap.near, Ref, Burrow, or any other protocol. Composition extends beyond intents.
+3. **Cross-protocol gating.** The same sequencer sequences `intents.near` with wrap.near, Ref, Burrow, or any other protocol. Composition extends beyond intents.
 4. **Session-level atomicity.** One tx from the user initiates the whole plan. If step 2 halts, step 3 doesn't fire — funds don't strand as they would across three independent user txs.
 
 What we **don't** add:
@@ -200,11 +200,11 @@ Step 2 (signed ft_withdraw intent via execute_intents):
 ```
 
 Why this wins as v1:
-- **Shows ordering genuinely** — without our kernel, the `ft_withdraw` might race the deposit (insufficient-balance error on the verifier). Our kernel asserts deposit-settled before firing withdraw.
+- **Shows ordering genuinely** — without our sequencer, the `ft_withdraw` might race the deposit (insufficient-balance error on the verifier). Our sequencer asserts deposit-settled before firing withdraw.
 - **Shows two-sided asserting** — first step asserts on `intents.near`'s ledger via `mt_balance_of`; second step asserts on the wallet ledger via `ft_balance_of`. Both bases covered.
 - **Self-contained** — no external API, no pre-existing balance, no solver. A developer can `./examples/sequential-intents.mjs --signer me --amount-near 0.01` and the whole demo runs end-to-end.
 - **Real dependency** — the withdraw actually *needs* the deposit to have settled, so the ordering isn't ceremonial; it's load-bearing.
-- **Upgrade path** — once 1Click research lands, FS-5's second step becomes an `execute_intents` carrying a solver-supplied `token_diff` pair, upgrading round-trip to round-trip-with-swap. Same kernel, same assertion pattern, one intent shape swapped.
+- **Upgrade path** — once 1Click research lands, FS-5's second step becomes an `execute_intents` carrying a solver-supplied `token_diff` pair, upgrading round-trip to round-trip-with-swap. Same sequencer, same assertion pattern, one intent shape swapped.
 
 FS-6 (add an intra-intents.near `transfer` between deposit and withdraw) is a nice extension that shows **two** signed intents in sequence. Recommend: bake in a `--with-transfer <recipient>` optional flag that turns FS-5 into FS-6 in one line. Default stays FS-5.
 
@@ -229,7 +229,7 @@ for tx-level detail. Remaining open items flagged below.
 
 1. **NEW** `scripts/lib/nep413-sign.mjs` — signing helper: `signNep413(signer, innerMessage) → MultiPayload`. ~50 lines. Unit-tested with a fixed test vector.
 2. **RENAME** `examples/intent-onboard.mjs` → `examples/sequential-intents.mjs`. Rebuild around FS-5 (deposit + ft_withdraw, both Asserted). Preserve existing DepositMessage + `mt_balance_of` scaffolding. Add `--deposit-only` flag for the prior minimal-mode case.
-3. **RENAME-HEADER** `examples/wrap-and-deposit.mjs` — header comment only. Rebrand as "cross-protocol atomic composition — sequential kernel works beyond `intents.near`."
+3. **RENAME-HEADER** `examples/wrap-and-deposit.mjs` — header comment only. Rebrand as "cross-protocol atomic composition — sequential sequencer works beyond `intents.near`."
 4. **NEW** `examples/dca.mjs` — scheduled variant of `sequential-intents.mjs`. Same FS-5 plan saved as a template, fired periodically via balance triggers.
 5. **NEW** `examples/README.md` — gallery index. Primary: `sequential-intents.mjs`. Secondary: `wrap-and-deposit.mjs`. Scheduled: `dca.mjs`.
 6. **LIVE-VALIDATE** `sequential-intents.mjs` against mainnet `intents.near` + `wrap.near` on a fresh v3 smart account (`sequential-intents.mike.near`) at small stakes (0.01 NEAR). Capture tx hashes for the README.
@@ -240,7 +240,7 @@ Gate for Pass 2 ship: all of (1)–(5) pass `./scripts/check.sh` and dry-run pro
 
 - Implementation of a `StepPolicy::SimulatedAsserted` variant (deferred future design).
 - Solver / 1Click integration (next research pass, post Pass 2 ship).
-- Multi-signer / agent-delegated signing flows (requires kernel changes; not in reshape scope).
+- Multi-signer / agent-delegated signing flows (requires sequencer changes; not in reshape scope).
 - Withdraw via direct function call on the verifier (we standardize on `execute_intents` + `ft_withdraw` intent).
 
 ## 9 · Sources
@@ -256,7 +256,7 @@ Gate for Pass 2 ship: all of (1)–(5) pass `./scripts/check.sh` and dry-run pro
 
 ## 10 · Battletest findings (mainnet v3, 2026-04-18)
 
-Five battletests probed distinct kernel edges on `sequential-intents.mike.near`. Full tx-level record in `MAINNET-V3-JOURNAL.md`; below are the design-relevant observations.
+Five battletests probed distinct sequencer edges on `sequential-intents.mike.near`. Full tx-level record in `MAINNET-V3-JOURNAL.md`; below are the design-relevant observations.
 
 ### 10.1 `sequence_halted` semantics
 
@@ -264,7 +264,7 @@ Five battletests probed distinct kernel edges on `sequential-intents.mike.near`.
 callback when it receives a failed upstream resolution — **not** by the
 step that fails. Two observable regimes:
 
-- **Mid-sequence failure** (failed step has a successor): `sequence_halted` fires on the successor's resume callback. Because the kernel doesn't proactively cancel the successor's yielded promise, the cleanup waits for NEAR's ~200-block yield decay — **~122s** empirically (see B1 `7gzutLq…`, B5 `4K4jXXZ…`).
+- **Mid-sequence failure** (failed step has a successor): `sequence_halted` fires on the successor's resume callback. Because the sequencer doesn't proactively cancel the successor's yielded promise, the cleanup waits for NEAR's ~200-block yield decay — **~122s** empirically (see B1 `7gzutLq…`, B5 `4K4jXXZ…`).
 - **Terminal-step failure** (no successor): **NO `sequence_halted` event fires.** Only `step_resolved_err`. Cleanup is ~10s, synchronous with the failed step's resolve. See B2 (`AG7Mwxd…`).
 
 Implication for indexers: don't treat the absence of `sequence_halted`
@@ -293,7 +293,7 @@ distinguish misprediction from protocol-level failure. See B1/B2 for
 - Terminal-step halt: **~10s** (synchronous resolve of the failing step)
 - Mid-sequence halt: **~122s** (yield decay of the dangling successor)
 
-If the 2-min mid-sequence cleanup becomes load-bearing, a kernel
+If the 2-min mid-sequence cleanup becomes load-bearing, a sequencer
 optimisation is to proactively resolve the successor's yielded promise
 with a halt sentinel when the failed step writes `step_resolved_err`.
 Out of scope for v3; noted here for future consideration.
@@ -309,7 +309,7 @@ independently.
 
 ### 10.5 Back-to-back idempotency proven
 
-B3a → B3b landed two clean round-trips within ~15 seconds. The kernel
+B3a → B3b landed two clean round-trips within ~15 seconds. The sequencer
 cleaned `manual:mike.near` after B3a drained and accepted fresh
 `register_step` calls for B3b without any wait or manual namespace
 management. Nonce freshness is maintained by `crypto.randomBytes(32)`
@@ -327,7 +327,7 @@ emitted a new event not present in the manual path: `run_finished` with
 The three gaps called out in an earlier draft of this section were all
 resolved. See `MAINNET-V3-JOURNAL.md` for tx hashes.
 
-- **`Direct` policy failure path** — B8 (`2Ns6XQA…`): step 1's method replaced with a non-existent method on `wrap.near`. Primary call fails with `MethodNotFound`; Direct-policy step emits `step_resolved_err`; steps 2+3 never dispatch. Halt shape identical to Asserted halts at the kernel layer — Direct and Asserted share the `step_resolved_err` → next-step-decay path.
+- **`Direct` policy failure path** — B8 (`2Ns6XQA…`): step 1's method replaced with a non-existent method on `wrap.near`. Primary call fails with `MethodNotFound`; Direct-policy step emits `step_resolved_err`; steps 2+3 never dispatch. Halt shape identical to Asserted halts at the sequencer layer — Direct and Asserted share the `step_resolved_err` → next-step-decay path.
 - **Multi-signer plans** — B6 (`5pjc3cQ…`): outer tx signed by `mike.near`; inner `ft_withdraw` intent signed by `sa-lab.mike.near`'s registered key. `intents.near` accepted the relayer pattern cleanly once the key-registry prerequisite (§10.8) was met.
 - **Deadline expiry** — B7 (`C9nZ6bR…`): `--intent-deadline-ms 1000` forced step 3's signed intent to be expired by execution time. `intents.near` rejected the expired intent at `execute_intents`; step 3's primary call failed; halt shape matched `poison-step=2` (step 3 dangling, `sequence_halted` ~2min later). The failure was NOT observed as `postcheck_failed` — it's a primary-call failure, not a postcheck failure.
 

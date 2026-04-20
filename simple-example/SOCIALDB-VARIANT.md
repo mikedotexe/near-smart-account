@@ -1,7 +1,7 @@
 # simple-example: NEAR Social variant
 
 The default `simple-example` run uses a repo-owned `recorder` leaf. That
-proves the kernel claim but keeps the witness in JSON. This variant swaps
+proves the sequencer claim but keeps the witness in JSON. This variant swaps
 the leaf for **NEAR Social** (`social.near` on mainnet,
 `v1.social08.testnet` on testnet) so the reorder is publicly visible on a
 real profile page any human can click through to.
@@ -12,7 +12,7 @@ off-chain script plus a one-time storage deposit.
 
 ## Claim this variant proves
 
-Exactly the same kernel claim as the recorder variant:
+Exactly the same sequencer claim as the recorder variant:
 
 > one multi-action transaction manufactures multiple yielded callbacks, and
 > a later `run_sequence` releases real downstream cross-contract work in a
@@ -183,7 +183,7 @@ against an existing simple-example deploy
   `https://test.near.social/simple-sequencer-simple-mo4jdkp3.x.mike.testnet`
 
 The downstream receipt block heights increase monotonically with release
-order, which is the kernel claim in its starkest public form: the next
+order, which is the sequencer claim in its starkest public form: the next
 real `FunctionCall` receipt is created only after the previous step's
 resolution surface resolves.
 
@@ -258,4 +258,4 @@ To make the posts land at `near.social/<your-account>` instead:
    step).
 
 This intentionally stays out of the first pass because it adds
-permission coupling that the kernel demo does not need.
+permission coupling that the sequencer demo does not need.

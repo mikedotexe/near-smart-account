@@ -223,7 +223,7 @@ The owner **can**:
 
 - Design note: [`md-CLAUDE-chapters/25-session-keys.md`](./md-CLAUDE-chapters/25-session-keys.md)
 - Flagship: [`examples/session-dapp.mjs`](./examples/session-dapp.mjs)
-- Kernel entry points (`contracts/smart-account/src/lib.rs`):
+- Sequencer entry points (`contracts/smart-account/src/lib.rs`):
   `enroll_session`, `revoke_session`, `revoke_expired_sessions`,
   `execute_trigger` (session-key path at top)
 - State type: `SessionGrant` / `SessionGrantView`
